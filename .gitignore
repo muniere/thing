@@ -1,0 +1,12 @@
+# Build artifacts
+/bin/
+
+# Local tray plan (project management, not product code)
+/.tray/
+
+# Web build output & deps
+/web/node_modules/
+/web/dist/
+
+# OS / editor cruft
+.DS_Store
