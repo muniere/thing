@@ -17,6 +17,31 @@ machinery.
 make build             # build all packages
 ```
 
+## Node file format
+
+Each node file is a YAML frontmatter block (delimited by `---`) followed by a
+free-form Markdown body:
+
+```markdown
+---
+title: Monitor rollout
+status: doing
+priority: high
+category: Project        # epics only
+tags:
+  - release
+updated: "2026-07-19"
+links:
+  - url: https://example.com
+    label: Design doc
+---
+Free-form Markdown body. `[[other-slug]]` links to another node; `rename`
+rewrites these backlinks automatically.
+```
+
+All frontmatter fields are optional. The filename is the slug — do not rename
+files by hand; use `thing <res> rename`.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
