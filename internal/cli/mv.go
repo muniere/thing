@@ -9,11 +9,11 @@ import (
 func newMvCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "mv <src> <dst>",
-		Short: "Move or rename a node; a rename rewrites [[slug]] backlinks to follow",
-		Long: "Move or rename a node, addressed as a slug path <parent>/<name> " +
-			"(a bare <name> for an epic, _orphan/<name> for an orphan issue). " +
-			"A changed parent moves the node; a changed name renames it, " +
-			"rewriting [[slug]] backlinks; changing both does both.",
+		Short: "Move or rename a node; a rename rewrites [[ref]] backlinks to follow",
+		Long: "Move or rename a node. src and dst are refs " +
+			"(<epic>, <epic>/<issue>, <epic>/<issue>/<task>; _orphan/<issue> for " +
+			"an orphan). A changed parent moves the node; a changed name renames " +
+			"it, rewriting [[ref]] backlinks; changing both does both.",
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			st, err := openStore(cmd)

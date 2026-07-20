@@ -146,35 +146,51 @@ func TestFindProjectDir(t *testing.T) {
 		t.Errorf("upward search: got %q ok=%v, want %q", got, ok, thing)
 	}
 }
-func TestScopedListings(t *testing.T) {
-	root := fixture(t)
-	s := Open(root)
 
-	epics, _ := s.Epics()
-	if len(epics) != 1 || epics[0].Slug != "alpha" {
-		t.Errorf("Epics = %+v", epics)
+// TestIndexPaths checks that nodes are keyed by their full slug-path.
+func TestIndexPaths(t *testing.T) {
+	idx, err := Open(fixture(t)).Index()
+	if err != nil {
+		t.Fatalf("Index: %v", err)
 	}
+	for _, path := range []string{"alpha", "alpha/one", "alpha/two", "alpha/one/task-a", "_orphan/loose", "_orphan/loose/a-task"} {
+		if idx[path] == nil {
+			t.Errorf("missing path %q in index", path)
+		}
+	}
+	// A bare slug is not a valid key when it is not top-level.
+	if idx["task-a"] != nil || idx["one"] != nil {
+		t.Error("nodes should be keyed by full path, not bare slug")
+	}
+	if got := idx["alpha/one/task-a"]; got != nil && got.Parent != "alpha/one" {
+		t.Errorf("task parent path = %q, want alpha/one", got.Parent)
+	}
+}
 
-	// All issues: alpha's "one","two" plus orphan "loose".
-	all, _ := s.Issues("")
-	if len(all) != 3 {
-		t.Errorf("Issues(\"\") count = %d, want 3", len(all))
+// TestSiblingScopedSlugs checks that a slug is unique only among its siblings:
+// the same title recurs verbatim under different parents, but auto-numbers when
+// repeated under one parent.
+func TestSiblingScopedSlugs(t *testing.T) {
+	s := Open(t.TempDir())
+	for _, title := range []string{"A", "B"} {
+		if _, err := s.Add("", &model.Node{Title: title}); err != nil {
+			t.Fatalf("Add epic %q: %v", title, err)
+		}
 	}
-	// Scoped to alpha: only its two issues, no orphan.
-	scoped, _ := s.Issues("alpha")
-	if len(scoped) != 2 {
-		t.Errorf("Issues(alpha) count = %d, want 2", len(scoped))
+	ra, err := s.Add("a", &model.Node{Title: "Review"})
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	// Tasks under "one".
-	tasks, _ := s.Tasks("one")
-	if len(tasks) != 1 || tasks[0].Slug != "task-a" {
-		t.Errorf("Tasks(one) = %+v", tasks)
+	rb, err := s.Add("b", &model.Node{Title: "Review"})
+	if err != nil {
+		t.Fatal(err)
 	}
-	// All tasks: task-a (one) + a-task,z-task (loose) = 3.
-	allTasks, _ := s.Tasks("")
-	if len(allTasks) != 3 {
-		t.Errorf("Tasks(\"\") count = %d, want 3", len(allTasks))
+	if ra != "a/review" || rb != "b/review" {
+		t.Errorf("same name under different parents = %q, %q; want a/review, b/review", ra, rb)
+	}
+	// A second "Review" under the same parent auto-numbers.
+	if r2, _ := s.Add("a", &model.Node{Title: "Review"}); r2 != "a/review-2" {
+		t.Errorf("same name under one parent = %q, want a/review-2", r2)
 	}
 }
 
@@ -182,13 +198,13 @@ func TestSave(t *testing.T) {
 	s := Open(fixture(t))
 
 	// A task's status write round-trips through disk, along with its updated date.
-	loc, _ := s.Locate("task-a")
+	loc, _ := s.Locate("alpha/one/task-a")
 	loc.Node.Status = model.Doing
 	loc.Node.Updated = "2026-07-20"
 	if err := s.Save(loc); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
-	reloaded, _ := s.Locate("task-a")
+	reloaded, _ := s.Locate("alpha/one/task-a")
 	if reloaded.Node.Status != model.Doing || reloaded.Node.Updated != "2026-07-20" {
 		t.Errorf("reloaded = {status:%q updated:%q}", reloaded.Node.Status, reloaded.Node.Updated)
 	}
@@ -249,7 +265,7 @@ func TestFind(t *testing.T) {
 }
 
 // mvFixture builds: epic alpha (issue one -> task t), epic beta, and an orphan
-// issue "ref" whose body links to [[one]].
+// issue "ref" whose body links to [[alpha/one]] by path.
 func mvFixture(t *testing.T) *Store {
 	t.Helper()
 	root := t.TempDir()
@@ -257,7 +273,10 @@ func mvFixture(t *testing.T) *Store {
 	write(t, filepath.Join(root, "alpha", "one", "_issue.md"), "---\ntitle: One\n---\n")
 	write(t, filepath.Join(root, "alpha", "one", "t.md"), "---\ntitle: T\n---\n")
 	write(t, filepath.Join(root, "beta", "_epic.md"), "---\ntitle: Beta\n---\n")
-	write(t, filepath.Join(root, OrphanDir, "ref", "_issue.md"), "---\ntitle: Ref\n---\nsee [[one]]\n")
+	// The ref issue links to alpha/one, to its descendant task alpha/one/t, and
+	// to a decoy that merely shares the "alpha/one" prefix (must not be touched).
+	write(t, filepath.Join(root, OrphanDir, "ref", "_issue.md"),
+		"---\ntitle: Ref\n---\nsee [[alpha/one]], [[alpha/one/t]], [[alpha/one-thing]]\n")
 	return Open(root)
 }
 
@@ -266,11 +285,11 @@ func TestMvRename(t *testing.T) {
 	if err := s.Mv("alpha/one", "alpha/planning", "2026-07-20"); err != nil {
 		t.Fatalf("Mv rename: %v", err)
 	}
-	// The slug changed; the old slug is gone and the new one is under the same epic.
-	if loc, _ := s.Locate("one"); loc != nil {
-		t.Error("old slug 'one' still resolves after rename")
+	// The slug changed; the old path is gone and the new one is under the same epic.
+	if loc, _ := s.Locate("alpha/one"); loc != nil {
+		t.Error("old path 'alpha/one' still resolves after rename")
 	}
-	loc, _ := s.Locate("planning")
+	loc, _ := s.Locate("alpha/planning")
 	if loc == nil || loc.Parent != "alpha" {
 		t.Fatalf("planning not found under alpha: %+v", loc)
 	}
@@ -278,13 +297,24 @@ func TestMvRename(t *testing.T) {
 	if loc.Node.Title != "One" {
 		t.Errorf("title = %q, want One (mv must not change the title)", loc.Node.Title)
 	}
-	// The child task moved with its issue.
-	if task, _ := s.Locate("t"); task == nil || task.Parent != "planning" {
+	// The child task moved with its issue (its path prefix changed).
+	if task, _ := s.Locate("alpha/planning/t"); task == nil || task.Parent != "alpha/planning" {
 		t.Errorf("task did not follow its issue: %+v", task)
 	}
-	// The backlink followed the rename.
-	if ref, _ := s.Locate("ref"); ref == nil || !strings.Contains(ref.Node.Body, "[[planning]]") {
-		t.Errorf("backlink not rewritten: %q", ref.Node.Body)
+	// Backlinks (refs) follow the rename: the node's own ref and its descendant
+	// task's ref are rewritten, but a prefix-sharing decoy is left alone.
+	ref, _ := s.Locate("_orphan/ref")
+	if ref == nil {
+		t.Fatal("ref issue missing")
+	}
+	if !strings.Contains(ref.Node.Body, "[[alpha/planning]]") {
+		t.Errorf("own backlink not rewritten: %q", ref.Node.Body)
+	}
+	if !strings.Contains(ref.Node.Body, "[[alpha/planning/t]]") {
+		t.Errorf("descendant backlink not rewritten: %q", ref.Node.Body)
+	}
+	if !strings.Contains(ref.Node.Body, "[[alpha/one-thing]]") {
+		t.Errorf("prefix-sharing decoy was wrongly rewritten: %q", ref.Node.Body)
 	}
 }
 
@@ -293,13 +323,13 @@ func TestMvMove(t *testing.T) {
 	if err := s.Mv("alpha/one", "beta/one", "2026-07-20"); err != nil {
 		t.Fatalf("Mv move: %v", err)
 	}
-	loc, _ := s.Locate("one")
+	loc, _ := s.Locate("beta/one")
 	if loc == nil || loc.Parent != "beta" {
 		t.Fatalf("one not moved under beta: %+v", loc)
 	}
-	// Slug unchanged on a pure move, so backlinks are untouched.
-	if ref, _ := s.Locate("ref"); ref == nil || !strings.Contains(ref.Node.Body, "[[one]]") {
-		t.Errorf("backlink should be unchanged on a move: %q", ref.Node.Body)
+	// A move changes the path, so path backlinks follow: [[alpha/one]] -> [[beta/one]].
+	if ref, _ := s.Locate("_orphan/ref"); ref == nil || !strings.Contains(ref.Node.Body, "[[beta/one]]") {
+		t.Errorf("backlink not rewritten on move: %q", ref.Node.Body)
 	}
 }
 
@@ -308,11 +338,11 @@ func TestMvMoveAndRename(t *testing.T) {
 	if err := s.Mv("alpha/one", "beta/roadmap", "2026-07-20"); err != nil {
 		t.Fatalf("Mv both: %v", err)
 	}
-	loc, _ := s.Locate("roadmap")
+	loc, _ := s.Locate("beta/roadmap")
 	if loc == nil || loc.Parent != "beta" {
 		t.Fatalf("roadmap not under beta: %+v", loc)
 	}
-	if ref, _ := s.Locate("ref"); ref == nil || !strings.Contains(ref.Node.Body, "[[roadmap]]") {
+	if ref, _ := s.Locate("_orphan/ref"); ref == nil || !strings.Contains(ref.Node.Body, "[[beta/roadmap]]") {
 		t.Errorf("backlink not rewritten on move+rename: %q", ref.Node.Body)
 	}
 }
@@ -323,16 +353,16 @@ func TestMvToOrphanAndTaskAndEpic(t *testing.T) {
 	if err := s.Mv("alpha/one", "_orphan/one", "2026-07-20"); err != nil {
 		t.Fatalf("Mv to orphan: %v", err)
 	}
-	if loc, _ := s.Locate("one"); loc == nil || loc.Parent != "" {
+	if loc, _ := s.Locate("_orphan/one"); loc == nil || loc.Parent != OrphanDir {
 		t.Errorf("one not an orphan issue: %+v", loc)
 	}
 	// Task to another issue (create a second issue first).
 	write(t, filepath.Join(s.Root, "beta", "two", "_issue.md"), "---\ntitle: Two\n---\n")
-	if err := s.Mv("one/t", "two/t", "2026-07-20"); err != nil {
+	if err := s.Mv("_orphan/one/t", "beta/two/t", "2026-07-20"); err != nil {
 		t.Fatalf("Mv task: %v", err)
 	}
-	if task, _ := s.Locate("t"); task == nil || task.Parent != "two" {
-		t.Errorf("task not moved to two: %+v", task)
+	if task, _ := s.Locate("beta/two/t"); task == nil || task.Parent != "beta/two" {
+		t.Errorf("task not moved to beta/two: %+v", task)
 	}
 	// Epic rename (a bare name; epics have no parent).
 	if err := s.Mv("alpha", "gamma", "2026-07-20"); err != nil {
@@ -345,13 +375,18 @@ func TestMvToOrphanAndTaskAndEpic(t *testing.T) {
 
 func TestMvErrors(t *testing.T) {
 	s := mvFixture(t)
-	// Source not at the stated parent.
+	// Source path does not exist (one is under alpha, not beta).
 	if err := s.Mv("beta/one", "beta/x", "2026-07-20"); err == nil {
-		t.Error("expected an error: 'one' is not under beta")
+		t.Error("expected an error: no node at 'beta/one'")
 	}
-	// Renaming onto an existing slug.
-	if err := s.Mv("alpha/one", "alpha/beta", "2026-07-20"); err == nil {
-		t.Error("expected an error: slug 'beta' already exists")
+	// The same ref is a no-op, not an error.
+	if err := s.Mv("alpha/one", "alpha/one", "2026-07-20"); err != nil {
+		t.Errorf("same ref should be a no-op, not an error: %v", err)
+	}
+	// Renaming onto an existing sibling slug errors.
+	write(t, filepath.Join(s.Root, "alpha", "two", "_issue.md"), "---\ntitle: Two\n---\n")
+	if err := s.Mv("alpha/one", "alpha/two", "2026-07-20"); err == nil {
+		t.Error("expected an error: slug 'two' already exists under alpha")
 	}
 	// An epic cannot be given a parent.
 	if err := s.Mv("alpha", "beta/alpha", "2026-07-20"); err == nil {
@@ -362,10 +397,10 @@ func TestMvErrors(t *testing.T) {
 		t.Error("expected an error: no such epic 'ghost'")
 	}
 	// Moving a task under a nonexistent issue.
-	if err := s.Mv("one/t", "ghost/t", "2026-07-20"); err == nil {
+	if err := s.Mv("alpha/one/t", "ghost/t", "2026-07-20"); err == nil {
 		t.Error("expected an error: no such issue 'ghost'")
 	}
-	// Empty source or destination.
+	// An empty source or destination.
 	if err := s.Mv("", "beta/x", "2026-07-20"); err == nil {
 		t.Error("expected an error: empty source")
 	}
@@ -375,18 +410,18 @@ func TestMvErrors(t *testing.T) {
 }
 
 // The destination name is slugified, and that normalized slug is what the node
-// is filed under, collision-checked, and used for backlinks.
+// is filed under and used for the backlink path.
 func TestMvSlugifiesDest(t *testing.T) {
 	s := mvFixture(t)
 	if err := s.Mv("alpha/one", "alpha/Q3 Roadmap", "2026-07-20"); err != nil {
 		t.Fatalf("Mv: %v", err)
 	}
-	loc, _ := s.Locate("q3-roadmap")
+	loc, _ := s.Locate("alpha/q3-roadmap")
 	if loc == nil || loc.Parent != "alpha" {
 		t.Fatalf("node not filed under normalized slug: %+v", loc)
 	}
-	if ref, _ := s.Locate("ref"); ref == nil || !strings.Contains(ref.Node.Body, "[[q3-roadmap]]") {
-		t.Errorf("backlink not rewritten to the normalized slug: %q", ref.Node.Body)
+	if ref, _ := s.Locate("_orphan/ref"); ref == nil || !strings.Contains(ref.Node.Body, "[[alpha/q3-roadmap]]") {
+		t.Errorf("backlink not rewritten to the normalized path: %q", ref.Node.Body)
 	}
 }
 
@@ -408,27 +443,27 @@ func TestRemove(t *testing.T) {
 	s := Open(fixture(t))
 
 	// Removing a task deletes only its file; its issue survives.
-	task, _ := s.Locate("task-a")
+	task, _ := s.Locate("alpha/one/task-a")
 	if err := s.Remove(task); err != nil {
 		t.Fatalf("Remove task: %v", err)
 	}
-	if loc, _ := s.Locate("task-a"); loc != nil {
-		t.Error("task-a still resolves after Remove")
+	if loc, _ := s.Locate("alpha/one/task-a"); loc != nil {
+		t.Error("task still resolves after Remove")
 	}
-	if loc, _ := s.Locate("one"); loc == nil {
-		t.Error("issue 'one' should survive removing its task")
+	if loc, _ := s.Locate("alpha/one"); loc == nil {
+		t.Error("issue 'alpha/one' should survive removing its task")
 	}
 
 	// Removing an issue deletes its whole subtree; a sibling issue survives.
-	issue, _ := s.Locate("one")
+	issue, _ := s.Locate("alpha/one")
 	if err := s.Remove(issue); err != nil {
 		t.Fatalf("Remove issue: %v", err)
 	}
-	if loc, _ := s.Locate("one"); loc != nil {
-		t.Error("issue 'one' still resolves after Remove")
+	if loc, _ := s.Locate("alpha/one"); loc != nil {
+		t.Error("issue 'alpha/one' still resolves after Remove")
 	}
-	if loc, _ := s.Locate("two"); loc == nil {
-		t.Error("sibling issue 'two' should survive")
+	if loc, _ := s.Locate("alpha/two"); loc == nil {
+		t.Error("sibling issue 'alpha/two' should survive")
 	}
 
 	// Removing an epic takes its subtree; an orphan issue elsewhere survives.
@@ -436,10 +471,10 @@ func TestRemove(t *testing.T) {
 	if err := s.Remove(epic); err != nil {
 		t.Fatalf("Remove epic: %v", err)
 	}
-	if loc, _ := s.Locate("two"); loc != nil {
-		t.Error("issue 'two' should be gone with its epic")
+	if loc, _ := s.Locate("alpha/two"); loc != nil {
+		t.Error("issue 'alpha/two' should be gone with its epic")
 	}
-	if loc, _ := s.Locate("loose"); loc == nil {
-		t.Error("orphan issue 'loose' should survive")
+	if loc, _ := s.Locate("_orphan/loose"); loc == nil {
+		t.Error("orphan issue '_orphan/loose' should survive")
 	}
 }

@@ -10,7 +10,7 @@ import (
 
 func newStatusCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "status <slug> <status>",
+		Use:   "status <ref> <status>",
 		Short: "Set a node's status",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -35,7 +35,7 @@ func newStatusCmd() *cobra.Command {
 
 func newPriorityCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "priority <slug> <priority>",
+		Use:   "priority <ref> <priority>",
 		Short: "Set a node's priority",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
