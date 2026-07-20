@@ -357,6 +357,18 @@ func (s *Store) Save(loc *Entry) error {
 	return writeNode(loc.File, loc.Node)
 }
 
+// Remove deletes a node. An epic or issue takes its whole subtree (its
+// directory); a task takes only its file. Any "[[slug]]" backlinks to the
+// removed node are left as-is (dangling).
+func (s *Store) Remove(e *Entry) error {
+	switch e.Node.Type {
+	case model.Epic, model.Issue:
+		return os.RemoveAll(e.Dir)
+	default: // task
+		return os.Remove(e.File)
+	}
+}
+
 // Mv relocates the node named by src to dst, the way the shell's mv does. Each
 // ref is a slug path "<parent>/<name>" — an epic is a bare "<name>", an orphan
 // issue uses the "_orphan" parent. A changed parent moves the node; a changed

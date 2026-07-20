@@ -403,3 +403,43 @@ func TestMvNoOp(t *testing.T) {
 		t.Errorf("no-op mv rewrote the file:\nbefore=%q\nafter=%q", before, after)
 	}
 }
+
+func TestRemove(t *testing.T) {
+	s := Open(fixture(t))
+
+	// Removing a task deletes only its file; its issue survives.
+	task, _ := s.Locate("task-a")
+	if err := s.Remove(task); err != nil {
+		t.Fatalf("Remove task: %v", err)
+	}
+	if loc, _ := s.Locate("task-a"); loc != nil {
+		t.Error("task-a still resolves after Remove")
+	}
+	if loc, _ := s.Locate("one"); loc == nil {
+		t.Error("issue 'one' should survive removing its task")
+	}
+
+	// Removing an issue deletes its whole subtree; a sibling issue survives.
+	issue, _ := s.Locate("one")
+	if err := s.Remove(issue); err != nil {
+		t.Fatalf("Remove issue: %v", err)
+	}
+	if loc, _ := s.Locate("one"); loc != nil {
+		t.Error("issue 'one' still resolves after Remove")
+	}
+	if loc, _ := s.Locate("two"); loc == nil {
+		t.Error("sibling issue 'two' should survive")
+	}
+
+	// Removing an epic takes its subtree; an orphan issue elsewhere survives.
+	epic, _ := s.Locate("alpha")
+	if err := s.Remove(epic); err != nil {
+		t.Fatalf("Remove epic: %v", err)
+	}
+	if loc, _ := s.Locate("two"); loc != nil {
+		t.Error("issue 'two' should be gone with its epic")
+	}
+	if loc, _ := s.Locate("loose"); loc == nil {
+		t.Error("orphan issue 'loose' should survive")
+	}
+}
