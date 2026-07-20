@@ -20,8 +20,60 @@ func newIssueCmd() *cobra.Command {
 		newIssueAddCmd(),
 		newIssueListCmd(),
 		newIssueShowCmd(),
+		newIssueStatusCmd(),
+		newIssuePriorityCmd(),
 	)
 	return cmd
+}
+
+func newIssueStatusCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "status <slug> <status>",
+		Short: "Set an issue's status",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			st, err := openStore(cmd)
+			if err != nil {
+				return err
+			}
+			loc, err := st.Find(args[0], model.Issue)
+			if err != nil {
+				return err
+			}
+			s := model.Status(args[1])
+			if !s.Valid() {
+				return fmt.Errorf("invalid status %q (want %s)", args[1], model.StatusValues())
+			}
+			loc.Node.Status = s
+			loc.Node.Updated = today()
+			return st.Save(loc)
+		},
+	}
+}
+
+func newIssuePriorityCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "priority <slug> <priority>",
+		Short: "Set an issue's priority",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			st, err := openStore(cmd)
+			if err != nil {
+				return err
+			}
+			loc, err := st.Find(args[0], model.Issue)
+			if err != nil {
+				return err
+			}
+			p := model.Priority(args[1])
+			if !p.Valid() {
+				return fmt.Errorf("invalid priority %q (want %s)", args[1], model.PriorityValues())
+			}
+			loc.Node.Priority = p
+			loc.Node.Updated = today()
+			return st.Save(loc)
+		},
+	}
 }
 
 func newIssueShowCmd() *cobra.Command {

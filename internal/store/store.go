@@ -89,7 +89,8 @@ func Open(root string) *Store {
 
 // Load reads the entire tree. The returned slice holds the top-level nodes:
 // epics (with their issues and tasks) and orphan issues, each sorted by slug.
-// Epic statuses are rolled up from their issues unless set explicitly.
+// A node's Status is exactly what its file holds — empty when omitted; the
+// display-time rollup and todo default live in model.Node.EffectiveStatus.
 func (s *Store) Load() ([]*model.Node, error) {
 	entries, err := os.ReadDir(s.Root)
 	if err != nil {
@@ -134,10 +135,6 @@ func (s *Store) loadEpic(dir, slug string) (*model.Node, error) {
 		return nil, err
 	}
 	n.Children = issues
-
-	if n.Status == "" {
-		n.Status = rollupStatus(issues)
-	}
 	return n, nil
 }
 
@@ -172,9 +169,6 @@ func (s *Store) loadIssue(dir, slug string) (*model.Node, error) {
 	}
 	n.Type = model.Issue
 	n.Slug = slug
-	if n.Status == "" {
-		n.Status = model.Todo
-	}
 
 	tasks, err := s.loadTasks(dir)
 	if err != nil {
@@ -205,9 +199,6 @@ func (s *Store) loadTasks(dir string) ([]*model.Node, error) {
 		}
 		n.Type = model.Task
 		n.Slug = strings.TrimSuffix(name, ".md")
-		if n.Status == "" {
-			n.Status = model.Todo
-		}
 		tasks = append(tasks, n)
 	}
 	sortBySlug(tasks)
@@ -343,38 +334,12 @@ func (s *Store) CreateTask(n *model.Node, issueDir string) error {
 	return writeNode(filepath.Join(issueDir, n.Slug+".md"), n)
 }
 
-// rollupStatus derives an epic's status from its issues:
-// all done -> done; any doing -> doing; all todo -> todo; otherwise doing.
-func rollupStatus(issues []*model.Node) model.Status {
-	if len(issues) == 0 {
-		return model.Todo
-	}
-	allDone, allTodo, anyDoing := true, true, false
-	for _, is := range issues {
-		st := is.Status
-		if st == "" {
-			st = model.Todo
-		}
-		if st != model.Done {
-			allDone = false
-		}
-		if st != model.Todo {
-			allTodo = false
-		}
-		if st == model.Doing {
-			anyDoing = true
-		}
-	}
-	switch {
-	case allDone:
-		return model.Done
-	case anyDoing:
-		return model.Doing
-	case allTodo:
-		return model.Todo
-	default:
-		return model.Doing
-	}
+// Save re-serializes a located node back to its own file. Callers set the
+// node's fields (and its Updated date) before calling. Because Load leaves
+// Status exactly as the file holds it, saving a node whose status the file
+// omits does not write a derived status — only an explicitly set one persists.
+func (s *Store) Save(loc *Located) error {
+	return writeNode(loc.File, loc.Node)
 }
 
 func sortBySlug(nodes []*model.Node) {

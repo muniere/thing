@@ -187,6 +187,56 @@ func TestInvalidPriorityRejected(t *testing.T) {
 	}
 }
 
+func TestStatusAndPriority(t *testing.T) {
+	dir := t.TempDir()
+	d := []string{"--data-dir", dir, "--config", dir}
+	runCLI(t, append([]string{"init"}, d...)...)
+	runCLI(t, append([]string{"epic", "add", "Web"}, d...)...)
+	runCLI(t, append([]string{"issue", "add", "Roll", "--epic", "web"}, d...)...)
+	runCLI(t, append([]string{"task", "add", "Do", "--issue", "roll"}, d...)...)
+
+	// Setting status and priority round-trips through show.
+	if code, _, errb := runCLI(t, append([]string{"task", "status", "do", "doing"}, d...)...); code != 0 {
+		t.Fatalf("task status: %s", errb)
+	}
+	runCLI(t, append([]string{"task", "priority", "do", "high"}, d...)...)
+	if _, out, _ := runCLI(t, append([]string{"task", "show", "do"}, d...)...); !strings.Contains(out, "doing") || !strings.Contains(out, "high") {
+		t.Errorf("show after status/priority: %q", out)
+	}
+
+	// Invalid values are rejected, and the error names the allowed set.
+	if code, _, errb := runCLI(t, append([]string{"task", "status", "do", "bogus"}, d...)...); code == 0 || !strings.Contains(errb, "invalid status") || !strings.Contains(errb, "todo") {
+		t.Errorf("invalid status: code=%d err=%q", code, errb)
+	}
+	if code, _, errb := runCLI(t, append([]string{"epic", "priority", "web", "bogus"}, d...)...); code == 0 || !strings.Contains(errb, "invalid priority") || !strings.Contains(errb, "high") {
+		t.Errorf("invalid priority: code=%d err=%q", code, errb)
+	}
+
+	// The resource acts as a type guard: a task slug is not an epic.
+	if code, _, _ := runCLI(t, append([]string{"epic", "status", "do", "doing"}, d...)...); code == 0 {
+		t.Error("epic status on a task slug should fail")
+	}
+}
+
+// Setting an epic's priority must not freeze its rolled-up status: the epic
+// still tracks its issues afterward.
+func TestEpicPriorityKeepsStatusLive(t *testing.T) {
+	dir := t.TempDir()
+	d := []string{"--data-dir", dir, "--config", dir}
+	runCLI(t, append([]string{"init"}, d...)...)
+	runCLI(t, append([]string{"epic", "add", "Web"}, d...)...)
+	runCLI(t, append([]string{"issue", "add", "Roll", "--epic", "web"}, d...)...)
+
+	// Set only priority, then move the issue to doing.
+	runCLI(t, append([]string{"epic", "priority", "web", "high"}, d...)...)
+	runCLI(t, append([]string{"issue", "status", "roll", "doing"}, d...)...)
+
+	// The epic rolls up to doing rather than a frozen todo.
+	if _, out, _ := runCLI(t, append([]string{"epic", "show", "web"}, d...)...); !strings.Contains(out, "doing") {
+		t.Errorf("epic status should roll up to doing, got: %q", out)
+	}
+}
+
 func TestVersionAndUsage(t *testing.T) {
 	if code, out, _ := runCLI(t, "--version"); code != 0 || strings.TrimSpace(out) == "" {
 		t.Errorf("version: code=%d out=%q", code, out)

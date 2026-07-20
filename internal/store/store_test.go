@@ -68,18 +68,26 @@ func TestLoad(t *testing.T) {
 	if len(orphan.Children) != 2 || orphan.Children[0].Slug != "a-task" || orphan.Children[1].Slug != "z-task" {
 		t.Errorf("orphan tasks = %+v", orphan.Children)
 	}
-	// Orphan issue with no explicit status defaults to todo.
-	if orphan.Status != model.Todo {
-		t.Errorf("orphan status = %q, want todo", orphan.Status)
+	// A file that omits status loads with an empty Status; the todo default is
+	// a display-time derivation, not baked into the loaded node.
+	if orphan.Status != "" {
+		t.Errorf("orphan raw status = %q, want empty", orphan.Status)
+	}
+	if orphan.EffectiveStatus() != model.Todo {
+		t.Errorf("orphan effective status = %q, want todo", orphan.EffectiveStatus())
 	}
 }
 
 func TestRollup(t *testing.T) {
 	root := fixture(t)
 	top, _ := Open(root).Load()
-	// alpha has issue "one"=done and "two"=doing -> any doing -> doing.
-	if top[0].Status != model.Doing {
-		t.Errorf("alpha rollup = %q, want doing", top[0].Status)
+	// alpha omits its own status; one=done and two=doing -> any doing -> doing.
+	// The rollup is a display derivation, so the loaded node's Status stays empty.
+	if top[0].Status != "" {
+		t.Errorf("alpha raw status = %q, want empty", top[0].Status)
+	}
+	if top[0].EffectiveStatus() != model.Doing {
+		t.Errorf("alpha rollup = %q, want doing", top[0].EffectiveStatus())
 	}
 }
 
@@ -88,34 +96,8 @@ func TestRollupExplicitWins(t *testing.T) {
 	write(t, filepath.Join(root, "e", "_epic.md"), "---\ntitle: E\nstatus: paused\n---\n")
 	write(t, filepath.Join(root, "e", "i", "_issue.md"), "---\ntitle: I\nstatus: doing\n---\n")
 	top, _ := Open(root).Load()
-	if top[0].Status != model.Paused {
-		t.Errorf("explicit epic status = %q, want paused", top[0].Status)
-	}
-}
-
-func TestRollupStatusRules(t *testing.T) {
-	mk := func(sts ...model.Status) []*model.Node {
-		var ns []*model.Node
-		for _, s := range sts {
-			ns = append(ns, &model.Node{Status: s})
-		}
-		return ns
-	}
-	cases := []struct {
-		name string
-		in   []*model.Node
-		want model.Status
-	}{
-		{"empty", nil, model.Todo},
-		{"all done", mk(model.Done, model.Done), model.Done},
-		{"all todo", mk(model.Todo, model.Todo), model.Todo},
-		{"any doing", mk(model.Todo, model.Doing, model.Done), model.Doing},
-		{"mixed done/todo", mk(model.Done, model.Todo), model.Doing},
-	}
-	for _, c := range cases {
-		if got := rollupStatus(c.in); got != c.want {
-			t.Errorf("%s: rollupStatus = %q, want %q", c.name, got, c.want)
-		}
+	if top[0].EffectiveStatus() != model.Paused {
+		t.Errorf("explicit epic status = %q, want paused", top[0].EffectiveStatus())
 	}
 }
 
@@ -192,6 +174,53 @@ func TestScopedListings(t *testing.T) {
 	allTasks, _ := s.Tasks("")
 	if len(allTasks) != 3 {
 		t.Errorf("Tasks(\"\") count = %d, want 3", len(allTasks))
+	}
+}
+
+func TestSave(t *testing.T) {
+	s := Open(fixture(t))
+
+	// A task's status write round-trips through disk, along with its updated date.
+	loc, _ := s.Locate("task-a")
+	loc.Node.Status = model.Doing
+	loc.Node.Updated = "2026-07-20"
+	if err := s.Save(loc); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	reloaded, _ := s.Locate("task-a")
+	if reloaded.Node.Status != model.Doing || reloaded.Node.Updated != "2026-07-20" {
+		t.Errorf("reloaded = {status:%q updated:%q}", reloaded.Node.Status, reloaded.Node.Updated)
+	}
+
+	// alpha's epic file omits its own status (rollup derives "doing"). Saving a
+	// non-status field must not freeze that derived status onto the file, and
+	// must not lose the node's body.
+	epic, _ := s.Locate("alpha")
+	if epic.Node.Status != "" {
+		t.Fatalf("precondition: alpha raw status = %q, want empty", epic.Node.Status)
+	}
+	epic.Node.Priority = model.Low
+	if err := s.Save(epic); err != nil {
+		t.Fatalf("Save epic priority: %v", err)
+	}
+	after, _ := s.Locate("alpha")
+	if after.Node.Status != "" {
+		t.Errorf("epic status frozen to %q after a priority-only save; want it left empty", after.Node.Status)
+	}
+	if after.Node.EffectiveStatus() != model.Doing {
+		t.Errorf("epic effective status = %q, want doing (rollup must stay live)", after.Node.EffectiveStatus())
+	}
+	if after.Node.Body == "" {
+		t.Error("epic body lost after Save")
+	}
+
+	// An explicitly set epic status, by contrast, does persist across reload.
+	after.Node.Status = model.Paused
+	if err := s.Save(after); err != nil {
+		t.Fatalf("Save epic status: %v", err)
+	}
+	if got, _ := s.Locate("alpha"); got.Node.Status != model.Paused {
+		t.Errorf("epic status = %q, want paused (an explicit status must persist)", got.Node.Status)
 	}
 }
 
