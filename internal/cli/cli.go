@@ -18,8 +18,8 @@ func NewRootCmd(version string) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	cmd.PersistentFlags().String("data-dir", "", "data directory (default: nearest .thing/, else ~/.local/share/thing)")
-	cmd.PersistentFlags().String("config", "", "config directory (default: nearest .thing/, else ~/.config/thing)")
+	cmd.PersistentFlags().String("data-dir", "", "data directory (default: nearest .thing/ searched upward)")
+	cmd.PersistentFlags().String("config", "", "config directory (default: nearest .thing/ upward, else ~/.config/thing)")
 	cmd.PersistentFlags().BoolP("global", "g", false, "use the global directories (~/.local/share/thing and ~/.config/thing)")
 	cmd.AddCommand(
 		newInitCmd(),

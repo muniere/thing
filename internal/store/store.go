@@ -10,6 +10,7 @@
 package store
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -27,29 +28,45 @@ const (
 	issueFile = "_issue.md"
 )
 
-// DataDir resolves the directory that holds the node tree, and ConfigDir the
-// one that holds config.yaml. Both follow the same precedence:
+// ProjectDir is the per-project directory name searched for upward, git-style.
+const ProjectDir = ".thing"
+
+// DataDir resolves the directory that holds the node tree:
 //
-//	flag  ->  env  ->  nearest .thing/ (skipped with -g)  ->  XDG default
+//	--data-dir  ->  THING_DATA_DIR  ->  -g global  ->  nearest .thing/ upward
 //
-// The XDG defaults are $XDG_DATA_HOME/thing (else ~/.local/share/thing) for data
-// and $XDG_CONFIG_HOME/thing (else ~/.config/thing) for config. A found project
-// .thing/ holds both, so DataDir and ConfigDir agree there. Returned paths are
-// not guaranteed to exist (init creates them).
+// -g resolves the global tree ($XDG_DATA_HOME/thing, else ~/.local/share/thing).
+// Without it, and with no flag/env, the tree is found by searching upward for a
+// .thing/. There is NO implicit global fallback: rather than silently operate on
+// a global tree, it returns an error when none of the above resolves.
 func DataDir(flag string, global bool) (string, error) {
-	return resolveDir(flag, global, "THING_DATA_DIR", "XDG_DATA_HOME", ".local/share/thing")
-}
-
-// ConfigDir resolves the directory that holds config.yaml. See DataDir.
-func ConfigDir(flag string, global bool) (string, error) {
-	return resolveDir(flag, global, "THING_CONFIG_DIR", "XDG_CONFIG_HOME", ".config/thing")
-}
-
-func resolveDir(flag string, global bool, env, xdgVar, homeRel string) (string, error) {
 	if flag != "" {
 		return flag, nil
 	}
-	if v := os.Getenv(env); v != "" {
+	if v := os.Getenv("THING_DATA_DIR"); v != "" {
+		return v, nil
+	}
+	if global {
+		return globalDir("XDG_DATA_HOME", ".local/share/thing")
+	}
+	if found, ok := searchUp(); ok {
+		return found, nil
+	}
+	return "", errors.New("no data directory found: pass --data-dir, set THING_DATA_DIR, use -g for the global tree, or run inside a project (a directory with a .thing/, found by searching upward)")
+}
+
+// ConfigDir resolves the directory that holds config.yaml:
+//
+//	--config  ->  THING_CONFIG_DIR  ->  -g global  ->  nearest .thing/ upward  ->  global default
+//
+// Unlike data, config always has a global default ($XDG_CONFIG_HOME/thing, else
+// ~/.config/thing): -g uses it directly, and without -g it is the fallback after
+// the upward .thing/ search.
+func ConfigDir(flag string, global bool) (string, error) {
+	if flag != "" {
+		return flag, nil
+	}
+	if v := os.Getenv("THING_CONFIG_DIR"); v != "" {
 		return v, nil
 	}
 	if !global {
@@ -57,6 +74,36 @@ func resolveDir(flag string, global bool, env, xdgVar, homeRel string) (string, 
 			return found, nil
 		}
 	}
+	return globalDir("XDG_CONFIG_HOME", ".config/thing")
+}
+
+// InitDataDir and InitConfigDir resolve where `thing init` creates directories.
+// Like npm init, a bare `thing init` anchors a new project at ./.thing in the
+// current directory; -g targets the global directories instead.
+func InitDataDir(flag string, global bool) (string, error) {
+	return initDir(flag, "THING_DATA_DIR", global, "XDG_DATA_HOME", ".local/share/thing")
+}
+
+func InitConfigDir(flag string, global bool) (string, error) {
+	return initDir(flag, "THING_CONFIG_DIR", global, "XDG_CONFIG_HOME", ".config/thing")
+}
+
+func initDir(flag, env string, global bool, xdgVar, homeRel string) (string, error) {
+	if flag != "" {
+		return flag, nil
+	}
+	if v := os.Getenv(env); v != "" {
+		return v, nil
+	}
+	if global {
+		return globalDir(xdgVar, homeRel)
+	}
+	return ProjectDir, nil
+}
+
+// globalDir returns $<xdgVar>/thing when that XDG var is an absolute path,
+// otherwise ~/<homeRel>.
+func globalDir(xdgVar, homeRel string) (string, error) {
 	if xdg := os.Getenv(xdgVar); filepath.IsAbs(xdg) {
 		return filepath.Join(xdg, "thing"), nil
 	}
