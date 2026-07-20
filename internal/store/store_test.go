@@ -167,6 +167,34 @@ func TestGlobalXDGDefaults(t *testing.T) {
 	}
 }
 
+func TestDataErrorsWithoutProjectConfigFallsBack(t *testing.T) {
+	t.Setenv("THING_DATA_DIR", "")
+	t.Setenv("THING_CONFIG_DIR", "")
+	t.Setenv("XDG_DATA_HOME", "")
+	t.Setenv("XDG_CONFIG_HOME", "")
+	// A directory with no .thing/ anywhere upward.
+	dir := t.TempDir()
+	orig, _ := os.Getwd()
+	t.Cleanup(func() { os.Chdir(orig) })
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+
+	// data has no global fallback: it errors when nothing resolves.
+	if _, err := DataDir("", false); err == nil {
+		t.Error("DataDir should error with no flag/env/project and no -g")
+	}
+	// config falls back to the global default.
+	home, _ := os.UserHomeDir()
+	if got, _ := ConfigDir("", false); got != filepath.Join(home, ".config", "thing") {
+		t.Errorf("config fallback: got %q", got)
+	}
+	// -g gives data the global tree.
+	if got, _ := DataDir("", true); got != filepath.Join(home, ".local", "share", "thing") {
+		t.Errorf("data -g: got %q", got)
+	}
+}
+
 func TestUpwardSearch(t *testing.T) {
 	t.Setenv("THING_DATA_DIR", "")
 	t.Setenv("THING_CONFIG_DIR", "")

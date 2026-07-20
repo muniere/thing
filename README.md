@@ -30,20 +30,24 @@ local `bin/thing` instead.
 
 1. `--data-dir <path>`
 2. `THING_DATA_DIR`
-3. the nearest `.thing/` searched upward (skipped with `-g` / `--global`)
-4. `$XDG_DATA_HOME/thing` (default `~/.local/share/thing`)
+3. `-g` / `--global` → `$XDG_DATA_HOME/thing` (default `~/.local/share/thing`)
+4. the nearest `.thing/` searched upward
+5. otherwise an error — data is never taken from an implicit global location
 
 ### Config directory
 
 1. `--config <path>`
 2. `THING_CONFIG_DIR`
-3. the nearest `.thing/` searched upward (skipped with `-g` / `--global`)
-4. `$XDG_CONFIG_HOME/thing` (default `~/.config/thing`)
+3. `-g` / `--global` → `$XDG_CONFIG_HOME/thing` (default `~/.config/thing`)
+4. the nearest `.thing/` searched upward
+5. otherwise `$XDG_CONFIG_HOME/thing` (default `~/.config/thing`)
 
 A `.thing/` found upward holds both, so a self-contained project keeps its tree
 and config together.
 
-Run `thing init` to create the directories and a starter `config.yaml`.
+Run `thing init` to create the directories and a starter `config.yaml`. Like
+`npm init`, a bare `thing init` anchors a new project at `./.thing` in the
+current directory; `thing init -g` targets the global directories instead.
 
 ## Commands
 
