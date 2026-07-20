@@ -36,15 +36,78 @@ func label(n *model.Node) string {
 	return s
 }
 
-// Tree renders the whole tree as an indented outline headed by title.
-func Tree(nodes []*model.Node, title string) string {
+// uncategorizedHeading groups epics with no (or unknown) category, plus orphan
+// issues, when category grouping is active.
+const uncategorizedHeading = "(uncategorized)"
+
+// group is a set of top-level nodes shown under one heading ("" = no heading).
+type group struct {
+	heading string
+	nodes   []*model.Node
+}
+
+// groupTop partitions top-level nodes into category groups. With no categories
+// configured it returns a single unheaded group (flat rendering). Otherwise
+// epics are grouped under their category in config order; epics with an empty
+// or unknown category and all orphan issues fall under "(uncategorized)".
+func groupTop(top []*model.Node, categories []string) []group {
+	if len(categories) == 0 {
+		return []group{{nodes: top}}
+	}
+	var epics, orphans []*model.Node
+	for _, n := range top {
+		if n.Type == model.Epic {
+			epics = append(epics, n)
+		} else {
+			orphans = append(orphans, n)
+		}
+	}
+	known := make(map[string]bool, len(categories))
+	for _, c := range categories {
+		known[c] = true
+	}
+
+	var groups []group
+	for _, c := range categories {
+		var g []*model.Node
+		for _, e := range epics {
+			if e.Category == c {
+				g = append(g, e)
+			}
+		}
+		if len(g) > 0 {
+			groups = append(groups, group{heading: c, nodes: g})
+		}
+	}
+	var rest []*model.Node
+	for _, e := range epics {
+		if e.Category == "" || !known[e.Category] {
+			rest = append(rest, e)
+		}
+	}
+	rest = append(rest, orphans...)
+	if len(rest) > 0 {
+		groups = append(groups, group{heading: uncategorizedHeading, nodes: rest})
+	}
+	return groups
+}
+
+// Tree renders the whole tree as an indented outline headed by title. When
+// categories are configured, top-level nodes are grouped under category
+// headings.
+func Tree(nodes []*model.Node, title string, categories []string) string {
 	if title == "" {
 		title = "thing"
 	}
 	var b strings.Builder
 	b.WriteString(title)
 	b.WriteByte('\n')
-	writeChildren(&b, nodes, "")
+	for _, g := range groupTop(nodes, categories) {
+		if g.heading != "" {
+			b.WriteString("\n# " + g.heading + "\n")
+		}
+		writeChildren(&b, g.nodes, "")
+	}
 	return b.String()
 }
 
@@ -54,6 +117,25 @@ func List(nodes []*model.Node) string {
 	for _, n := range nodes {
 		b.WriteString(listLine(n))
 		b.WriteByte('\n')
+	}
+	return b.String()
+}
+
+// TopList renders top-level nodes as a flat listing, grouped under category
+// headings when categories are configured.
+func TopList(nodes []*model.Node, categories []string) string {
+	var b strings.Builder
+	for _, g := range groupTop(nodes, categories) {
+		if g.heading != "" {
+			if b.Len() > 0 {
+				b.WriteByte('\n')
+			}
+			b.WriteString("# " + g.heading + "\n")
+		}
+		for _, n := range g.nodes {
+			b.WriteString(listLine(n))
+			b.WriteByte('\n')
+		}
 	}
 	return b.String()
 }

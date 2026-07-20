@@ -490,3 +490,38 @@ func TestLinkCommand(t *testing.T) {
 		t.Error("link add on an unknown ref should fail")
 	}
 }
+
+func TestTreeGroupsByCategory(t *testing.T) {
+	dir := t.TempDir()
+	d := []string{"--data-dir", dir, "--config", dir}
+	runCLI(t, append([]string{"init"}, d...)...)
+	// Configure category headings and their order.
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"),
+		[]byte("title: Board\ncategories:\n  - Project\n  - Personal\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runCLI(t, append([]string{"add", "Web", "--category", "Project"}, d...)...)
+	runCLI(t, append([]string{"add", "Home", "--category", "Personal"}, d...)...)
+	runCLI(t, append([]string{"add", "Misc"}, d...)...)
+	runCLI(t, append([]string{"add", "web/Roll"}, d...)...)
+	runCLI(t, append([]string{"add", "_orphan/Loose"}, d...)...)
+
+	// tree and top-level ls both group under headings in config order.
+	for _, cmd := range [][]string{{"tree"}, {"ls"}} {
+		_, out, _ := runCLI(t, append(cmd, d...)...)
+		i, j, k := strings.Index(out, "# Project"), strings.Index(out, "# Personal"), strings.Index(out, "# (uncategorized)")
+		if i < 0 || j < 0 || k < 0 || !(i < j && j < k) {
+			t.Errorf("%v grouping: Project=%d Personal=%d uncat=%d\n%s", cmd, i, j, k, out)
+		}
+		if !strings.Contains(out[k:], "misc") {
+			t.Errorf("%v: misc should be uncategorized\n%s", cmd, out)
+		}
+	}
+
+	// Grouping applies only to the top level: ls of a parent or _orphan is flat.
+	for _, cmd := range [][]string{{"ls", "web"}, {"ls", "_orphan"}} {
+		if _, out, _ := runCLI(t, append(cmd, d...)...); strings.Contains(out, "#") {
+			t.Errorf("%v should be flat (no headings): %q", cmd, out)
+		}
+	}
+}

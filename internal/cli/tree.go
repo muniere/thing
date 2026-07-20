@@ -31,7 +31,7 @@ func newTreeCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Fprint(cmd.OutOrStdout(), render.Tree(nodes, cfg.Title))
+			fmt.Fprint(cmd.OutOrStdout(), render.Tree(nodes, cfg.Title, cfg.Categories))
 			return nil
 		},
 	}

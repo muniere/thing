@@ -1,9 +1,14 @@
 # Example thing configuration.
-# Copy to <data-dir>/config.yaml (or let `thing init` write a starter for you).
+# Copy to <config-dir>/config.yaml (or let `thing init` write a starter for you).
 
 # Board title, shown as the header of `thing tree`.
 title: thing
 
-# Exclusive category groups for epics (used by tree/list grouping).
-# Configured and documented once category grouping lands.
-categories: []
+# Category headings for grouping epics in `thing tree` and top-level `thing ls`.
+# They define the heading order; each epic belongs to at most one category (set
+# with `thing add ... --category`). Epics with an empty or unknown category, and
+# all orphan issues, fall under "(uncategorized)". With none configured, output
+# stays flat.
+categories:
+  - Project
+  - Personal

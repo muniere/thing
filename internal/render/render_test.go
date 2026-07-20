@@ -20,7 +20,7 @@ func TestTree(t *testing.T) {
 		},
 		{Type: model.Issue, Slug: "loose", Status: model.Todo},
 	}
-	out := Tree(nodes, "My Board")
+	out := Tree(nodes, "My Board", nil)
 
 	wantLines := []string{
 		"My Board",
@@ -44,7 +44,7 @@ func TestTree(t *testing.T) {
 }
 
 func TestTreeDefaultTitle(t *testing.T) {
-	out := Tree(nil, "")
+	out := Tree(nil, "", nil)
 	if !strings.HasPrefix(out, "thing\n") {
 		t.Errorf("default title: %q", out)
 	}
@@ -93,5 +93,62 @@ func TestShowNoBody(t *testing.T) {
 	}
 	if strings.HasSuffix(got, "\n\n") {
 		t.Errorf("no trailing blank line without body: %q", got)
+	}
+}
+
+func TestCategoryGrouping(t *testing.T) {
+	top := []*model.Node{
+		{Type: model.Epic, Slug: "web", Title: "Web", Category: "Project"},
+		{Type: model.Epic, Slug: "home", Title: "Home", Category: "Personal"},
+		{Type: model.Epic, Slug: "misc", Title: "Misc"},                 // no category
+		{Type: model.Epic, Slug: "old", Title: "Old", Category: "Gone"}, // unknown category
+		{Type: model.Issue, Slug: "loose", Title: "Loose"},              // orphan issue
+	}
+	// "Archive" is configured but unused: its heading must be skipped.
+	cats := []string{"Project", "Personal", "Archive"}
+
+	// Tree groups under category headings in config order, with the empty/unknown
+	// epics and orphans under "(uncategorized)" last.
+	tree := Tree(top, "Board", cats)
+	if strings.Contains(tree, "# Archive") {
+		t.Errorf("a configured category with no epics must not emit a heading:\n%s", tree)
+	}
+	for _, want := range []string{"# Project", "# Personal", "# (uncategorized)"} {
+		if !strings.Contains(tree, want) {
+			t.Errorf("tree missing heading %q:\n%s", want, tree)
+		}
+	}
+	if i, j, k := strings.Index(tree, "# Project"), strings.Index(tree, "# Personal"), strings.Index(tree, "# (uncategorized)"); !(i < j && j < k) {
+		t.Errorf("heading order wrong: Project=%d Personal=%d uncat=%d", i, j, k)
+	}
+	// misc, old, and the orphan all land in uncategorized.
+	uncat := tree[strings.Index(tree, "# (uncategorized)"):]
+	for _, want := range []string{"misc", "old", "loose"} {
+		if !strings.Contains(uncat, want) {
+			t.Errorf("uncategorized missing %q:\n%s", want, uncat)
+		}
+	}
+
+	// TopList groups the same way, flatly. Assert the exact layout: no leading
+	// blank line, a blank line between groups, and the empty "Archive" skipped.
+	want := "# Project\n[ ] web  Web\n\n" +
+		"# Personal\n[ ] home  Home\n\n" +
+		"# (uncategorized)\n[ ] misc  Misc\n[ ] old  Old\n[ ] loose  Loose\n"
+	if got := TopList(top, cats); got != want {
+		t.Errorf("TopList layout:\n got: %q\nwant: %q", got, want)
+	}
+
+	// Categories configured but no epic matches any: only "(uncategorized)".
+	allUncat := TopList([]*model.Node{{Type: model.Epic, Slug: "x", Title: "X"}}, cats)
+	if strings.Contains(allUncat, "# Project") || !strings.HasPrefix(allUncat, "# (uncategorized)\n") {
+		t.Errorf("all-uncategorized: %q", allUncat)
+	}
+
+	// With no categories configured, output stays flat (no headings).
+	if flat := Tree(top, "Board", nil); strings.Contains(flat, "#") {
+		t.Errorf("no categories should render flat:\n%s", flat)
+	}
+	if flat := TopList(top, nil); strings.Contains(flat, "#") {
+		t.Errorf("no categories should render a flat list:\n%s", flat)
 	}
 }
