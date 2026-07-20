@@ -17,6 +17,35 @@ machinery.
 make build             # build all packages
 ```
 
+## Data directory resolution
+
+Every command resolves the data directory in this order:
+
+1. `--dir <path>` flag
+2. `-g` / `--global` → `~/.thing`
+3. `THING_DIR` environment variable
+4. the nearest `.thing/` searched upward from the working directory (git-style)
+5. `./.thing`
+
+Run `thing init [--dir <path>]` to create the directory and a starter
+`config.yaml`.
+
+## On-disk layout
+
+```
+<data-dir>/
+  config.yaml
+  <epic-slug>/
+    _epic.md
+    <issue-slug>/
+      _issue.md
+      <task-slug>.md
+  _orphan/
+    <issue-slug>/            # issues that belong to no epic
+      _issue.md
+      <task-slug>.md
+```
+
 ## Node file format
 
 Each node file is a YAML frontmatter block (delimited by `---`) followed by a
