@@ -69,8 +69,15 @@ thing rm <ref>                               # remove a node (an epic/issue take
 thing link add  <ref> <url> [--label <l>]    # add or update a related link
 thing link rm   <ref> <url|index>            # remove a link by URL, or 1-based index
 thing link list <ref>                        # list a node's related links
+thing find <query> [--json]                  # fuzzy-search titles, slugs, and tags
 thing tree                                   # whole tree as an indented outline
 ```
+
+`find` fuzzy-matches the query against each node's title, slug, and tags,
+ranking matches (a contiguous substring generally ranks above a scattered
+subsequence; matches nearer the start rank highest). Plain output is
+`<ref>  <title>  [<type>]` per line; `--json` emits a ranked array of
+`{type, slug, title, ref, score}`.
 
 ### `add` — the parent decides the type
 

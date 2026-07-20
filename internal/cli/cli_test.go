@@ -525,3 +525,36 @@ func TestTreeGroupsByCategory(t *testing.T) {
 		}
 	}
 }
+
+func TestFindCommand(t *testing.T) {
+	dir := t.TempDir()
+	d := []string{"--data-dir", dir, "--config", dir}
+	runCLI(t, append([]string{"init"}, d...)...)
+	runCLI(t, append([]string{"add", "Web release"}, d...)...)
+	runCLI(t, append([]string{"add", "web-release/Monitor rollout", "--tags", "observability"}, d...)...)
+
+	// Plain output is a ranked listing of "<ref>  <title>  [<type>]".
+	if _, out, _ := runCLI(t, append([]string{"find", "monitor"}, d...)...); !strings.Contains(out, "web-release/monitor-rollout  Monitor rollout  [issue]") {
+		t.Errorf("find monitor: %q", out)
+	}
+	// A tag matches.
+	if _, out, _ := runCLI(t, append([]string{"find", "observability"}, d...)...); !strings.Contains(out, "monitor-rollout") {
+		t.Errorf("find by tag: %q", out)
+	}
+	// --json emits a valid ranked array carrying the ref.
+	if _, out, _ := runCLI(t, append([]string{"find", "web", "--json"}, d...)...); !strings.Contains(out, "\"ref\": \"web-release\"") {
+		t.Errorf("find --json: %q", out)
+	}
+	// No match: empty plain output, exit 0.
+	if code, out, _ := runCLI(t, append([]string{"find", "zzzzz"}, d...)...); code != 0 || out != "" {
+		t.Errorf("find no-match: code=%d out=%q", code, out)
+	}
+	// No match with --json emits an empty array, not null.
+	if _, out, _ := runCLI(t, append([]string{"find", "zzzzz", "--json"}, d...)...); strings.TrimSpace(out) != "[]" {
+		t.Errorf("find --json no-match: %q", out)
+	}
+	// A missing query is a usage error.
+	if code, _, _ := runCLI(t, append([]string{"find"}, d...)...); code == 0 {
+		t.Error("find with no query should fail")
+	}
+}
