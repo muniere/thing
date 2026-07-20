@@ -28,11 +28,13 @@ func NewRootCmd(version string) *cobra.Command {
 	cmd.PersistentFlags().BoolP("global", "g", false, "use the global directories (~/.local/share/thing and ~/.config/thing)")
 	cmd.AddCommand(
 		newInitCmd(),
-		newTreeCmd(),
-		newEpicCmd(),
-		newIssueCmd(),
-		newTaskCmd(),
+		newAddCmd(),
+		newLsCmd(),
+		newShowCmd(),
+		newStatusCmd(),
+		newPriorityCmd(),
 		newMvCmd(),
+		newTreeCmd(),
 	)
 	return cmd
 }

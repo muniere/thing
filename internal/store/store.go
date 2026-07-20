@@ -272,6 +272,19 @@ func (s *Store) Locate(slug string) (*Entry, error) {
 	return idx[slug], nil
 }
 
+// Get looks up slug and errors if no node has it. Unlike Find it does not
+// constrain the node's type — a slug is globally unique and carries its own.
+func (s *Store) Get(slug string) (*Entry, error) {
+	loc, err := s.Locate(slug)
+	if err != nil {
+		return nil, err
+	}
+	if loc == nil {
+		return nil, fmt.Errorf("no such node %q", slug)
+	}
+	return loc, nil
+}
+
 // Find looks up slug and requires it to be of the given type, erroring if it is
 // missing or of another type.
 func (s *Store) Find(slug string, typ model.NodeType) (*Entry, error) {
