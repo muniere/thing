@@ -30,7 +30,11 @@ func newEpicShowCmd() *cobra.Command {
 		Short: "Show an epic and its body",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			loc, err := locate(cmd, model.Epic, args[0])
+			st, err := openStore(cmd)
+			if err != nil {
+				return err
+			}
+			loc, err := st.Find(args[0], model.Epic)
 			if err != nil {
 				return err
 			}
@@ -71,8 +75,8 @@ func newEpicAddCmd() *cobra.Command {
 			if title == "" {
 				return fmt.Errorf("a title is required")
 			}
-			if err := checkPriority(priority); err != nil {
-				return err
+			if priority != "" && !model.Priority(priority).Valid() {
+				return fmt.Errorf("invalid priority %q", priority)
 			}
 			st, err := openStore(cmd)
 			if err != nil {
@@ -86,7 +90,7 @@ func newEpicAddCmd() *cobra.Command {
 				Title:    title,
 				Category: category,
 				Priority: model.Priority(priority),
-				Tags:     splitTags(tags),
+				Tags:     splitTrim(tags, ","),
 				Updated:  today(),
 				Slug:     slug.Unique(slug.Slugify(title), taken),
 			}

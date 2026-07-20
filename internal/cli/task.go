@@ -30,7 +30,11 @@ func newTaskShowCmd() *cobra.Command {
 		Short: "Show a task and its body",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			loc, err := locate(cmd, model.Task, args[0])
+			st, err := openStore(cmd)
+			if err != nil {
+				return err
+			}
+			loc, err := st.Find(args[0], model.Task)
 			if err != nil {
 				return err
 			}
@@ -77,19 +81,16 @@ func newTaskAddCmd() *cobra.Command {
 			if issue == "" {
 				return fmt.Errorf("--issue is required")
 			}
-			if err := checkPriority(priority); err != nil {
-				return err
+			if priority != "" && !model.Priority(priority).Valid() {
+				return fmt.Errorf("invalid priority %q", priority)
 			}
 			st, err := openStore(cmd)
 			if err != nil {
 				return err
 			}
-			loc, err := st.Locate(issue)
+			loc, err := st.Find(issue, model.Issue)
 			if err != nil {
 				return err
-			}
-			if loc == nil || loc.Node.Type != model.Issue {
-				return fmt.Errorf("no such issue %q", issue)
 			}
 			taken, err := st.AllSlugs()
 			if err != nil {
@@ -98,7 +99,7 @@ func newTaskAddCmd() *cobra.Command {
 			n := &model.Node{
 				Title:    title,
 				Priority: model.Priority(priority),
-				Tags:     splitTags(tags),
+				Tags:     splitTrim(tags, ","),
 				Updated:  today(),
 				Slug:     slug.Unique(slug.Slugify(title), taken),
 			}

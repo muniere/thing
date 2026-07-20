@@ -8,7 +8,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/muniere/thing/internal/config"
-	"github.com/muniere/thing/internal/store"
 )
 
 func newInitCmd() *cobra.Command {
@@ -17,14 +16,11 @@ func newInitCmd() *cobra.Command {
 		Short: "Create the data and config directories and a starter config.yaml",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			dataFlag, _ := cmd.Flags().GetString("data-dir")
-			cfgFlag, _ := cmd.Flags().GetString("config")
-			global, _ := cmd.Flags().GetBool("global")
-			data, err := store.InitDataDir(dataFlag, global)
+			data, err := initDataDir(cmd)
 			if err != nil {
 				return err
 			}
-			cfg, err := store.InitConfigDir(cfgFlag, global)
+			cfg, err := initConfigDir(cmd)
 			if err != nil {
 				return err
 			}

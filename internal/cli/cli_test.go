@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
 )
 
 // runCLI executes the root command with the given args and returns exit code,
@@ -122,6 +124,69 @@ func TestListAndShow(t *testing.T) {
 	}
 }
 
+func TestSplitTrim(t *testing.T) {
+	cases := []struct {
+		in   string
+		want []string
+	}{
+		{"", nil},
+		{"   ", nil},
+		{"a,b,c", []string{"a", "b", "c"}},
+		{"a, b , c", []string{"a", "b", "c"}}, // surrounding whitespace trimmed
+		{"a,,b", []string{"a", "b"}},          // blank fields dropped
+	}
+	for _, c := range cases {
+		got := splitTrim(c.in, ",")
+		if len(got) != len(c.want) {
+			t.Errorf("splitTrim(%q) = %v, want %v", c.in, got, c.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != c.want[i] {
+				t.Errorf("splitTrim(%q)[%d] = %q, want %q", c.in, i, got[i], c.want[i])
+			}
+		}
+	}
+}
+
+func TestTagsFlag(t *testing.T) {
+	dir := t.TempDir()
+	d := []string{"--data-dir", dir, "--config", dir}
+	runCLI(t, append([]string{"init"}, d...)...)
+
+	// --tags is comma-separated; whitespace around each tag is trimmed on the
+	// way into the stored node.
+	_, out, _ := runCLI(t, append([]string{"epic", "add", "Tagged", "--tags", "a, b, c"}, d...)...)
+	slug := strings.TrimSpace(out)
+
+	_, out, _ = runCLI(t, append([]string{"epic", "show", slug}, d...)...)
+	if !strings.Contains(out, "tags:") || !strings.Contains(out, "a, b, c") {
+		t.Errorf("tags round-trip: %q", out)
+	}
+}
+
+func TestInvalidPriorityRejected(t *testing.T) {
+	dir := t.TempDir()
+	d := []string{"--data-dir", dir, "--config", dir}
+	runCLI(t, append([]string{"init"}, d...)...)
+	_, epicOut, _ := runCLI(t, append([]string{"epic", "add", "E"}, d...)...)
+	_, issueOut, _ := runCLI(t, append([]string{"issue", "add", "I", "--epic", strings.TrimSpace(epicOut)}, d...)...)
+	issue := strings.TrimSpace(issueOut)
+
+	// The inlined priority check rejects a bad value at every add site.
+	cases := [][]string{
+		{"epic", "add", "Bad", "--priority", "bogus"},
+		{"issue", "add", "Bad", "--priority", "bogus"},
+		{"task", "add", "Bad", "--issue", issue, "--priority", "bogus"},
+	}
+	for _, c := range cases {
+		code, _, errb := runCLI(t, append(c, d...)...)
+		if code == 0 || !strings.Contains(errb, "invalid priority") {
+			t.Errorf("%v with --priority bogus: code=%d err=%q", c[:2], code, errb)
+		}
+	}
+}
+
 func TestVersionAndUsage(t *testing.T) {
 	if code, out, _ := runCLI(t, "--version"); code != 0 || strings.TrimSpace(out) == "" {
 		t.Errorf("version: code=%d out=%q", code, out)
@@ -131,5 +196,128 @@ func TestVersionAndUsage(t *testing.T) {
 	}
 	if code, _, _ := runCLI(t, "bogus"); code == 0 {
 		t.Error("unknown command should be non-zero")
+	}
+}
+
+// flagCmd builds a command carrying the persistent flags the resolvers read.
+func flagCmd(dataDir, config string, global bool) *cobra.Command {
+	cmd := &cobra.Command{}
+	cmd.Flags().String("data-dir", dataDir, "")
+	cmd.Flags().String("config", config, "")
+	cmd.Flags().Bool("global", global, "")
+	return cmd
+}
+
+func TestDataDirResolution(t *testing.T) {
+	t.Setenv("THING_DATA_DIR", "")
+	t.Setenv("XDG_DATA_HOME", "")
+
+	// flag wins over everything.
+	if got, _ := dataDir(flagCmd("/explicit", "", true)); got != "/explicit" {
+		t.Errorf("flag: got %q", got)
+	}
+	// env beats -g.
+	t.Setenv("THING_DATA_DIR", "/data/env")
+	if got, _ := dataDir(flagCmd("", "", true)); got != "/data/env" {
+		t.Errorf("env: got %q", got)
+	}
+	t.Setenv("THING_DATA_DIR", "")
+	// -g resolves the global tree.
+	home, _ := os.UserHomeDir()
+	if got, _ := dataDir(flagCmd("", "", true)); got != filepath.Join(home, ".local", "share", "thing") {
+		t.Errorf("-g: got %q", got)
+	}
+
+	// no flag/env/-g and no project -> error (no implicit global fallback).
+	dir := t.TempDir()
+	orig, _ := os.Getwd()
+	t.Cleanup(func() { os.Chdir(orig) })
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := dataDir(flagCmd("", "", false)); err == nil {
+		t.Error("expected an error with no data directory")
+	}
+}
+
+func TestConfigDirFallsBackToGlobal(t *testing.T) {
+	t.Setenv("THING_CONFIG_DIR", "")
+	t.Setenv("XDG_CONFIG_HOME", "")
+	dir := t.TempDir()
+	orig, _ := os.Getwd()
+	t.Cleanup(func() { os.Chdir(orig) })
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	home, _ := os.UserHomeDir()
+	if got, _ := configDir(flagCmd("", "", false)); got != filepath.Join(home, ".config", "thing") {
+		t.Errorf("config fallback: got %q", got)
+	}
+
+	// config's flag and (separate) env var win over the fallback.
+	if got, _ := configDir(flagCmd("", "/explicit", false)); got != "/explicit" {
+		t.Errorf("config flag: got %q", got)
+	}
+	t.Setenv("THING_CONFIG_DIR", "/config/env")
+	if got, _ := configDir(flagCmd("", "", false)); got != "/config/env" {
+		t.Errorf("THING_CONFIG_DIR: got %q", got)
+	}
+}
+
+// TestResolveInProject covers the in-project happy path for both resolvers and
+// that -g overrides a discoverable project — branches the split left untested.
+func TestResolveInProject(t *testing.T) {
+	t.Setenv("THING_DATA_DIR", "")
+	t.Setenv("THING_CONFIG_DIR", "")
+	root := t.TempDir()
+	// Resolve symlinks so macOS /var -> /private/var doesn't defeat the compare.
+	root, _ = filepath.EvalSymlinks(root)
+	thing := filepath.Join(root, ".thing")
+	if err := os.MkdirAll(thing, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sub := filepath.Join(root, "a", "b")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	orig, _ := os.Getwd()
+	t.Cleanup(func() { os.Chdir(orig) })
+	if err := os.Chdir(sub); err != nil {
+		t.Fatal(err)
+	}
+
+	// Inside a project, both data and config resolve to the discovered .thing/.
+	if got, _ := dataDir(flagCmd("", "", false)); got != thing {
+		t.Errorf("data in project: got %q, want %q", got, thing)
+	}
+	if got, _ := configDir(flagCmd("", "", false)); got != thing {
+		t.Errorf("config in project: got %q, want %q", got, thing)
+	}
+	// -g overrides a discoverable project, for both resolvers.
+	if got, _ := dataDir(flagCmd("", "", true)); got == thing {
+		t.Errorf("-g should override the project dir for data, got %q", got)
+	}
+	if got, _ := configDir(flagCmd("", "", true)); got == thing {
+		t.Errorf("-g should override the project dir for config, got %q", got)
+	}
+}
+
+func TestInitAnchorsProjectDir(t *testing.T) {
+	t.Setenv("THING_DATA_DIR", "")
+	t.Setenv("THING_CONFIG_DIR", "")
+	// bare init -> ./.thing
+	if got, _ := initDataDir(flagCmd("", "", false)); got != ".thing" {
+		t.Errorf("init data: got %q", got)
+	}
+	if got, _ := initConfigDir(flagCmd("", "", false)); got != ".thing" {
+		t.Errorf("init config: got %q", got)
+	}
+	// -g targets the global directories instead, for both resolvers.
+	home, _ := os.UserHomeDir()
+	if got, _ := initDataDir(flagCmd("", "", true)); got != filepath.Join(home, ".local", "share", "thing") {
+		t.Errorf("init -g data: got %q", got)
+	}
+	if got, _ := initConfigDir(flagCmd("", "", true)); got != filepath.Join(home, ".config", "thing") {
+		t.Errorf("init -g config: got %q", got)
 	}
 }
