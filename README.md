@@ -112,6 +112,14 @@ An epic's status is rolled up from its issues (all done → done; any doing →
 doing; all todo → todo; otherwise doing) unless the epic sets a status
 explicitly.
 
+### Categories
+
+`config.yaml` may list `categories` — headings used to group epics in `thing
+tree` and top-level `thing ls`, in the listed order. Set an epic's category with
+`thing add "<title>" --category <c>`; each epic belongs to at most one. Epics
+with an empty or unknown category, and all orphan issues, fall under
+`(uncategorized)`. With no categories configured, output stays flat.
+
 ## On-disk layout
 
 ```
@@ -156,8 +164,8 @@ move or rename files by hand; use `thing mv`.
 
 ## Configuration
 
-`config.yaml` holds the board `title`. See
-[`config.example.yaml`](config.example.yaml).
+`config.yaml` holds the board `title` and the `categories` used to group epics.
+See [`config.example.yaml`](config.example.yaml).
 
 ## License
 
