@@ -68,18 +68,26 @@ func TestLoad(t *testing.T) {
 	if len(orphan.Children) != 2 || orphan.Children[0].Slug != "a-task" || orphan.Children[1].Slug != "z-task" {
 		t.Errorf("orphan tasks = %+v", orphan.Children)
 	}
-	// Orphan issue with no explicit status defaults to todo.
-	if orphan.Status != model.Todo {
-		t.Errorf("orphan status = %q, want todo", orphan.Status)
+	// A file that omits status loads with an empty Status; the todo default is
+	// a display-time derivation, not baked into the loaded node.
+	if orphan.Status != "" {
+		t.Errorf("orphan raw status = %q, want empty", orphan.Status)
+	}
+	if orphan.EffectiveStatus() != model.Todo {
+		t.Errorf("orphan effective status = %q, want todo", orphan.EffectiveStatus())
 	}
 }
 
 func TestRollup(t *testing.T) {
 	root := fixture(t)
 	top, _ := Open(root).Load()
-	// alpha has issue "one"=done and "two"=doing -> any doing -> doing.
-	if top[0].Status != model.Doing {
-		t.Errorf("alpha rollup = %q, want doing", top[0].Status)
+	// alpha omits its own status; one=done and two=doing -> any doing -> doing.
+	// The rollup is a display derivation, so the loaded node's Status stays empty.
+	if top[0].Status != "" {
+		t.Errorf("alpha raw status = %q, want empty", top[0].Status)
+	}
+	if top[0].EffectiveStatus() != model.Doing {
+		t.Errorf("alpha rollup = %q, want doing", top[0].EffectiveStatus())
 	}
 }
 
@@ -88,34 +96,8 @@ func TestRollupExplicitWins(t *testing.T) {
 	write(t, filepath.Join(root, "e", "_epic.md"), "---\ntitle: E\nstatus: paused\n---\n")
 	write(t, filepath.Join(root, "e", "i", "_issue.md"), "---\ntitle: I\nstatus: doing\n---\n")
 	top, _ := Open(root).Load()
-	if top[0].Status != model.Paused {
-		t.Errorf("explicit epic status = %q, want paused", top[0].Status)
-	}
-}
-
-func TestRollupStatusRules(t *testing.T) {
-	mk := func(sts ...model.Status) []*model.Node {
-		var ns []*model.Node
-		for _, s := range sts {
-			ns = append(ns, &model.Node{Status: s})
-		}
-		return ns
-	}
-	cases := []struct {
-		name string
-		in   []*model.Node
-		want model.Status
-	}{
-		{"empty", nil, model.Todo},
-		{"all done", mk(model.Done, model.Done), model.Done},
-		{"all todo", mk(model.Todo, model.Todo), model.Todo},
-		{"any doing", mk(model.Todo, model.Doing, model.Done), model.Doing},
-		{"mixed done/todo", mk(model.Done, model.Todo), model.Doing},
-	}
-	for _, c := range cases {
-		if got := rollupStatus(c.in); got != c.want {
-			t.Errorf("%s: rollupStatus = %q, want %q", c.name, got, c.want)
-		}
+	if top[0].EffectiveStatus() != model.Paused {
+		t.Errorf("explicit epic status = %q, want paused", top[0].EffectiveStatus())
 	}
 }
 

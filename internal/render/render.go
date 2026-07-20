@@ -29,7 +29,7 @@ func label(n *model.Node) string {
 	if title == "" {
 		title = n.Slug
 	}
-	s := statusBox(n.Status) + " " + title + " (" + n.Slug + ")"
+	s := statusBox(n.EffectiveStatus()) + " " + title + " (" + n.Slug + ")"
 	if n.Priority != "" {
 		s += " !" + string(n.Priority)
 	}
@@ -59,7 +59,7 @@ func List(nodes []*model.Node) string {
 }
 
 func listLine(n *model.Node) string {
-	s := statusBox(n.Status) + " " + n.Slug
+	s := statusBox(n.EffectiveStatus()) + " " + n.Slug
 	if n.Title != "" && n.Title != n.Slug {
 		s += "  " + n.Title
 	}
@@ -74,7 +74,7 @@ func Show(n *model.Node) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s %s\n", n.Type, n.Slug)
 	field(&b, "title", n.Title)
-	field(&b, "status", string(n.Status))
+	field(&b, "status", string(n.EffectiveStatus()))
 	field(&b, "priority", string(n.Priority))
 	field(&b, "category", n.Category)
 	if len(n.Tags) > 0 {

@@ -71,7 +71,8 @@ type Link struct {
 
 // Node is a single node in the tree. Type, Slug, Body, and Children are
 // derived from the on-disk layout; the remaining fields are stored in the
-// node file's YAML frontmatter.
+// node file's YAML frontmatter. Status is the file's explicit status, empty
+// when the file omits one; use EffectiveStatus for the value to display.
 type Node struct {
 	Type     NodeType
 	Slug     string
@@ -84,4 +85,49 @@ type Node struct {
 	Links    []Link
 	Body     string
 	Children []*Node
+}
+
+// EffectiveStatus is the status to display for a node. An explicit Status wins.
+// Otherwise an epic rolls its status up from its issues, and any other node
+// defaults to Todo. It is a read-time derivation and is never persisted, so
+// setting an epic's priority does not freeze its rolled-up status onto disk.
+func (n *Node) EffectiveStatus() Status {
+	if n.Status != "" {
+		return n.Status
+	}
+	if n.Type == Epic {
+		return rollup(n.Children)
+	}
+	return Todo
+}
+
+// rollup derives an epic's status from its issues:
+// all done -> done; any doing -> doing; all todo -> todo; otherwise doing.
+func rollup(issues []*Node) Status {
+	if len(issues) == 0 {
+		return Todo
+	}
+	allDone, allTodo, anyDoing := true, true, false
+	for _, is := range issues {
+		st := is.EffectiveStatus()
+		if st != Done {
+			allDone = false
+		}
+		if st != Todo {
+			allTodo = false
+		}
+		if st == Doing {
+			anyDoing = true
+		}
+	}
+	switch {
+	case allDone:
+		return Done
+	case anyDoing:
+		return Doing
+	case allTodo:
+		return Todo
+	default:
+		return Doing
+	}
 }
