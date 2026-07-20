@@ -218,8 +218,9 @@ func loadNodeFile(path string) (*model.Node, error) {
 	return frontmatter.Parse(data)
 }
 
-// Located pins a loaded node to its place on disk.
-type Located struct {
+// Entry pairs a loaded node with its place on disk, as returned by Locate and
+// stored in the Index.
+type Entry struct {
 	Node   *model.Node // the loaded node
 	File   string      // path to the node's Markdown file
 	Dir    string      // directory owned by the node (issue dir for a task)
@@ -229,40 +230,40 @@ type Located struct {
 // Index loads the tree and returns every node keyed by slug, each paired with
 // its on-disk location. Slugs are globally unique, so a flat index is enough to
 // resolve any ref.
-func (s *Store) Index() (map[string]*Located, error) {
+func (s *Store) Index() (map[string]*Entry, error) {
 	top, err := s.Load()
 	if err != nil {
 		return nil, err
 	}
-	idx := make(map[string]*Located)
+	idx := make(map[string]*Entry)
 	for _, n := range top {
 		if n.Type == model.Epic {
 			dir := filepath.Join(s.Root, n.Slug)
-			idx[n.Slug] = &Located{Node: n, File: filepath.Join(dir, epicFile), Dir: dir}
+			idx[n.Slug] = &Entry{Node: n, File: filepath.Join(dir, epicFile), Dir: dir}
 			for _, issue := range n.Children {
 				indexIssue(idx, issue, dir, n.Slug)
 			}
 		} else { // orphan issue
 			dir := filepath.Join(s.Root, OrphanDir, n.Slug)
-			idx[n.Slug] = &Located{Node: n, File: filepath.Join(dir, issueFile), Dir: dir}
+			idx[n.Slug] = &Entry{Node: n, File: filepath.Join(dir, issueFile), Dir: dir}
 			for _, task := range n.Children {
-				idx[task.Slug] = &Located{Node: task, File: filepath.Join(dir, task.Slug+".md"), Dir: dir, Parent: n.Slug}
+				idx[task.Slug] = &Entry{Node: task, File: filepath.Join(dir, task.Slug+".md"), Dir: dir, Parent: n.Slug}
 			}
 		}
 	}
 	return idx, nil
 }
 
-func indexIssue(idx map[string]*Located, issue *model.Node, epicDir, epicSlug string) {
+func indexIssue(idx map[string]*Entry, issue *model.Node, epicDir, epicSlug string) {
 	dir := filepath.Join(epicDir, issue.Slug)
-	idx[issue.Slug] = &Located{Node: issue, File: filepath.Join(dir, issueFile), Dir: dir, Parent: epicSlug}
+	idx[issue.Slug] = &Entry{Node: issue, File: filepath.Join(dir, issueFile), Dir: dir, Parent: epicSlug}
 	for _, task := range issue.Children {
-		idx[task.Slug] = &Located{Node: task, File: filepath.Join(dir, task.Slug+".md"), Dir: dir, Parent: issue.Slug}
+		idx[task.Slug] = &Entry{Node: task, File: filepath.Join(dir, task.Slug+".md"), Dir: dir, Parent: issue.Slug}
 	}
 }
 
 // Locate returns the node with the given slug, or nil if it does not exist.
-func (s *Store) Locate(slug string) (*Located, error) {
+func (s *Store) Locate(slug string) (*Entry, error) {
 	idx, err := s.Index()
 	if err != nil {
 		return nil, err
@@ -272,7 +273,7 @@ func (s *Store) Locate(slug string) (*Located, error) {
 
 // Find looks up slug and requires it to be of the given type, erroring if it is
 // missing or of another type.
-func (s *Store) Find(slug string, typ model.NodeType) (*Located, error) {
+func (s *Store) Find(slug string, typ model.NodeType) (*Entry, error) {
 	loc, err := s.Locate(slug)
 	if err != nil {
 		return nil, err
@@ -338,7 +339,7 @@ func (s *Store) CreateTask(n *model.Node, issueDir string) error {
 // node's fields (and its Updated date) before calling. Because Load leaves
 // Status exactly as the file holds it, saving a node whose status the file
 // omits does not write a derived status — only an explicitly set one persists.
-func (s *Store) Save(loc *Located) error {
+func (s *Store) Save(loc *Entry) error {
 	return writeNode(loc.File, loc.Node)
 }
 
