@@ -12,7 +12,7 @@ import (
 
 func newLsCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "ls [<parent>]",
+		Use:   "ls [<ref>]",
 		Short: "List a parent's children, or the top level when omitted",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

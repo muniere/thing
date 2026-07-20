@@ -223,14 +223,14 @@ func loadNodeFile(path string) (*model.Node, error) {
 // stored in the Index.
 type Entry struct {
 	Node   *model.Node // the loaded node
-	File   string      // path to the node's Markdown file
-	Dir    string      // directory owned by the node (issue dir for a task)
-	Parent string      // parent slug ("" for an epic or an orphan issue)
+	Ref    string      // the node's ref (identity): "epic", "epic/issue", "epic/issue/task", "_orphan/issue"
+	File   string      // OS path to the node's Markdown file
+	Dir    string      // OS directory owned by the node (issue dir for a task)
+	Parent string      // the parent's ref ("" for a top-level epic, "_orphan" for an orphan issue)
 }
 
-// Index loads the tree and returns every node keyed by slug, each paired with
-// its on-disk location. Slugs are globally unique, so a flat index is enough to
-// resolve any ref.
+// Index loads the tree and returns every node keyed by its ref. A slug is
+// unique only among its siblings, so the full ref is the identity.
 func (s *Store) Index() (map[string]*Entry, error) {
 	top, err := s.Load()
 	if err != nil {
@@ -239,75 +239,88 @@ func (s *Store) Index() (map[string]*Entry, error) {
 	idx := make(map[string]*Entry)
 	for _, n := range top {
 		if n.Type == model.Epic {
-			dir := filepath.Join(s.Root, n.Slug)
-			idx[n.Slug] = &Entry{Node: n, File: filepath.Join(dir, epicFile), Dir: dir}
-			for _, issue := range n.Children {
-				indexIssue(idx, issue, dir, n.Slug)
-			}
+			s.indexNode(idx, s.Root, "", n)
 		} else { // orphan issue
-			dir := filepath.Join(s.Root, OrphanDir, n.Slug)
-			idx[n.Slug] = &Entry{Node: n, File: filepath.Join(dir, issueFile), Dir: dir}
-			for _, task := range n.Children {
-				idx[task.Slug] = &Entry{Node: task, File: filepath.Join(dir, task.Slug+".md"), Dir: dir, Parent: n.Slug}
-			}
+			s.indexNode(idx, filepath.Join(s.Root, OrphanDir), OrphanDir, n)
 		}
 	}
 	return idx, nil
 }
 
-func indexIssue(idx map[string]*Entry, issue *model.Node, epicDir, epicSlug string) {
-	dir := filepath.Join(epicDir, issue.Slug)
-	idx[issue.Slug] = &Entry{Node: issue, File: filepath.Join(dir, issueFile), Dir: dir, Parent: epicSlug}
-	for _, task := range issue.Children {
-		idx[task.Slug] = &Entry{Node: task, File: filepath.Join(dir, task.Slug+".md"), Dir: dir, Parent: issue.Slug}
+// indexNode records n and its descendants, deriving each node's ref from
+// parentRef and its on-disk location from parentDir.
+func (s *Store) indexNode(idx map[string]*Entry, parentDir, parentRef string, n *model.Node) {
+	ref := n.Slug
+	if parentRef != "" {
+		ref = parentRef + "/" + n.Slug
+	}
+	if n.Type == model.Task {
+		idx[ref] = &Entry{Node: n, Ref: ref, File: filepath.Join(parentDir, n.Slug+".md"), Dir: parentDir, Parent: parentRef}
+		return
+	}
+	dir := filepath.Join(parentDir, n.Slug)
+	idx[ref] = &Entry{Node: n, Ref: ref, File: filepath.Join(dir, markerFile(n.Type)), Dir: dir, Parent: parentRef}
+	for _, c := range n.Children {
+		s.indexNode(idx, dir, ref, c)
 	}
 }
 
-// Locate returns the node with the given slug, or nil if it does not exist.
-func (s *Store) Locate(slug string) (*Entry, error) {
+// markerFile is the fixed file name that marks an epic or issue directory.
+func markerFile(t model.NodeType) string {
+	if t == model.Epic {
+		return epicFile
+	}
+	return issueFile
+}
+
+// Locate returns the node at the given ref, or nil if none exists.
+func (s *Store) Locate(ref string) (*Entry, error) {
 	idx, err := s.Index()
 	if err != nil {
 		return nil, err
 	}
-	return idx[slug], nil
+	return idx[ref], nil
 }
 
-// Get looks up slug and errors if no node has it. Unlike Find it does not
-// constrain the node's type — a slug is globally unique and carries its own.
-func (s *Store) Get(slug string) (*Entry, error) {
-	loc, err := s.Locate(slug)
+// Get looks up a ref and errors if no node is there. Unlike Find it does
+// not constrain the node's type — a ref already identifies a single node.
+func (s *Store) Get(ref string) (*Entry, error) {
+	loc, err := s.Locate(ref)
 	if err != nil {
 		return nil, err
 	}
 	if loc == nil {
-		return nil, fmt.Errorf("no such node %q", slug)
+		return nil, fmt.Errorf("no such node %q", ref)
 	}
 	return loc, nil
 }
 
-// Find looks up slug and requires it to be of the given type, erroring if it is
-// missing or of another type.
-func (s *Store) Find(slug string, typ model.NodeType) (*Entry, error) {
-	loc, err := s.Locate(slug)
+// Find looks up a ref and requires the node to be of the given type,
+// erroring if it is missing or of another type.
+func (s *Store) Find(ref string, typ model.NodeType) (*Entry, error) {
+	loc, err := s.Locate(ref)
 	if err != nil {
 		return nil, err
 	}
 	if loc == nil || loc.Node.Type != typ {
-		return nil, fmt.Errorf("no such %s %q", typ, slug)
+		return nil, fmt.Errorf("no such %s %q", typ, ref)
 	}
 	return loc, nil
 }
 
-// AllSlugs returns the set of every slug in the tree (the global uniqueness
-// scope for new slugs).
-func (s *Store) AllSlugs() (map[string]bool, error) {
+// siblingSlugs returns the slugs already used directly under parentRef (an
+// empty parentRef is the top level, i.e. epics). This is the uniqueness scope
+// for a new slug: names collide only within one parent.
+func (s *Store) siblingSlugs(parentRef string) (map[string]bool, error) {
 	idx, err := s.Index()
 	if err != nil {
 		return nil, err
 	}
-	set := make(map[string]bool, len(idx))
-	for slug := range idx {
-		set[slug] = true
+	set := make(map[string]bool)
+	for _, e := range idx {
+		if e.Parent == parentRef {
+			set[e.Node.Slug] = true
+		}
 	}
 	return set, nil
 }
@@ -324,29 +337,57 @@ func writeNode(path string, n *model.Node) error {
 	return os.WriteFile(path, data, 0o644)
 }
 
-// CreateEpic writes a new epic node under the root.
-func (s *Store) CreateEpic(n *model.Node) error {
-	n.Type = model.Epic
-	return writeNode(filepath.Join(s.Root, n.Slug, epicFile), n)
-}
-
-// CreateIssue writes a new issue node under the given epic, or under _orphan
-// when epicSlug is empty.
-func (s *Store) CreateIssue(n *model.Node, epicSlug string) error {
-	n.Type = model.Issue
-	var dir string
-	if epicSlug == "" {
-		dir = filepath.Join(s.Root, OrphanDir, n.Slug)
-	} else {
-		dir = filepath.Join(s.Root, epicSlug, n.Slug)
+// Add creates a node from n (with Title and any Priority/Tags/Category set)
+// under parentRef — "" for a top-level epic, "_orphan" for an orphan issue,
+// otherwise an epic ref (-> issue) or issue ref (-> task). The child's type
+// follows its parent; its slug is made unique among its siblings. It returns
+// the new node's ref.
+func (s *Store) Add(parentRef string, n *model.Node) (string, error) {
+	container, childType, err := s.addTarget(parentRef)
+	if err != nil {
+		return "", err
 	}
-	return writeNode(filepath.Join(dir, issueFile), n)
+	sib, err := s.siblingSlugs(parentRef)
+	if err != nil {
+		return "", err
+	}
+	n.Type = childType
+	n.Slug = slug.Unique(slug.Slugify(n.Title), sib)
+
+	file := filepath.Join(container, n.Slug+".md")
+	if childType != model.Task {
+		file = filepath.Join(container, n.Slug, markerFile(childType))
+	}
+	if err := writeNode(file, n); err != nil {
+		return "", err
+	}
+	if parentRef == "" {
+		return n.Slug, nil
+	}
+	return parentRef + "/" + n.Slug, nil
 }
 
-// CreateTask writes a new task node in the given issue directory.
-func (s *Store) CreateTask(n *model.Node, issueDir string) error {
-	n.Type = model.Task
-	return writeNode(filepath.Join(issueDir, n.Slug+".md"), n)
+// addTarget resolves the directory that will hold a child of parentRef and the
+// type such a child would be.
+func (s *Store) addTarget(parentRef string) (container string, childType model.NodeType, err error) {
+	switch parentRef {
+	case "":
+		return s.Root, model.Epic, nil
+	case OrphanDir:
+		return filepath.Join(s.Root, OrphanDir), model.Issue, nil
+	}
+	p, err := s.Get(parentRef)
+	if err != nil {
+		return "", "", err
+	}
+	switch p.Node.Type {
+	case model.Epic:
+		return p.Dir, model.Issue, nil
+	case model.Issue:
+		return p.Dir, model.Task, nil
+	default:
+		return "", "", fmt.Errorf("cannot add a node under a task")
+	}
 }
 
 // Save re-serializes a located node back to its own file. Callers set the
@@ -369,27 +410,19 @@ func (s *Store) Remove(e *Entry) error {
 	}
 }
 
-// Mv relocates the node named by src to dst, the way the shell's mv does. Each
-// ref is a slug path "<parent>/<name>" — an epic is a bare "<name>", an orphan
-// issue uses the "_orphan" parent. A changed parent moves the node; a changed
-// name renames it, rewriting "[[old]]" backlinks across the tree to follow; a
-// change to both does both. The name is the slug itself, not the title.
+// Mv relocates the node at ref src to ref dst, the way the shell's mv does. dst
+// is "<parent-ref>/<name>" — a bare "<name>" for an epic. A changed parent moves
+// the node; a changed name renames it, rewriting "[[old-ref]]" backlinks (and
+// those of its descendants) across the tree to follow; a change to both does
+// both. The name is the slug, not the title.
 func (s *Store) Mv(src, dst, updated string) error {
-	srcParent, srcName := splitRef(src)
-	dstParent, dstName := splitRef(dst)
-	if srcName == "" || dstName == "" {
-		return fmt.Errorf("mv: a source and destination are required")
-	}
-
-	e, err := s.Locate(srcName)
+	e, err := s.Get(src)
 	if err != nil {
 		return err
 	}
-	if e == nil {
-		return fmt.Errorf("no such node %q", srcName)
-	}
-	if srcParent != parentRef(e) {
-		return fmt.Errorf("%q is not at %q", srcName, src)
+	dstParent, dstName := splitRef(dst)
+	if dstName == "" {
+		return fmt.Errorf("mv: a destination is required")
 	}
 
 	container, err := s.destContainer(e.Node.Type, dstParent)
@@ -398,20 +431,35 @@ func (s *Store) Mv(src, dst, updated string) error {
 	}
 
 	newSlug := slug.Slugify(dstName)
-	if newSlug != e.Node.Slug {
-		taken, err := s.AllSlugs()
-		if err != nil {
-			return err
-		}
-		if taken[newSlug] {
-			return fmt.Errorf("slug %q already exists", newSlug)
+	sib, err := s.siblingSlugs(dstParent)
+	if err != nil {
+		return err
+	}
+	if dstParent == e.Parent {
+		delete(sib, e.Node.Slug) // the node does not collide with itself
+	}
+	if sib[newSlug] {
+		return fmt.Errorf("%q already exists under %q", newSlug, dstParent)
+	}
+
+	oldRef := e.Ref
+	if err := s.relocate(e, container, newSlug, updated); err != nil {
+		return err
+	}
+	newRef := newSlug
+	if dstParent != "" {
+		newRef = dstParent + "/" + newSlug
+	}
+	if newRef != oldRef {
+		if err := s.rewriteBacklinks(oldRef, newRef); err != nil {
+			return fmt.Errorf("mv: node moved, but backlinks were only partly rewritten: %w", err)
 		}
 	}
-	return s.relocate(e, container, newSlug, updated)
+	return nil
 }
 
-// splitRef splits a "<parent>/<name>" ref into its parent and name; a ref with
-// no slash has an empty parent.
+// splitRef splits a "<parent>/<name>" ref into its parent ref and name;
+// a ref with no slash has an empty parent.
 func splitRef(ref string) (parent, name string) {
 	if i := strings.LastIndex(ref, "/"); i >= 0 {
 		return ref[:i], ref[i+1:]
@@ -419,24 +467,8 @@ func splitRef(ref string) (parent, name string) {
 	return "", ref
 }
 
-// parentRef is the path-parent an entry would appear under: "" for an epic,
-// "_orphan" for an orphan issue, otherwise the parent slug.
-func parentRef(e *Entry) string {
-	switch e.Node.Type {
-	case model.Epic:
-		return ""
-	case model.Issue:
-		if e.Parent == "" {
-			return OrphanDir
-		}
-		return e.Parent
-	default: // task
-		return e.Parent
-	}
-}
-
 // destContainer resolves the directory that will hold a node of the given type
-// under dstParent, validating that dstParent is a legal parent for that type.
+// under dstParent (a ref), validating that dstParent is a legal parent.
 func (s *Store) destContainer(typ model.NodeType, dstParent string) (string, error) {
 	switch typ {
 	case model.Epic:
@@ -463,10 +495,10 @@ func (s *Store) destContainer(typ model.NodeType, dstParent string) (string, err
 }
 
 // relocate renames a node's file/dir into container under newSlug, stamps the
-// updated date, re-saves, and rewrites backlinks when the slug changed. The
-// slug is the node's on-disk name, not a frontmatter field, so after the rename
-// the node's identity already matches its location; a mid-way failure can leave
-// a stale updated date or partly-rewritten backlinks, but not a broken slug.
+// updated date, and re-saves; a complete no-op (same parent and name) returns
+// early without touching anything. The slug is the node's on-disk name, so after
+// the rename its identity already matches its location. Rewriting backlinks is
+// the caller's job (it needs the old and new refs).
 func (s *Store) relocate(e *Entry, container, newSlug, updated string) error {
 	oldSlug := e.Node.Slug
 	moved := false
@@ -507,22 +539,18 @@ func (s *Store) relocate(e *Entry, container, newSlug, updated string) error {
 	if err := s.Save(e); err != nil {
 		return fmt.Errorf("mv: save %s: %w", e.File, err)
 	}
-	if newSlug != oldSlug {
-		if err := s.rewriteBacklinks(oldSlug, newSlug); err != nil {
-			return fmt.Errorf("mv: node moved, but backlinks were only partly rewritten: %w", err)
-		}
-	}
 	return nil
 }
 
-// rewriteBacklinks replaces every "[[oldSlug]]" with "[[newSlug]]" across all
-// node files. A file that vanished (e.g. removed concurrently) is skipped.
-func (s *Store) rewriteBacklinks(oldSlug, newSlug string) error {
+// rewriteBacklinks rewrites "[[oldRef]]" and any descendant "[[oldRef/...]]"
+// references to use newRef, across every node file, so a moved or renamed
+// node's links (and those to its descendants) follow. A file that vanished
+// (e.g. removed concurrently) is skipped.
+func (s *Store) rewriteBacklinks(oldRef, newRef string) error {
 	idx, err := s.Index()
 	if err != nil {
 		return err
 	}
-	old, neu := "[["+oldSlug+"]]", "[["+newSlug+"]]"
 	for _, e := range idx {
 		data, err := os.ReadFile(e.File)
 		if err != nil {
@@ -531,10 +559,12 @@ func (s *Store) rewriteBacklinks(oldSlug, newSlug string) error {
 			}
 			return fmt.Errorf("read %s: %w", e.File, err)
 		}
-		if !strings.Contains(string(data), old) {
+		out := strings.ReplaceAll(string(data), "[["+oldRef+"]]", "[["+newRef+"]]")
+		out = strings.ReplaceAll(out, "[["+oldRef+"/", "[["+newRef+"/")
+		if out == string(data) {
 			continue
 		}
-		if err := os.WriteFile(e.File, []byte(strings.ReplaceAll(string(data), old, neu)), 0o644); err != nil {
+		if err := os.WriteFile(e.File, []byte(out), 0o644); err != nil {
 			return fmt.Errorf("write %s: %w", e.File, err)
 		}
 	}
@@ -543,57 +573,4 @@ func (s *Store) rewriteBacklinks(oldSlug, newSlug string) error {
 
 func sortBySlug(nodes []*model.Node) {
 	sort.Slice(nodes, func(i, j int) bool { return nodes[i].Slug < nodes[j].Slug })
-}
-
-// Epics returns the top-level epics.
-func (s *Store) Epics() ([]*model.Node, error) {
-	top, err := s.Load()
-	if err != nil {
-		return nil, err
-	}
-	var out []*model.Node
-	for _, n := range top {
-		if n.Type == model.Epic {
-			out = append(out, n)
-		}
-	}
-	return out, nil
-}
-
-// Issues returns issues scoped to epicSlug, or every issue (including orphans)
-// when epicSlug is empty.
-func (s *Store) Issues(epicSlug string) ([]*model.Node, error) {
-	top, err := s.Load()
-	if err != nil {
-		return nil, err
-	}
-	var out []*model.Node
-	for _, n := range top {
-		switch n.Type {
-		case model.Epic:
-			if epicSlug == "" || n.Slug == epicSlug {
-				out = append(out, n.Children...)
-			}
-		case model.Issue: // orphan
-			if epicSlug == "" {
-				out = append(out, n)
-			}
-		}
-	}
-	return out, nil
-}
-
-// Tasks returns tasks scoped to issueSlug, or every task when issueSlug is empty.
-func (s *Store) Tasks(issueSlug string) ([]*model.Node, error) {
-	issues, err := s.Issues("")
-	if err != nil {
-		return nil, err
-	}
-	var out []*model.Node
-	for _, is := range issues {
-		if issueSlug == "" || is.Slug == issueSlug {
-			out = append(out, is.Children...)
-		}
-	}
-	return out, nil
 }

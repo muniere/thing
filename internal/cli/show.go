@@ -10,7 +10,7 @@ import (
 
 func newShowCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "show <slug>",
+		Use:   "show <ref>",
 		Short: "Show a node and its body",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

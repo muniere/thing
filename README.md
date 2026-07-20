@@ -7,9 +7,11 @@ data layer:
 - **`thing`** — an AI-facing CLI that reads and writes the tree directly.
 - **`thingd`** — a human-facing web server (full CSR SPA + JSON API).
 
-Slugs are the stable identity: a node's filename is its slug, and every ref is
-slug-only (globally unique across the tree). There is no uid or ref-mode
-machinery.
+The tree is a filesystem: a node's directory or file name is its **slug**, and a
+node is identified by its **ref** — a slash-joined slug path: `<epic>`,
+`<epic>/<issue>`, `<epic>/<issue>/<task>` (an orphan issue lives under
+`_orphan/`). A slug is unique only among its siblings, so the same name may recur
+in different branches; the full ref is the identity. There is no uid.
 
 ## Install
 
@@ -51,54 +53,53 @@ current directory; `thing init -g` targets the global directories instead.
 
 ## Commands
 
-The tree behaves like a filesystem: a node is addressed by a **slug path**
-`<parent>/<name>`, and the commands mirror the shell's. A slug is globally
-unique and carries its own type, so operations on an existing node take a bare
-slug — there is no `epic`/`issue`/`task` prefix.
+The tree behaves like a filesystem: every node is addressed by its full **ref**,
+and the commands mirror the shell's. There is no `epic`/`issue`/`task` prefix —
+the ref already says what and where a node is.
 
 ```
 thing init                                   create the data + config dirs and config.yaml
-thing add <path> [--priority <p>] [--tags a,b] [--category <c>]
-thing ls [<parent>]                          # list a parent's children, or the top level
-thing show <slug>                            # show a node + body
-thing status   <slug> <todo|doing|done|paused>
-thing priority <slug> <high|medium|low>
-thing mv <src> <dst>                         # move and/or rename a node (like mv)
-thing rm <slug>                              # remove a node (an epic/issue takes its subtree)
+thing add [<parent>/]<title> [--priority <p>] [--tags a,b] [--category <c>]
+thing ls [<ref>]                             # list a node's children, or the top level
+thing show <ref>                             # show a node + body
+thing status   <ref> <todo|doing|done|paused>
+thing priority <ref> <high|medium|low>
+thing mv <src> <dst>                         # move and/or rename a node (src/dst are refs)
+thing rm <ref>                               # remove a node (an epic/issue takes its subtree)
 thing tree                                   # whole tree as an indented outline
 ```
 
-### `add` — a path decides the type
+### `add` — the parent decides the type
 
-`add` takes a path `[<parent>/]<title>`; the parent's type decides what is
-created (like `mkdir` in a tree):
+`add` takes `[<parent>/]<title>`; the parent's type decides what is created
+(like `mkdir` in a tree). It prints the new node's ref.
 
 ```
-thing add "Web release"                 # no parent      -> epic
-thing add web-release/"Monitor rollout" # under an epic  -> issue
-thing add monitor-rollout/"Confirm"     # under an issue -> task
-thing add _orphan/"Loose end"           # under _orphan  -> orphan issue
+thing add "Web release"                             # no parent      -> epic
+thing add web-release/"Monitor rollout"             # under an epic  -> issue
+thing add web-release/monitor-rollout/"Confirm"     # under an issue -> task
+thing add _orphan/"Loose end"                       # under _orphan  -> orphan issue
 ```
 
-`--category` applies only to an epic. `add` prints the created slug on stdout.
+`--category` applies only to an epic.
 
 ### `ls` — list children
 
-`thing ls` lists the top level (epics and orphan issues); `thing ls <parent>`
+`thing ls` lists the top level (epics and orphan issues); `thing ls <ref>`
 lists that node's children; `thing ls _orphan` lists the orphan issues.
 
 ### `mv` — move and/or rename
 
-`mv` addresses a node by the same `<parent>/<name>` path — a bare `<name>` for
-an epic, `_orphan/<name>` for an orphan issue. A changed parent moves the node;
-a changed name renames it (rewriting `[[slug]]` backlinks across the tree);
-changing both does both. The name is the node's slug, not its title. It is
-silent on success.
+`mv` takes two refs. A changed parent moves the node; a changed name
+renames it (rewriting `[[ref]]` backlinks, including those of its descendants,
+across the tree); changing both does both. The name is the node's slug, not its
+title. It is silent on success.
 
 ```
-thing mv alpha/one beta/one       # move issue "one" from epic alpha to beta
-thing mv alpha/one alpha/planning # rename the slug one -> planning in place
-thing mv alpha/one _orphan/one    # detach an issue into _orphan
+thing mv alpha/one beta/one                # move issue "one" from epic alpha to beta
+thing mv alpha/one alpha/planning          # rename the slug one -> planning in place
+thing mv alpha/one/task beta/two/task      # move a task to another issue
+thing mv alpha/one _orphan/one             # detach an issue into _orphan
 ```
 
 The `--data-dir`, `--config`, and `-g` / `--global` flags apply to every
@@ -143,12 +144,12 @@ links:
   - url: https://example.com
     label: Design doc
 ---
-Free-form Markdown body. `[[other-slug]]` links to another node; `rename`
-rewrites these backlinks automatically.
+Free-form Markdown body. `[[<ref>]]` links to another node by its ref;
+`mv` rewrites these backlinks automatically when a node moves or is renamed.
 ```
 
-All frontmatter fields are optional. The filename is the slug — do not rename
-files by hand; use `thing <res> rename`.
+All frontmatter fields are optional. A node's name on disk is its slug — do not
+move or rename files by hand; use `thing mv`.
 
 ## Configuration
 
