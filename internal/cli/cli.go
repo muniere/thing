@@ -134,22 +134,6 @@ func initConfigDir(cmd *cobra.Command) (string, error) {
 	return store.ProjectDir, nil
 }
 
-// locate resolves slug and verifies it is of the expected type.
-func locate(cmd *cobra.Command, res model.NodeType, slug string) (*store.Located, error) {
-	st, err := openStore(cmd)
-	if err != nil {
-		return nil, err
-	}
-	loc, err := st.Locate(slug)
-	if err != nil {
-		return nil, err
-	}
-	if loc == nil || loc.Node.Type != res {
-		return nil, fmt.Errorf("no such %s %q", res, slug)
-	}
-	return loc, nil
-}
-
 // checkPriority validates an optional priority flag value.
 func checkPriority(p string) error {
 	if p != "" && !model.Priority(p).Valid() {

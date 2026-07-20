@@ -30,7 +30,11 @@ func newIssueShowCmd() *cobra.Command {
 		Short: "Show an issue and its body",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			loc, err := locate(cmd, model.Issue, args[0])
+			st, err := openStore(cmd)
+			if err != nil {
+				return err
+			}
+			loc, err := st.Find(args[0], model.Issue)
 			if err != nil {
 				return err
 			}
@@ -82,12 +86,8 @@ func newIssueAddCmd() *cobra.Command {
 				return err
 			}
 			if epic != "" {
-				loc, err := st.Locate(epic)
-				if err != nil {
+				if _, err := st.Find(epic, model.Epic); err != nil {
 					return err
-				}
-				if loc == nil || loc.Node.Type != model.Epic {
-					return fmt.Errorf("no such epic %q", epic)
 				}
 			}
 			taken, err := st.AllSlugs()

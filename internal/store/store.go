@@ -279,6 +279,19 @@ func (s *Store) Locate(slug string) (*Located, error) {
 	return idx[slug], nil
 }
 
+// Find looks up slug and requires it to be of the given type, erroring if it is
+// missing or of another type.
+func (s *Store) Find(slug string, typ model.NodeType) (*Located, error) {
+	loc, err := s.Locate(slug)
+	if err != nil {
+		return nil, err
+	}
+	if loc == nil || loc.Node.Type != typ {
+		return nil, fmt.Errorf("no such %s %q", typ, slug)
+	}
+	return loc, nil
+}
+
 // AllSlugs returns the set of every slug in the tree (the global uniqueness
 // scope for new slugs).
 func (s *Store) AllSlugs() (map[string]bool, error) {

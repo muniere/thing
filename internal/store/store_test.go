@@ -194,3 +194,26 @@ func TestScopedListings(t *testing.T) {
 		t.Errorf("Tasks(\"\") count = %d, want 3", len(allTasks))
 	}
 }
+
+func TestFind(t *testing.T) {
+	s := Open(fixture(t))
+
+	// Found with the matching type.
+	loc, err := s.Find("alpha", model.Epic)
+	if err != nil {
+		t.Fatalf("Find(alpha, Epic): %v", err)
+	}
+	if loc.Node.Slug != "alpha" {
+		t.Errorf("Find(alpha, Epic) = %q", loc.Node.Slug)
+	}
+
+	// Found, but the type guard rejects it.
+	if _, err := s.Find("alpha", model.Task); err == nil {
+		t.Error("Find(alpha, Task) should fail: alpha is an epic")
+	}
+
+	// Missing slug.
+	if _, err := s.Find("ghost", model.Task); err == nil {
+		t.Error("Find(ghost, Task) should fail: no such slug")
+	}
+}
