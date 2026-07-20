@@ -237,6 +237,109 @@ func loadNodeFile(path string) (*model.Node, error) {
 	return frontmatter.Parse(data)
 }
 
+// Located pins a loaded node to its place on disk.
+type Located struct {
+	Node   *model.Node // the loaded node
+	File   string      // path to the node's Markdown file
+	Dir    string      // directory owned by the node (issue dir for a task)
+	Parent string      // parent slug ("" for an epic or an orphan issue)
+}
+
+// Index loads the tree and returns every node keyed by slug, each paired with
+// its on-disk location. Slugs are globally unique, so a flat index is enough to
+// resolve any ref.
+func (s *Store) Index() (map[string]*Located, error) {
+	top, err := s.Load()
+	if err != nil {
+		return nil, err
+	}
+	idx := make(map[string]*Located)
+	for _, n := range top {
+		if n.Type == model.Epic {
+			dir := filepath.Join(s.Root, n.Slug)
+			idx[n.Slug] = &Located{Node: n, File: filepath.Join(dir, epicFile), Dir: dir}
+			for _, issue := range n.Children {
+				indexIssue(idx, issue, dir, n.Slug)
+			}
+		} else { // orphan issue
+			dir := filepath.Join(s.Root, OrphanDir, n.Slug)
+			idx[n.Slug] = &Located{Node: n, File: filepath.Join(dir, issueFile), Dir: dir}
+			for _, task := range n.Children {
+				idx[task.Slug] = &Located{Node: task, File: filepath.Join(dir, task.Slug+".md"), Dir: dir, Parent: n.Slug}
+			}
+		}
+	}
+	return idx, nil
+}
+
+func indexIssue(idx map[string]*Located, issue *model.Node, epicDir, epicSlug string) {
+	dir := filepath.Join(epicDir, issue.Slug)
+	idx[issue.Slug] = &Located{Node: issue, File: filepath.Join(dir, issueFile), Dir: dir, Parent: epicSlug}
+	for _, task := range issue.Children {
+		idx[task.Slug] = &Located{Node: task, File: filepath.Join(dir, task.Slug+".md"), Dir: dir, Parent: issue.Slug}
+	}
+}
+
+// Locate returns the node with the given slug, or nil if it does not exist.
+func (s *Store) Locate(slug string) (*Located, error) {
+	idx, err := s.Index()
+	if err != nil {
+		return nil, err
+	}
+	return idx[slug], nil
+}
+
+// AllSlugs returns the set of every slug in the tree (the global uniqueness
+// scope for new slugs).
+func (s *Store) AllSlugs() (map[string]bool, error) {
+	idx, err := s.Index()
+	if err != nil {
+		return nil, err
+	}
+	set := make(map[string]bool, len(idx))
+	for slug := range idx {
+		set[slug] = true
+	}
+	return set, nil
+}
+
+// writeNode marshals a node and writes it to path, creating parent dirs.
+func writeNode(path string, n *model.Node) error {
+	data, err := frontmatter.Marshal(n)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o644)
+}
+
+// CreateEpic writes a new epic node under the root.
+func (s *Store) CreateEpic(n *model.Node) error {
+	n.Type = model.Epic
+	return writeNode(filepath.Join(s.Root, n.Slug, epicFile), n)
+}
+
+// CreateIssue writes a new issue node under the given epic, or under _orphan
+// when epicSlug is empty.
+func (s *Store) CreateIssue(n *model.Node, epicSlug string) error {
+	n.Type = model.Issue
+	var dir string
+	if epicSlug == "" {
+		dir = filepath.Join(s.Root, OrphanDir, n.Slug)
+	} else {
+		dir = filepath.Join(s.Root, epicSlug, n.Slug)
+	}
+	return writeNode(filepath.Join(dir, issueFile), n)
+}
+
+// CreateTask writes a new task node in the given issue directory.
+func (s *Store) CreateTask(n *model.Node, issueDir string) error {
+	n.Type = model.Task
+	return writeNode(filepath.Join(issueDir, n.Slug+".md"), n)
+}
+
 // rollupStatus derives an epic's status from its issues:
 // all done -> done; any doing -> doing; all todo -> todo; otherwise doing.
 func rollupStatus(issues []*model.Node) model.Status {

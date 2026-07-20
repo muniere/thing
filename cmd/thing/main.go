@@ -1,19 +1,19 @@
 // Command thing is a CLI for a topic tree of Epic > Issue > Task nodes.
-//
-// This scaffold build only prints usage; the commands are wired up in later
-// commits.
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"os"
 
-const usage = `thing — manage a topic tree of Epic > Issue > Task nodes.
+	"github.com/muniere/thing/internal/cli"
+)
 
-Usage:
-  thing <command> [arguments]
-
-No commands are available yet; this is the project scaffold.
-`
+// version is the CLI version, overridable at build time via -ldflags.
+var version = "0.0.1-dev"
 
 func main() {
-	fmt.Print(usage)
+	if err := cli.NewRootCmd(version).Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, "thing:", err)
+		os.Exit(1)
+	}
 }
