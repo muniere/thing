@@ -71,6 +71,8 @@ thing link rm   <ref> <url|index>            # remove a link by URL, or 1-based 
 thing link list <ref>                        # list a node's related links
 thing find <query> [--json]                  # fuzzy-search titles, slugs, and tags
 thing tree                                   # whole tree as an indented outline
+thing export                                 # print the whole tree as JSON
+thing import <file> [--dry-run]              # bulk-create nodes from a JSON batch
 ```
 
 `find` fuzzy-matches the query against each node's title, slug, and tags,
@@ -115,9 +117,35 @@ thing mv alpha/one _orphan/one             # detach an issue into _orphan
 The `--data-dir`, `--config`, and `-g` / `--global` flags apply to every
 command.
 
-An epic's status is rolled up from its issues (all done → done; any doing →
-doing; all todo → todo; otherwise doing) unless the epic sets a status
-explicitly.
+A parent's status is rolled up from its children (all done → done; any doing →
+doing; all todo → todo; otherwise doing) unless it sets a status explicitly: an
+epic rolls up from its issues, an issue from its tasks, and the rollup recurses
+so a statusless epic reflects its tasks through its issues.
+
+### `export` / `import` — JSON in and out
+
+`thing export` prints the whole tree as an indented JSON array of top-level
+nodes, each with its subtree nested under `children` and its rolled-up status.
+
+`thing import <file>` bulk-creates nodes from a JSON **array** (a flat list, not
+nested). Each item is `{type, title, parent, priority, category, tags, links,
+body}`; only `title` is required and `type` defaults to `task`. `parent` is the
+ref of the parent node — or `"inbox"` for a task (creating/reusing an orphan
+`inbox` issue), or empty for an epic or orphan issue. Items may reference
+parents created earlier in the same batch. The batch is flat (no `children`), so
+an `export` file is **not** an import file.
+
+It prints a JSON result array (one entry per item, in order) of
+`{title, ref, parent, status, message}`; a failing item becomes
+`"status": "error"` without stopping the rest, and the command exits non-zero if
+any item failed. `--dry-run` validates parents and assigns refs without writing
+(each accepted item reports `"status": "validated"`).
+
+```
+thing export > tree.json
+thing import batch.json                      # bulk-create; exits non-zero on any item error
+thing import batch.json --dry-run            # validate only, write nothing
+```
 
 ### Categories
 
