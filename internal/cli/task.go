@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/muniere/thing/internal/model"
+	"github.com/muniere/thing/internal/render"
 	"github.com/muniere/thing/internal/slug"
 )
 
@@ -15,7 +16,50 @@ func newTaskCmd() *cobra.Command {
 		Use:   "task",
 		Short: "Manage task nodes",
 	}
-	cmd.AddCommand(newTaskAddCmd())
+	cmd.AddCommand(
+		newTaskAddCmd(),
+		newTaskListCmd(),
+		newTaskShowCmd(),
+	)
+	return cmd
+}
+
+func newTaskShowCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "show <slug>",
+		Short: "Show a task and its body",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			loc, err := locate(cmd, model.Task, args[0])
+			if err != nil {
+				return err
+			}
+			fmt.Fprint(cmd.OutOrStdout(), render.Show(loc.Node))
+			return nil
+		},
+	}
+}
+
+func newTaskListCmd() *cobra.Command {
+	var issue string
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List tasks (optionally scoped to an issue)",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			st, err := openStore(cmd)
+			if err != nil {
+				return err
+			}
+			nodes, err := st.Tasks(issue)
+			if err != nil {
+				return err
+			}
+			fmt.Fprint(cmd.OutOrStdout(), render.List(nodes))
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&issue, "issue", "", "scope to an issue")
 	return cmd
 }
 

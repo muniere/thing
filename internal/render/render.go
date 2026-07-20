@@ -2,6 +2,7 @@
 package render
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/muniere/thing/internal/model"
@@ -45,6 +46,65 @@ func Tree(nodes []*model.Node, title string) string {
 	b.WriteByte('\n')
 	writeChildren(&b, nodes, "")
 	return b.String()
+}
+
+// List renders nodes as a flat, one-line-per-node plain-text listing.
+func List(nodes []*model.Node) string {
+	var b strings.Builder
+	for _, n := range nodes {
+		b.WriteString(listLine(n))
+		b.WriteByte('\n')
+	}
+	return b.String()
+}
+
+func listLine(n *model.Node) string {
+	s := statusBox(n.Status) + " " + n.Slug
+	if n.Title != "" && n.Title != n.Slug {
+		s += "  " + n.Title
+	}
+	if n.Priority != "" {
+		s += " !" + string(n.Priority)
+	}
+	return s
+}
+
+// Show renders a single node's fields followed by its Markdown body.
+func Show(n *model.Node) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s %s\n", n.Type, n.Slug)
+	field(&b, "title", n.Title)
+	field(&b, "status", string(n.Status))
+	field(&b, "priority", string(n.Priority))
+	field(&b, "category", n.Category)
+	if len(n.Tags) > 0 {
+		field(&b, "tags", strings.Join(n.Tags, ", "))
+	}
+	field(&b, "updated", n.Updated)
+	if len(n.Links) > 0 {
+		b.WriteString("links:\n")
+		for _, l := range n.Links {
+			if l.Label != "" {
+				fmt.Fprintf(&b, "  - %s (%s)\n", l.URL, l.Label)
+			} else {
+				fmt.Fprintf(&b, "  - %s\n", l.URL)
+			}
+		}
+	}
+	if body := strings.TrimRight(n.Body, "\n"); strings.TrimSpace(body) != "" {
+		b.WriteByte('\n')
+		b.WriteString(body)
+		b.WriteByte('\n')
+	}
+	return b.String()
+}
+
+// field writes an aligned "name: value" line, skipping empty values.
+func field(b *strings.Builder, name, value string) {
+	if value == "" {
+		return
+	}
+	fmt.Fprintf(b, "%-9s %s\n", name+":", value)
 }
 
 func writeChildren(b *strings.Builder, nodes []*model.Node, prefix string) {
