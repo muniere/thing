@@ -36,6 +36,7 @@ func NewRootCmd(version string) *cobra.Command {
 		newMvCmd(),
 		newRmCmd(),
 		newLinkCmd(),
+		newFindCmd(),
 		newTreeCmd(),
 	)
 	return cmd
