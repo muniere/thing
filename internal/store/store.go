@@ -1,4 +1,6 @@
-// Package store resolves the data directory and loads the tree from disk.
+// Package store loads and mutates the node tree on disk. It also exposes the
+// directory primitives — the global XDG directories and the upward .thing/
+// search — that the CLI layer composes into a resolved data/config directory.
 //
 // On-disk layout:
 //
@@ -10,7 +12,6 @@
 package store
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -28,77 +29,19 @@ const (
 	issueFile = "_issue.md"
 )
 
-// ProjectDir is the per-project directory name searched for upward, git-style.
+// ProjectDir is the per-project directory name, searched for upward git-style.
 const ProjectDir = ".thing"
 
-// DataDir resolves the directory that holds the node tree:
-//
-//	--data-dir  ->  THING_DATA_DIR  ->  -g global  ->  nearest .thing/ upward
-//
-// -g resolves the global tree ($XDG_DATA_HOME/thing, else ~/.local/share/thing).
-// Without it, and with no flag/env, the tree is found by searching upward for a
-// .thing/. There is NO implicit global fallback: rather than silently operate on
-// a global tree, it returns an error when none of the above resolves.
-func DataDir(flag string, global bool) (string, error) {
-	if flag != "" {
-		return flag, nil
-	}
-	if v := os.Getenv("THING_DATA_DIR"); v != "" {
-		return v, nil
-	}
-	if global {
-		return globalDir("XDG_DATA_HOME", ".local/share/thing")
-	}
-	if found, ok := searchUp(); ok {
-		return found, nil
-	}
-	return "", errors.New("no data directory found: pass --data-dir, set THING_DATA_DIR, use -g for the global tree, or run inside a project (a directory with a .thing/, found by searching upward)")
+// GlobalDataDir is the global tree directory following the XDG spec:
+// $XDG_DATA_HOME/thing when that is an absolute path, else ~/.local/share/thing.
+func GlobalDataDir() (string, error) {
+	return globalDir("XDG_DATA_HOME", ".local/share/thing")
 }
 
-// ConfigDir resolves the directory that holds config.yaml:
-//
-//	--config  ->  THING_CONFIG_DIR  ->  -g global  ->  nearest .thing/ upward  ->  global default
-//
-// Unlike data, config always has a global default ($XDG_CONFIG_HOME/thing, else
-// ~/.config/thing): -g uses it directly, and without -g it is the fallback after
-// the upward .thing/ search.
-func ConfigDir(flag string, global bool) (string, error) {
-	if flag != "" {
-		return flag, nil
-	}
-	if v := os.Getenv("THING_CONFIG_DIR"); v != "" {
-		return v, nil
-	}
-	if !global {
-		if found, ok := searchUp(); ok {
-			return found, nil
-		}
-	}
+// GlobalConfigDir is the global config directory following the XDG spec:
+// $XDG_CONFIG_HOME/thing when that is an absolute path, else ~/.config/thing.
+func GlobalConfigDir() (string, error) {
 	return globalDir("XDG_CONFIG_HOME", ".config/thing")
-}
-
-// InitDataDir and InitConfigDir resolve where `thing init` creates directories.
-// Like npm init, a bare `thing init` anchors a new project at ./.thing in the
-// current directory; -g targets the global directories instead.
-func InitDataDir(flag string, global bool) (string, error) {
-	return initDir(flag, "THING_DATA_DIR", global, "XDG_DATA_HOME", ".local/share/thing")
-}
-
-func InitConfigDir(flag string, global bool) (string, error) {
-	return initDir(flag, "THING_CONFIG_DIR", global, "XDG_CONFIG_HOME", ".config/thing")
-}
-
-func initDir(flag, env string, global bool, xdgVar, homeRel string) (string, error) {
-	if flag != "" {
-		return flag, nil
-	}
-	if v := os.Getenv(env); v != "" {
-		return v, nil
-	}
-	if global {
-		return globalDir(xdgVar, homeRel)
-	}
-	return ProjectDir, nil
 }
 
 // globalDir returns $<xdgVar>/thing when that XDG var is an absolute path,
@@ -114,9 +57,9 @@ func globalDir(xdgVar, homeRel string) (string, error) {
 	return filepath.Join(home, filepath.FromSlash(homeRel)), nil
 }
 
-// searchUp walks up from the working directory looking for a .thing directory,
-// git-style.
-func searchUp() (string, bool) {
+// FindProjectDir searches upward from the working directory for a project
+// .thing/ directory, git-style, returning it if found.
+func FindProjectDir() (string, bool) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "", false

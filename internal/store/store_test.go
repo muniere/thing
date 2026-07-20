@@ -119,39 +119,13 @@ func TestRollupStatusRules(t *testing.T) {
 	}
 }
 
-func TestDataAndConfigDir(t *testing.T) {
-	// flag wins.
-	if got, _ := DataDir("/explicit", false); got != "/explicit" {
-		t.Errorf("data flag: got %q", got)
-	}
-	if got, _ := ConfigDir("/explicit", false); got != "/explicit" {
-		t.Errorf("config flag: got %q", got)
-	}
-
-	// env beats the default, and the two dirs read separate variables.
-	t.Setenv("THING_DATA_DIR", "/data/env")
-	t.Setenv("THING_CONFIG_DIR", "/config/env")
-	if got, _ := DataDir("", true); got != "/data/env" {
-		t.Errorf("THING_DATA_DIR: got %q", got)
-	}
-	if got, _ := ConfigDir("", true); got != "/config/env" {
-		t.Errorf("THING_CONFIG_DIR: got %q", got)
-	}
-	// flag beats env.
-	if got, _ := DataDir("/explicit", true); got != "/explicit" {
-		t.Errorf("data flag over env: got %q", got)
-	}
-}
-
-func TestGlobalXDGDefaults(t *testing.T) {
-	t.Setenv("THING_DATA_DIR", "")
-	t.Setenv("THING_CONFIG_DIR", "")
+func TestGlobalDirs(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", "/xdg/data")
 	t.Setenv("XDG_CONFIG_HOME", "/xdg/config")
-	if got, _ := DataDir("", true); got != "/xdg/data/thing" {
+	if got, _ := GlobalDataDir(); got != "/xdg/data/thing" {
 		t.Errorf("XDG_DATA_HOME: got %q", got)
 	}
-	if got, _ := ConfigDir("", true); got != "/xdg/config/thing" {
+	if got, _ := GlobalConfigDir(); got != "/xdg/config/thing" {
 		t.Errorf("XDG_CONFIG_HOME: got %q", got)
 	}
 
@@ -159,45 +133,15 @@ func TestGlobalXDGDefaults(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
 	home, _ := os.UserHomeDir()
-	if got, _ := DataDir("", true); got != filepath.Join(home, ".local", "share", "thing") {
+	if got, _ := GlobalDataDir(); got != filepath.Join(home, ".local", "share", "thing") {
 		t.Errorf("data default: got %q", got)
 	}
-	if got, _ := ConfigDir("", true); got != filepath.Join(home, ".config", "thing") {
+	if got, _ := GlobalConfigDir(); got != filepath.Join(home, ".config", "thing") {
 		t.Errorf("config default: got %q", got)
 	}
 }
 
-func TestDataErrorsWithoutProjectConfigFallsBack(t *testing.T) {
-	t.Setenv("THING_DATA_DIR", "")
-	t.Setenv("THING_CONFIG_DIR", "")
-	t.Setenv("XDG_DATA_HOME", "")
-	t.Setenv("XDG_CONFIG_HOME", "")
-	// A directory with no .thing/ anywhere upward.
-	dir := t.TempDir()
-	orig, _ := os.Getwd()
-	t.Cleanup(func() { os.Chdir(orig) })
-	if err := os.Chdir(dir); err != nil {
-		t.Fatal(err)
-	}
-
-	// data has no global fallback: it errors when nothing resolves.
-	if _, err := DataDir("", false); err == nil {
-		t.Error("DataDir should error with no flag/env/project and no -g")
-	}
-	// config falls back to the global default.
-	home, _ := os.UserHomeDir()
-	if got, _ := ConfigDir("", false); got != filepath.Join(home, ".config", "thing") {
-		t.Errorf("config fallback: got %q", got)
-	}
-	// -g gives data the global tree.
-	if got, _ := DataDir("", true); got != filepath.Join(home, ".local", "share", "thing") {
-		t.Errorf("data -g: got %q", got)
-	}
-}
-
-func TestUpwardSearch(t *testing.T) {
-	t.Setenv("THING_DATA_DIR", "")
-	t.Setenv("THING_CONFIG_DIR", "")
+func TestFindProjectDir(t *testing.T) {
 	root := t.TempDir()
 	// Resolve symlinks so macOS /var -> /private/var doesn't defeat the compare.
 	root, _ = filepath.EvalSymlinks(root)
@@ -215,15 +159,8 @@ func TestUpwardSearch(t *testing.T) {
 	if err := os.Chdir(sub); err != nil {
 		t.Fatal(err)
 	}
-	// A found project .thing/ holds both data and config; -g skips the search.
-	if got, _ := DataDir("", false); got != thing {
-		t.Errorf("data upward search: got %q, want %q", got, thing)
-	}
-	if got, _ := ConfigDir("", false); got != thing {
-		t.Errorf("config upward search: got %q, want %q", got, thing)
-	}
-	if got, _ := DataDir("", true); got == thing {
-		t.Errorf("-g should skip the project .thing/, got %q", got)
+	if got, ok := FindProjectDir(); !ok || got != thing {
+		t.Errorf("upward search: got %q ok=%v, want %q", got, ok, thing)
 	}
 }
 func TestScopedListings(t *testing.T) {

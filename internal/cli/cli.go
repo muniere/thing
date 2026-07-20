@@ -3,8 +3,15 @@
 package cli
 
 import (
+	"errors"
+	"fmt"
+	"os"
+	"strings"
+	"time"
+
 	"github.com/spf13/cobra"
 
+	"github.com/muniere/thing/internal/model"
 	"github.com/muniere/thing/internal/store"
 )
 
@@ -31,20 +38,6 @@ func NewRootCmd(version string) *cobra.Command {
 	return cmd
 }
 
-// dataDir resolves the tree's data directory from the persistent flags.
-func dataDir(cmd *cobra.Command) (string, error) {
-	flag, _ := cmd.Flags().GetString("data-dir")
-	global, _ := cmd.Flags().GetBool("global")
-	return store.DataDir(flag, global)
-}
-
-// configDir resolves the config directory from the persistent flags.
-func configDir(cmd *cobra.Command) (string, error) {
-	flag, _ := cmd.Flags().GetString("config")
-	global, _ := cmd.Flags().GetBool("global")
-	return store.ConfigDir(flag, global)
-}
-
 // openStore opens the store rooted at the resolved data directory.
 func openStore(cmd *cobra.Command) (*store.Store, error) {
 	dir, err := dataDir(cmd)
@@ -52,4 +45,129 @@ func openStore(cmd *cobra.Command) (*store.Store, error) {
 		return nil, err
 	}
 	return store.Open(dir), nil
+}
+
+func today() string {
+	return time.Now().Format("2006-01-02")
+}
+
+// Environment variables that override the data and config directories.
+const (
+	envDataDir   = "THING_DATA_DIR"
+	envConfigDir = "THING_CONFIG_DIR"
+)
+
+// Directory resolution combines CLI inputs (the --data-dir / --config flags and
+// -g) with the THING_*_DIR env vars and the store's directory primitives. This
+// precedence lives in the CLI layer; the store only knows how to find a project
+// .thing/ and where the global XDG directories are.
+
+// dataDir resolves the tree's data directory:
+//
+//	--data-dir  ->  THING_DATA_DIR  ->  -g global  ->  nearest .thing/ upward
+//
+// There is no implicit global fallback: it errors rather than silently use a
+// global tree.
+func dataDir(cmd *cobra.Command) (string, error) {
+	if flag, _ := cmd.Flags().GetString("data-dir"); flag != "" {
+		return flag, nil
+	}
+	if v := os.Getenv(envDataDir); v != "" {
+		return v, nil
+	}
+	if global, _ := cmd.Flags().GetBool("global"); global {
+		return store.GlobalDataDir()
+	}
+	if dir, ok := store.FindProjectDir(); ok {
+		return dir, nil
+	}
+	return "", errors.New("no data directory found: pass --data-dir, set THING_DATA_DIR, use -g for the global tree, or run inside a project (a directory with a .thing/, found by searching upward)")
+}
+
+// configDir resolves the config directory:
+//
+//	--config  ->  THING_CONFIG_DIR  ->  nearest .thing/ upward (unless -g)  ->  global
+//
+// Unlike data, config keeps a global default ($XDG_CONFIG_HOME/thing, else
+// ~/.config/thing) as the final fallback rather than erroring.
+func configDir(cmd *cobra.Command) (string, error) {
+	if flag, _ := cmd.Flags().GetString("config"); flag != "" {
+		return flag, nil
+	}
+	if v := os.Getenv(envConfigDir); v != "" {
+		return v, nil
+	}
+	if global, _ := cmd.Flags().GetBool("global"); !global {
+		if dir, ok := store.FindProjectDir(); ok {
+			return dir, nil
+		}
+	}
+	return store.GlobalConfigDir()
+}
+
+// initDataDir / initConfigDir resolve where `thing init` creates directories.
+// Like npm init, a bare init anchors a new project at ./.thing rather than
+// searching upward; -g targets the global directories.
+func initDataDir(cmd *cobra.Command) (string, error) {
+	if flag, _ := cmd.Flags().GetString("data-dir"); flag != "" {
+		return flag, nil
+	}
+	if v := os.Getenv(envDataDir); v != "" {
+		return v, nil
+	}
+	if global, _ := cmd.Flags().GetBool("global"); global {
+		return store.GlobalDataDir()
+	}
+	return store.ProjectDir, nil
+}
+
+func initConfigDir(cmd *cobra.Command) (string, error) {
+	if flag, _ := cmd.Flags().GetString("config"); flag != "" {
+		return flag, nil
+	}
+	if v := os.Getenv(envConfigDir); v != "" {
+		return v, nil
+	}
+	if global, _ := cmd.Flags().GetBool("global"); global {
+		return store.GlobalConfigDir()
+	}
+	return store.ProjectDir, nil
+}
+
+// locate resolves slug and verifies it is of the expected type.
+func locate(cmd *cobra.Command, res model.NodeType, slug string) (*store.Located, error) {
+	st, err := openStore(cmd)
+	if err != nil {
+		return nil, err
+	}
+	loc, err := st.Locate(slug)
+	if err != nil {
+		return nil, err
+	}
+	if loc == nil || loc.Node.Type != res {
+		return nil, fmt.Errorf("no such %s %q", res, slug)
+	}
+	return loc, nil
+}
+
+// checkPriority validates an optional priority flag value.
+func checkPriority(p string) error {
+	if p != "" && !model.Priority(p).Valid() {
+		return fmt.Errorf("invalid priority %q", p)
+	}
+	return nil
+}
+
+// splitTags parses a comma-separated tag list, dropping blanks.
+func splitTags(s string) []string {
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	var out []string
+	for _, p := range strings.Split(s, ",") {
+		if t := strings.TrimSpace(p); t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
 }
