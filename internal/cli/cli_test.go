@@ -124,6 +124,69 @@ func TestListAndShow(t *testing.T) {
 	}
 }
 
+func TestSplitTrim(t *testing.T) {
+	cases := []struct {
+		in   string
+		want []string
+	}{
+		{"", nil},
+		{"   ", nil},
+		{"a,b,c", []string{"a", "b", "c"}},
+		{"a, b , c", []string{"a", "b", "c"}}, // surrounding whitespace trimmed
+		{"a,,b", []string{"a", "b"}},          // blank fields dropped
+	}
+	for _, c := range cases {
+		got := splitTrim(c.in, ",")
+		if len(got) != len(c.want) {
+			t.Errorf("splitTrim(%q) = %v, want %v", c.in, got, c.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != c.want[i] {
+				t.Errorf("splitTrim(%q)[%d] = %q, want %q", c.in, i, got[i], c.want[i])
+			}
+		}
+	}
+}
+
+func TestTagsFlag(t *testing.T) {
+	dir := t.TempDir()
+	d := []string{"--data-dir", dir, "--config", dir}
+	runCLI(t, append([]string{"init"}, d...)...)
+
+	// --tags is comma-separated; whitespace around each tag is trimmed on the
+	// way into the stored node.
+	_, out, _ := runCLI(t, append([]string{"epic", "add", "Tagged", "--tags", "a, b, c"}, d...)...)
+	slug := strings.TrimSpace(out)
+
+	_, out, _ = runCLI(t, append([]string{"epic", "show", slug}, d...)...)
+	if !strings.Contains(out, "tags:") || !strings.Contains(out, "a, b, c") {
+		t.Errorf("tags round-trip: %q", out)
+	}
+}
+
+func TestInvalidPriorityRejected(t *testing.T) {
+	dir := t.TempDir()
+	d := []string{"--data-dir", dir, "--config", dir}
+	runCLI(t, append([]string{"init"}, d...)...)
+	_, epicOut, _ := runCLI(t, append([]string{"epic", "add", "E"}, d...)...)
+	_, issueOut, _ := runCLI(t, append([]string{"issue", "add", "I", "--epic", strings.TrimSpace(epicOut)}, d...)...)
+	issue := strings.TrimSpace(issueOut)
+
+	// The inlined priority check rejects a bad value at every add site.
+	cases := [][]string{
+		{"epic", "add", "Bad", "--priority", "bogus"},
+		{"issue", "add", "Bad", "--priority", "bogus"},
+		{"task", "add", "Bad", "--issue", issue, "--priority", "bogus"},
+	}
+	for _, c := range cases {
+		code, _, errb := runCLI(t, append(c, d...)...)
+		if code == 0 || !strings.Contains(errb, "invalid priority") {
+			t.Errorf("%v with --priority bogus: code=%d err=%q", c[:2], code, errb)
+		}
+	}
+}
+
 func TestVersionAndUsage(t *testing.T) {
 	if code, out, _ := runCLI(t, "--version"); code != 0 || strings.TrimSpace(out) == "" {
 		t.Errorf("version: code=%d out=%q", code, out)

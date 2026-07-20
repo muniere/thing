@@ -4,14 +4,12 @@ package cli
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
-	"github.com/muniere/thing/internal/model"
 	"github.com/muniere/thing/internal/store"
 )
 
@@ -134,21 +132,11 @@ func initConfigDir(cmd *cobra.Command) (string, error) {
 	return store.ProjectDir, nil
 }
 
-// checkPriority validates an optional priority flag value.
-func checkPriority(p string) error {
-	if p != "" && !model.Priority(p).Valid() {
-		return fmt.Errorf("invalid priority %q", p)
-	}
-	return nil
-}
-
-// splitTags parses a comma-separated tag list, dropping blanks.
-func splitTags(s string) []string {
-	if strings.TrimSpace(s) == "" {
-		return nil
-	}
+// splitTrim splits s on sep, trimming whitespace from each field and dropping
+// blanks. An all-blank input yields nil.
+func splitTrim(s, sep string) []string {
 	var out []string
-	for _, p := range strings.Split(s, ",") {
+	for _, p := range strings.Split(s, sep) {
 		if t := strings.TrimSpace(p); t != "" {
 			out = append(out, t)
 		}

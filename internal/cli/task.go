@@ -81,8 +81,8 @@ func newTaskAddCmd() *cobra.Command {
 			if issue == "" {
 				return fmt.Errorf("--issue is required")
 			}
-			if err := checkPriority(priority); err != nil {
-				return err
+			if priority != "" && !model.Priority(priority).Valid() {
+				return fmt.Errorf("invalid priority %q", priority)
 			}
 			st, err := openStore(cmd)
 			if err != nil {
@@ -99,7 +99,7 @@ func newTaskAddCmd() *cobra.Command {
 			n := &model.Node{
 				Title:    title,
 				Priority: model.Priority(priority),
-				Tags:     splitTags(tags),
+				Tags:     splitTrim(tags, ","),
 				Updated:  today(),
 				Slug:     slug.Unique(slug.Slugify(title), taken),
 			}
