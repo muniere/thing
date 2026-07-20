@@ -1,7 +1,12 @@
-.PHONY: build test gen check fmt fmt-check vet clean
+.PHONY: build install test gen check fmt fmt-check vet clean
 
 build:
 	go build -o bin/thing ./cmd/thing
+
+# install builds and installs the binaries into the Go bin directory
+# (`go env GOBIN`, else `$GOPATH/bin`).
+install:
+	go install ./cmd/thing
 
 test:
 	go test ./...

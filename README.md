@@ -14,27 +14,61 @@ machinery.
 ## Install
 
 ```
-make build             # build all packages
+make install
 ```
 
-## Data directory resolution
+This installs `thing` into your Go bin directory (`go env GOBIN`, else
+`$GOPATH/bin`); make sure it is on your `PATH`. Use `make build` to produce a
+local `bin/thing` instead.
 
-Every command resolves the data directory in this order:
+## Directories
 
-1. `--dir <path>` flag
-2. `-g` / `--global` → `~/.thing`
-3. `THING_DIR` environment variable
-4. the nearest `.thing/` searched upward from the working directory (git-style)
-5. `./.thing`
+`thing` keeps the node tree in a **data** directory and `config.yaml` in a
+**config** directory. Each resolves independently — the first match wins.
 
-Run `thing init [--dir <path>]` to create the directory and a starter
-`config.yaml`.
+### Data directory
+
+1. `--data-dir <path>`
+2. `THING_DATA_DIR`
+3. the nearest `.thing/` searched upward (skipped with `-g` / `--global`)
+4. `$XDG_DATA_HOME/thing` (default `~/.local/share/thing`)
+
+### Config directory
+
+1. `--config <path>`
+2. `THING_CONFIG_DIR`
+3. the nearest `.thing/` searched upward (skipped with `-g` / `--global`)
+4. `$XDG_CONFIG_HOME/thing` (default `~/.config/thing`)
+
+A `.thing/` found upward holds both, so a self-contained project keeps its tree
+and config together.
+
+Run `thing init` to create the directories and a starter `config.yaml`.
+
+## Commands
+
+```
+thing init                                   create the data + config dirs and config.yaml
+thing epic   add "<title>" [--category <c>] [--priority <p>] [--tags a,b]
+thing issue  add "<title>" [--epic <slug>]  [--priority <p>] [--tags a,b]   # no --epic → orphan
+thing task   add "<title>"  --issue <slug>  [--priority <p>] [--tags a,b]
+thing tree                                   # whole tree as an indented outline
+```
+
+`<res>` is `epic`, `issue`, or `task`. The `--data-dir`, `--config`, and
+`-g` / `--global` flags apply to every command. `add` prints the created slug on
+stdout.
+
+An epic's status is rolled up from its issues (all done → done; any doing →
+doing; all todo → todo; otherwise doing) unless the epic sets a status
+explicitly.
 
 ## On-disk layout
 
 ```
-<data-dir>/
+<config-dir>/
   config.yaml
+<data-dir>/
   <epic-slug>/
     _epic.md
     <issue-slug>/
@@ -70,6 +104,11 @@ rewrites these backlinks automatically.
 
 All frontmatter fields are optional. The filename is the slug — do not rename
 files by hand; use `thing <res> rename`.
+
+## Configuration
+
+`config.yaml` holds the board `title`. See
+[`config.example.yaml`](config.example.yaml).
 
 ## License
 

@@ -1,0 +1,9 @@
+# Example thing configuration.
+# Copy to <data-dir>/config.yaml (or let `thing init` write a starter for you).
+
+# Board title, shown as the header of `thing tree`.
+title: thing
+
+# Exclusive category groups for epics (used by tree/list grouping).
+# Configured and documented once category grouping lands.
+categories: []
