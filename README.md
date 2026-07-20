@@ -51,35 +51,48 @@ current directory; `thing init -g` targets the global directories instead.
 
 ## Commands
 
+The tree behaves like a filesystem: a node is addressed by a **slug path**
+`<parent>/<name>`, and the commands mirror the shell's. A slug is globally
+unique and carries its own type, so operations on an existing node take a bare
+slug — there is no `epic`/`issue`/`task` prefix.
+
 ```
 thing init                                   create the data + config dirs and config.yaml
-thing epic   add "<title>" [--category <c>] [--priority <p>] [--tags a,b]
-thing issue  add "<title>" [--epic <slug>]  [--priority <p>] [--tags a,b]   # no --epic → orphan
-thing task   add "<title>"  --issue <slug>  [--priority <p>] [--tags a,b]
-thing epic   list                            # list epics
-thing issue  list [--epic <slug>]            # list issues (optionally scoped)
-thing task   list [--issue <slug>]           # list tasks (optionally scoped)
-thing epic   show <slug>                     # show an epic + body
-thing issue  show <slug>                     # show an issue + body
-thing task   show <slug>                     # show a task + body
-thing epic   status <slug> <todo|doing|done|paused>    # set an epic's status
-thing issue  status <slug> <todo|doing|done|paused>    # set an issue's status
-thing task   status <slug> <todo|doing|done|paused>    # set a task's status
-thing epic   priority <slug> <high|medium|low>         # set an epic's priority
-thing issue  priority <slug> <high|medium|low>         # set an issue's priority
-thing task   priority <slug> <high|medium|low>         # set a task's priority
+thing add <path> [--priority <p>] [--tags a,b] [--category <c>]
+thing ls [<parent>]                          # list a parent's children, or the top level
+thing show <slug>                            # show a node + body
+thing status   <slug> <todo|doing|done|paused>
+thing priority <slug> <high|medium|low>
 thing mv <src> <dst>                         # move and/or rename a node (like mv)
 thing tree                                   # whole tree as an indented outline
 ```
 
-The resource (`epic` / `issue` / `task`) acts as a type guard on the slug for
-`show`, `status`, and `priority`.
+### `add` — a path decides the type
 
-`mv` addresses a node by a slug path `<parent>/<name>` — a bare `<name>` for an
-epic, `_orphan/<name>` for an orphan issue. Like the shell's `mv`, a changed
-parent moves the node and a changed name renames it (rewriting `[[slug]]`
-backlinks across the tree); changing both does both. The name is the node's
-slug, not its title. It is silent on success.
+`add` takes a path `[<parent>/]<title>`; the parent's type decides what is
+created (like `mkdir` in a tree):
+
+```
+thing add "Web release"                 # no parent      -> epic
+thing add web-release/"Monitor rollout" # under an epic  -> issue
+thing add monitor-rollout/"Confirm"     # under an issue -> task
+thing add _orphan/"Loose end"           # under _orphan  -> orphan issue
+```
+
+`--category` applies only to an epic. `add` prints the created slug on stdout.
+
+### `ls` — list children
+
+`thing ls` lists the top level (epics and orphan issues); `thing ls <parent>`
+lists that node's children; `thing ls _orphan` lists the orphan issues.
+
+### `mv` — move and/or rename
+
+`mv` addresses a node by the same `<parent>/<name>` path — a bare `<name>` for
+an epic, `_orphan/<name>` for an orphan issue. A changed parent moves the node;
+a changed name renames it (rewriting `[[slug]]` backlinks across the tree);
+changing both does both. The name is the node's slug, not its title. It is
+silent on success.
 
 ```
 thing mv alpha/one beta/one       # move issue "one" from epic alpha to beta
@@ -88,7 +101,7 @@ thing mv alpha/one _orphan/one    # detach an issue into _orphan
 ```
 
 The `--data-dir`, `--config`, and `-g` / `--global` flags apply to every
-command. `add` prints the created slug on stdout.
+command.
 
 An epic's status is rolled up from its issues (all done → done; any doing →
 doing; all todo → todo; otherwise doing) unless the epic sets a status

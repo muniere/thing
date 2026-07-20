@@ -42,36 +42,41 @@ func TestWalkingSkeleton(t *testing.T) {
 		t.Fatalf("config.yaml not created: %v", err)
 	}
 
-	// epic add
-	code, out, errb := runCLI(t, append([]string{"epic", "add", "Web release"}, d...)...)
+	// add an epic (a bare title, no parent)
+	code, out, errb := runCLI(t, append([]string{"add", "Web release"}, d...)...)
 	if code != 0 {
-		t.Fatalf("epic add: code=%d err=%s", code, errb)
+		t.Fatalf("add epic: code=%d err=%s", code, errb)
 	}
 	epicSlug := strings.TrimSpace(out)
 	if epicSlug != "web-release" {
 		t.Fatalf("epic slug = %q, want web-release", epicSlug)
 	}
 
-	// issue add under epic
-	_, out, errb = runCLI(t, append([]string{"issue", "add", "Monitor rollout", "--epic", epicSlug}, d...)...)
+	// add an issue under the epic (parent path)
+	_, out, errb = runCLI(t, append([]string{"add", epicSlug + "/Monitor rollout"}, d...)...)
 	issueSlug := strings.TrimSpace(out)
 	if issueSlug != "monitor-rollout" {
 		t.Fatalf("issue slug = %q err=%s", issueSlug, errb)
 	}
 
-	// task add requires --issue
-	if code, _, _ := runCLI(t, append([]string{"task", "add", "no parent"}, d...)...); code == 0 {
-		t.Fatal("task add without --issue should fail")
+	// adding under a nonexistent parent fails
+	if code, _, _ := runCLI(t, append([]string{"add", "monitor-rollout-2/nope"}, d...)...); code == 0 {
+		t.Fatal("add under a nonexistent parent should fail")
 	}
 
-	// task add under issue
-	_, out, _ = runCLI(t, append([]string{"task", "add", "Confirm routing", "--issue", issueSlug}, d...)...)
+	// add a task under the issue
+	_, out, _ = runCLI(t, append([]string{"add", issueSlug + "/Confirm routing"}, d...)...)
 	if strings.TrimSpace(out) != "confirm-routing" {
 		t.Fatalf("task slug = %q", out)
 	}
 
-	// orphan issue (no --epic)
-	_, out, _ = runCLI(t, append([]string{"issue", "add", "Loose end"}, d...)...)
+	// a task cannot be a parent (the hierarchy stops at tasks)
+	if code, _, errb := runCLI(t, append([]string{"add", "confirm-routing/nope"}, d...)...); code == 0 {
+		t.Fatalf("add under a task should fail; errb=%s", errb)
+	}
+
+	// add an orphan issue (under _orphan)
+	_, out, _ = runCLI(t, append([]string{"add", "_orphan/Loose end"}, d...)...)
 	if strings.TrimSpace(out) != "loose-end" {
 		t.Fatalf("orphan slug = %q", out)
 	}
@@ -92,35 +97,65 @@ func TestSlugUniqueness(t *testing.T) {
 	dir := t.TempDir()
 	d := []string{"--data-dir", dir, "--config", dir}
 	runCLI(t, append([]string{"init"}, d...)...)
-	_, out1, _ := runCLI(t, append([]string{"epic", "add", "Same Name"}, d...)...)
-	_, out2, _ := runCLI(t, append([]string{"epic", "add", "Same Name"}, d...)...)
+	_, out1, _ := runCLI(t, append([]string{"add", "Same Name"}, d...)...)
+	_, out2, _ := runCLI(t, append([]string{"add", "Same Name"}, d...)...)
 	if strings.TrimSpace(out1) != "same-name" || strings.TrimSpace(out2) != "same-name-2" {
 		t.Errorf("uniqueness: %q then %q", out1, out2)
 	}
 }
 
-func TestListAndShow(t *testing.T) {
+func TestLsAndShow(t *testing.T) {
 	dir := t.TempDir()
 	d := []string{"--data-dir", dir, "--config", dir}
 	runCLI(t, append([]string{"init"}, d...)...)
-	runCLI(t, append([]string{"epic", "add", "Web"}, d...)...)
-	runCLI(t, append([]string{"issue", "add", "Roll", "--epic", "web"}, d...)...)
-	runCLI(t, append([]string{"task", "add", "Do", "--issue", "roll"}, d...)...)
+	runCLI(t, append([]string{"add", "Web"}, d...)...)
+	runCLI(t, append([]string{"add", "web/Roll"}, d...)...)
+	runCLI(t, append([]string{"add", "roll/Do"}, d...)...)
 
-	// list is scoped per resource.
-	if _, out, _ := runCLI(t, append([]string{"epic", "list"}, d...)...); !strings.Contains(out, "web") {
-		t.Errorf("epic list: %q", out)
+	// ls with no arg lists the top level; ls <parent> lists its children.
+	if _, out, _ := runCLI(t, append([]string{"ls"}, d...)...); !strings.Contains(out, "web") {
+		t.Errorf("ls: %q", out)
 	}
-	if _, out, _ := runCLI(t, append([]string{"task", "list", "--issue", "roll"}, d...)...); !strings.Contains(out, "do") {
-		t.Errorf("task list --issue: %q", out)
+	if _, out, _ := runCLI(t, append([]string{"ls", "roll"}, d...)...); !strings.Contains(out, "do") {
+		t.Errorf("ls roll: %q", out)
 	}
 
-	// show reflects a node; the resource acts as a type guard.
-	if _, out, _ := runCLI(t, append([]string{"task", "show", "do"}, d...)...); !strings.Contains(out, "Do") {
+	// ls _orphan lists orphan issues and excludes epics.
+	runCLI(t, append([]string{"add", "_orphan/Loose"}, d...)...)
+	if _, out, _ := runCLI(t, append([]string{"ls", "_orphan"}, d...)...); !strings.Contains(out, "loose") || strings.Contains(out, "web") {
+		t.Errorf("ls _orphan: %q", out)
+	}
+	// ls of an unknown parent errors.
+	if code, _, _ := runCLI(t, append([]string{"ls", "nope"}, d...)...); code == 0 {
+		t.Error("ls on an unknown parent should fail")
+	}
+
+	// show reflects any node by slug, without a resource prefix.
+	if _, out, _ := runCLI(t, append([]string{"show", "do"}, d...)...); !strings.Contains(out, "Do") {
 		t.Errorf("show: %q", out)
 	}
-	if code, _, _ := runCLI(t, append([]string{"epic", "show", "do"}, d...)...); code == 0 {
-		t.Error("epic show on a task slug should fail")
+	if code, _, _ := runCLI(t, append([]string{"show", "nope"}, d...)...); code == 0 {
+		t.Error("show on an unknown slug should fail")
+	}
+}
+
+func TestAddCategoryOnlyForEpic(t *testing.T) {
+	dir := t.TempDir()
+	d := []string{"--data-dir", dir, "--config", dir}
+	runCLI(t, append([]string{"init"}, d...)...)
+	runCLI(t, append([]string{"add", "Web"}, d...)...)
+
+	// --category is fine on an epic (no parent).
+	if code, _, errb := runCLI(t, append([]string{"add", "Other", "--category", "Proj"}, d...)...); code != 0 {
+		t.Fatalf("add epic --category: %s", errb)
+	}
+	// --category with a parent (a non-epic) is rejected.
+	if code, _, errb := runCLI(t, append([]string{"add", "web/Sub", "--category", "Proj"}, d...)...); code == 0 || !strings.Contains(errb, "category") {
+		t.Errorf("add issue --category: code=%d err=%q", code, errb)
+	}
+	// A leading slash (an empty parent) is rejected.
+	if code, _, _ := runCLI(t, append([]string{"add", "/Nope"}, d...)...); code == 0 {
+		t.Error("add with a leading slash should fail")
 	}
 }
 
@@ -156,10 +191,10 @@ func TestTagsFlag(t *testing.T) {
 
 	// --tags is comma-separated; whitespace around each tag is trimmed on the
 	// way into the stored node.
-	_, out, _ := runCLI(t, append([]string{"epic", "add", "Tagged", "--tags", "a, b, c"}, d...)...)
+	_, out, _ := runCLI(t, append([]string{"add", "Tagged", "--tags", "a, b, c"}, d...)...)
 	slug := strings.TrimSpace(out)
 
-	_, out, _ = runCLI(t, append([]string{"epic", "show", slug}, d...)...)
+	_, out, _ = runCLI(t, append([]string{"show", slug}, d...)...)
 	if !strings.Contains(out, "tags:") || !strings.Contains(out, "a, b, c") {
 		t.Errorf("tags round-trip: %q", out)
 	}
@@ -169,20 +204,15 @@ func TestInvalidPriorityRejected(t *testing.T) {
 	dir := t.TempDir()
 	d := []string{"--data-dir", dir, "--config", dir}
 	runCLI(t, append([]string{"init"}, d...)...)
-	_, epicOut, _ := runCLI(t, append([]string{"epic", "add", "E"}, d...)...)
-	_, issueOut, _ := runCLI(t, append([]string{"issue", "add", "I", "--epic", strings.TrimSpace(epicOut)}, d...)...)
-	issue := strings.TrimSpace(issueOut)
+	runCLI(t, append([]string{"add", "E"}, d...)...)
+	runCLI(t, append([]string{"add", "e/I"}, d...)...)
 
-	// The inlined priority check rejects a bad value at every add site.
-	cases := [][]string{
-		{"epic", "add", "Bad", "--priority", "bogus"},
-		{"issue", "add", "Bad", "--priority", "bogus"},
-		{"task", "add", "Bad", "--issue", issue, "--priority", "bogus"},
-	}
-	for _, c := range cases {
-		code, _, errb := runCLI(t, append(c, d...)...)
+	// A bad --priority is rejected whatever the target's type (epic/issue/task).
+	cases := []string{"Bad", "e/Bad", "i/Bad"}
+	for _, path := range cases {
+		code, _, errb := runCLI(t, append([]string{"add", path, "--priority", "bogus"}, d...)...)
 		if code == 0 || !strings.Contains(errb, "invalid priority") {
-			t.Errorf("%v with --priority bogus: code=%d err=%q", c[:2], code, errb)
+			t.Errorf("add %q --priority bogus: code=%d err=%q", path, code, errb)
 		}
 	}
 }
@@ -191,30 +221,30 @@ func TestStatusAndPriority(t *testing.T) {
 	dir := t.TempDir()
 	d := []string{"--data-dir", dir, "--config", dir}
 	runCLI(t, append([]string{"init"}, d...)...)
-	runCLI(t, append([]string{"epic", "add", "Web"}, d...)...)
-	runCLI(t, append([]string{"issue", "add", "Roll", "--epic", "web"}, d...)...)
-	runCLI(t, append([]string{"task", "add", "Do", "--issue", "roll"}, d...)...)
+	runCLI(t, append([]string{"add", "Web"}, d...)...)
+	runCLI(t, append([]string{"add", "web/Roll"}, d...)...)
+	runCLI(t, append([]string{"add", "roll/Do"}, d...)...)
 
-	// Setting status and priority round-trips through show.
-	if code, _, errb := runCLI(t, append([]string{"task", "status", "do", "doing"}, d...)...); code != 0 {
-		t.Fatalf("task status: %s", errb)
+	// status/priority take a bare slug (no resource prefix) and round-trip.
+	if code, _, errb := runCLI(t, append([]string{"status", "do", "doing"}, d...)...); code != 0 {
+		t.Fatalf("status: %s", errb)
 	}
-	runCLI(t, append([]string{"task", "priority", "do", "high"}, d...)...)
-	if _, out, _ := runCLI(t, append([]string{"task", "show", "do"}, d...)...); !strings.Contains(out, "doing") || !strings.Contains(out, "high") {
+	runCLI(t, append([]string{"priority", "do", "high"}, d...)...)
+	if _, out, _ := runCLI(t, append([]string{"show", "do"}, d...)...); !strings.Contains(out, "doing") || !strings.Contains(out, "high") {
 		t.Errorf("show after status/priority: %q", out)
 	}
 
 	// Invalid values are rejected, and the error names the allowed set.
-	if code, _, errb := runCLI(t, append([]string{"task", "status", "do", "bogus"}, d...)...); code == 0 || !strings.Contains(errb, "invalid status") || !strings.Contains(errb, "todo") {
+	if code, _, errb := runCLI(t, append([]string{"status", "do", "bogus"}, d...)...); code == 0 || !strings.Contains(errb, "invalid status") || !strings.Contains(errb, "todo") {
 		t.Errorf("invalid status: code=%d err=%q", code, errb)
 	}
-	if code, _, errb := runCLI(t, append([]string{"epic", "priority", "web", "bogus"}, d...)...); code == 0 || !strings.Contains(errb, "invalid priority") || !strings.Contains(errb, "high") {
+	if code, _, errb := runCLI(t, append([]string{"priority", "web", "bogus"}, d...)...); code == 0 || !strings.Contains(errb, "invalid priority") || !strings.Contains(errb, "high") {
 		t.Errorf("invalid priority: code=%d err=%q", code, errb)
 	}
 
-	// The resource acts as a type guard: a task slug is not an epic.
-	if code, _, _ := runCLI(t, append([]string{"epic", "status", "do", "doing"}, d...)...); code == 0 {
-		t.Error("epic status on a task slug should fail")
+	// An unknown slug is rejected.
+	if code, _, _ := runCLI(t, append([]string{"status", "nope", "doing"}, d...)...); code == 0 {
+		t.Error("status on an unknown slug should fail")
 	}
 }
 
@@ -224,15 +254,15 @@ func TestEpicPriorityKeepsStatusLive(t *testing.T) {
 	dir := t.TempDir()
 	d := []string{"--data-dir", dir, "--config", dir}
 	runCLI(t, append([]string{"init"}, d...)...)
-	runCLI(t, append([]string{"epic", "add", "Web"}, d...)...)
-	runCLI(t, append([]string{"issue", "add", "Roll", "--epic", "web"}, d...)...)
+	runCLI(t, append([]string{"add", "Web"}, d...)...)
+	runCLI(t, append([]string{"add", "web/Roll"}, d...)...)
 
 	// Set only priority, then move the issue to doing.
-	runCLI(t, append([]string{"epic", "priority", "web", "high"}, d...)...)
-	runCLI(t, append([]string{"issue", "status", "roll", "doing"}, d...)...)
+	runCLI(t, append([]string{"priority", "web", "high"}, d...)...)
+	runCLI(t, append([]string{"status", "roll", "doing"}, d...)...)
 
 	// The epic rolls up to doing rather than a frozen todo.
-	if _, out, _ := runCLI(t, append([]string{"epic", "show", "web"}, d...)...); !strings.Contains(out, "doing") {
+	if _, out, _ := runCLI(t, append([]string{"show", "web"}, d...)...); !strings.Contains(out, "doing") {
 		t.Errorf("epic status should roll up to doing, got: %q", out)
 	}
 }
@@ -376,9 +406,9 @@ func TestMvCommand(t *testing.T) {
 	dir := t.TempDir()
 	d := []string{"--data-dir", dir, "--config", dir}
 	runCLI(t, append([]string{"init"}, d...)...)
-	runCLI(t, append([]string{"epic", "add", "Alpha"}, d...)...)
-	runCLI(t, append([]string{"epic", "add", "Beta"}, d...)...)
-	runCLI(t, append([]string{"issue", "add", "One", "--epic", "alpha"}, d...)...)
+	runCLI(t, append([]string{"add", "Alpha"}, d...)...)
+	runCLI(t, append([]string{"add", "Beta"}, d...)...)
+	runCLI(t, append([]string{"add", "alpha/One"}, d...)...)
 
 	// mv is silent on success (the destination is fully specified).
 	if code, out, errb := runCLI(t, append([]string{"mv", "alpha/one", "beta/planning"}, d...)...); code != 0 || out != "" {
@@ -388,8 +418,8 @@ func TestMvCommand(t *testing.T) {
 	if _, out, _ := runCLI(t, append([]string{"tree"}, d...)...); !strings.Contains(out, "planning") || strings.Contains(out, "(one)") {
 		t.Errorf("tree after mv: %q", out)
 	}
-	if code, _, _ := runCLI(t, append([]string{"issue", "show", "planning"}, d...)...); code != 0 {
-		t.Error("issue show planning should succeed after mv")
+	if code, _, _ := runCLI(t, append([]string{"show", "planning"}, d...)...); code != 0 {
+		t.Error("show planning should succeed after mv")
 	}
 	// A bad source path errors.
 	if code, _, _ := runCLI(t, append([]string{"mv", "alpha/planning", "beta/x"}, d...)...); code == 0 {
