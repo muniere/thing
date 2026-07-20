@@ -32,6 +32,7 @@ func NewRootCmd(version string) *cobra.Command {
 		newEpicCmd(),
 		newIssueCmd(),
 		newTaskCmd(),
+		newMvCmd(),
 	)
 	return cmd
 }

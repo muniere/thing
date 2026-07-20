@@ -3,6 +3,7 @@ package store
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/muniere/thing/internal/model"
@@ -244,5 +245,161 @@ func TestFind(t *testing.T) {
 	// Missing slug.
 	if _, err := s.Find("ghost", model.Task); err == nil {
 		t.Error("Find(ghost, Task) should fail: no such slug")
+	}
+}
+
+// mvFixture builds: epic alpha (issue one -> task t), epic beta, and an orphan
+// issue "ref" whose body links to [[one]].
+func mvFixture(t *testing.T) *Store {
+	t.Helper()
+	root := t.TempDir()
+	write(t, filepath.Join(root, "alpha", "_epic.md"), "---\ntitle: Alpha\n---\n")
+	write(t, filepath.Join(root, "alpha", "one", "_issue.md"), "---\ntitle: One\n---\n")
+	write(t, filepath.Join(root, "alpha", "one", "t.md"), "---\ntitle: T\n---\n")
+	write(t, filepath.Join(root, "beta", "_epic.md"), "---\ntitle: Beta\n---\n")
+	write(t, filepath.Join(root, OrphanDir, "ref", "_issue.md"), "---\ntitle: Ref\n---\nsee [[one]]\n")
+	return Open(root)
+}
+
+func TestMvRename(t *testing.T) {
+	s := mvFixture(t)
+	if err := s.Mv("alpha/one", "alpha/planning", "2026-07-20"); err != nil {
+		t.Fatalf("Mv rename: %v", err)
+	}
+	// The slug changed; the old slug is gone and the new one is under the same epic.
+	if loc, _ := s.Locate("one"); loc != nil {
+		t.Error("old slug 'one' still resolves after rename")
+	}
+	loc, _ := s.Locate("planning")
+	if loc == nil || loc.Parent != "alpha" {
+		t.Fatalf("planning not found under alpha: %+v", loc)
+	}
+	// The title is untouched; only the slug (the name) changed.
+	if loc.Node.Title != "One" {
+		t.Errorf("title = %q, want One (mv must not change the title)", loc.Node.Title)
+	}
+	// The child task moved with its issue.
+	if task, _ := s.Locate("t"); task == nil || task.Parent != "planning" {
+		t.Errorf("task did not follow its issue: %+v", task)
+	}
+	// The backlink followed the rename.
+	if ref, _ := s.Locate("ref"); ref == nil || !strings.Contains(ref.Node.Body, "[[planning]]") {
+		t.Errorf("backlink not rewritten: %q", ref.Node.Body)
+	}
+}
+
+func TestMvMove(t *testing.T) {
+	s := mvFixture(t)
+	if err := s.Mv("alpha/one", "beta/one", "2026-07-20"); err != nil {
+		t.Fatalf("Mv move: %v", err)
+	}
+	loc, _ := s.Locate("one")
+	if loc == nil || loc.Parent != "beta" {
+		t.Fatalf("one not moved under beta: %+v", loc)
+	}
+	// Slug unchanged on a pure move, so backlinks are untouched.
+	if ref, _ := s.Locate("ref"); ref == nil || !strings.Contains(ref.Node.Body, "[[one]]") {
+		t.Errorf("backlink should be unchanged on a move: %q", ref.Node.Body)
+	}
+}
+
+func TestMvMoveAndRename(t *testing.T) {
+	s := mvFixture(t)
+	if err := s.Mv("alpha/one", "beta/roadmap", "2026-07-20"); err != nil {
+		t.Fatalf("Mv both: %v", err)
+	}
+	loc, _ := s.Locate("roadmap")
+	if loc == nil || loc.Parent != "beta" {
+		t.Fatalf("roadmap not under beta: %+v", loc)
+	}
+	if ref, _ := s.Locate("ref"); ref == nil || !strings.Contains(ref.Node.Body, "[[roadmap]]") {
+		t.Errorf("backlink not rewritten on move+rename: %q", ref.Node.Body)
+	}
+}
+
+func TestMvToOrphanAndTaskAndEpic(t *testing.T) {
+	s := mvFixture(t)
+	// Issue to _orphan.
+	if err := s.Mv("alpha/one", "_orphan/one", "2026-07-20"); err != nil {
+		t.Fatalf("Mv to orphan: %v", err)
+	}
+	if loc, _ := s.Locate("one"); loc == nil || loc.Parent != "" {
+		t.Errorf("one not an orphan issue: %+v", loc)
+	}
+	// Task to another issue (create a second issue first).
+	write(t, filepath.Join(s.Root, "beta", "two", "_issue.md"), "---\ntitle: Two\n---\n")
+	if err := s.Mv("one/t", "two/t", "2026-07-20"); err != nil {
+		t.Fatalf("Mv task: %v", err)
+	}
+	if task, _ := s.Locate("t"); task == nil || task.Parent != "two" {
+		t.Errorf("task not moved to two: %+v", task)
+	}
+	// Epic rename (a bare name; epics have no parent).
+	if err := s.Mv("alpha", "gamma", "2026-07-20"); err != nil {
+		t.Fatalf("Mv epic rename: %v", err)
+	}
+	if loc, _ := s.Locate("gamma"); loc == nil || loc.Node.Type != model.Epic {
+		t.Errorf("epic not renamed to gamma: %+v", loc)
+	}
+}
+
+func TestMvErrors(t *testing.T) {
+	s := mvFixture(t)
+	// Source not at the stated parent.
+	if err := s.Mv("beta/one", "beta/x", "2026-07-20"); err == nil {
+		t.Error("expected an error: 'one' is not under beta")
+	}
+	// Renaming onto an existing slug.
+	if err := s.Mv("alpha/one", "alpha/beta", "2026-07-20"); err == nil {
+		t.Error("expected an error: slug 'beta' already exists")
+	}
+	// An epic cannot be given a parent.
+	if err := s.Mv("alpha", "beta/alpha", "2026-07-20"); err == nil {
+		t.Error("expected an error: an epic has no parent")
+	}
+	// Moving an issue under a nonexistent epic.
+	if err := s.Mv("alpha/one", "ghost/one", "2026-07-20"); err == nil {
+		t.Error("expected an error: no such epic 'ghost'")
+	}
+	// Moving a task under a nonexistent issue.
+	if err := s.Mv("one/t", "ghost/t", "2026-07-20"); err == nil {
+		t.Error("expected an error: no such issue 'ghost'")
+	}
+	// Empty source or destination.
+	if err := s.Mv("", "beta/x", "2026-07-20"); err == nil {
+		t.Error("expected an error: empty source")
+	}
+	if err := s.Mv("alpha/one", "", "2026-07-20"); err == nil {
+		t.Error("expected an error: empty destination")
+	}
+}
+
+// The destination name is slugified, and that normalized slug is what the node
+// is filed under, collision-checked, and used for backlinks.
+func TestMvSlugifiesDest(t *testing.T) {
+	s := mvFixture(t)
+	if err := s.Mv("alpha/one", "alpha/Q3 Roadmap", "2026-07-20"); err != nil {
+		t.Fatalf("Mv: %v", err)
+	}
+	loc, _ := s.Locate("q3-roadmap")
+	if loc == nil || loc.Parent != "alpha" {
+		t.Fatalf("node not filed under normalized slug: %+v", loc)
+	}
+	if ref, _ := s.Locate("ref"); ref == nil || !strings.Contains(ref.Node.Body, "[[q3-roadmap]]") {
+		t.Errorf("backlink not rewritten to the normalized slug: %q", ref.Node.Body)
+	}
+}
+
+// Moving a node onto itself is a no-op that does not touch the file, so its
+// updated date is left alone.
+func TestMvNoOp(t *testing.T) {
+	s := mvFixture(t)
+	before, _ := os.ReadFile(filepath.Join(s.Root, "alpha", "one", "_issue.md"))
+	if err := s.Mv("alpha/one", "alpha/one", "2099-01-01"); err != nil {
+		t.Fatalf("Mv no-op: %v", err)
+	}
+	after, _ := os.ReadFile(filepath.Join(s.Root, "alpha", "one", "_issue.md"))
+	if string(before) != string(after) {
+		t.Errorf("no-op mv rewrote the file:\nbefore=%q\nafter=%q", before, after)
 	}
 }

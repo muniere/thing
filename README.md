@@ -68,11 +68,24 @@ thing task   status <slug> <todo|doing|done|paused>    # set a task's status
 thing epic   priority <slug> <high|medium|low>         # set an epic's priority
 thing issue  priority <slug> <high|medium|low>         # set an issue's priority
 thing task   priority <slug> <high|medium|low>         # set a task's priority
+thing mv <src> <dst>                         # move and/or rename a node (like mv)
 thing tree                                   # whole tree as an indented outline
 ```
 
 The resource (`epic` / `issue` / `task`) acts as a type guard on the slug for
 `show`, `status`, and `priority`.
+
+`mv` addresses a node by a slug path `<parent>/<name>` — a bare `<name>` for an
+epic, `_orphan/<name>` for an orphan issue. Like the shell's `mv`, a changed
+parent moves the node and a changed name renames it (rewriting `[[slug]]`
+backlinks across the tree); changing both does both. The name is the node's
+slug, not its title. It is silent on success.
+
+```
+thing mv alpha/one beta/one       # move issue "one" from epic alpha to beta
+thing mv alpha/one alpha/planning # rename the slug one -> planning in place
+thing mv alpha/one _orphan/one    # detach an issue into _orphan
+```
 
 The `--data-dir`, `--config`, and `-g` / `--global` flags apply to every
 command. `add` prints the created slug on stdout.
