@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/muniere/thing/internal/frontmatter"
@@ -399,7 +400,7 @@ func (s *Store) Save(loc *Entry) error {
 }
 
 // Remove deletes a node. An epic or issue takes its whole subtree (its
-// directory); a task takes only its file. Any "[[slug]]" backlinks to the
+// directory); a task takes only its file. Any "[[ref]]" backlinks to the
 // removed node are left as-is (dangling).
 func (s *Store) Remove(e *Entry) error {
 	switch e.Node.Type {
@@ -408,6 +409,43 @@ func (s *Store) Remove(e *Entry) error {
 	default: // task
 		return os.Remove(e.File)
 	}
+}
+
+// AddLink adds a related link to a node, or — when the URL is already present —
+// overwrites its label (an empty label clears it), stamping the updated date.
+func (s *Store) AddLink(e *Entry, url, label, updated string) error {
+	for i := range e.Node.Links {
+		if e.Node.Links[i].URL == url {
+			e.Node.Links[i].Label = label
+			e.Node.Updated = updated
+			return s.Save(e)
+		}
+	}
+	e.Node.Links = append(e.Node.Links, model.Link{URL: url, Label: label})
+	e.Node.Updated = updated
+	return s.Save(e)
+}
+
+// RemoveLink removes a link identified by its URL, or failing that by a 1-based
+// index into the node's links, stamping the updated date.
+func (s *Store) RemoveLink(e *Entry, which, updated string) error {
+	links := e.Node.Links
+	for i := range links {
+		if links[i].URL == which {
+			e.Node.Links = append(links[:i:i], links[i+1:]...)
+			e.Node.Updated = updated
+			return s.Save(e)
+		}
+	}
+	if idx, err := strconv.Atoi(which); err == nil {
+		if idx < 1 || idx > len(links) {
+			return fmt.Errorf("link index %d out of range (1..%d)", idx, len(links))
+		}
+		e.Node.Links = append(links[:idx-1:idx-1], links[idx:]...)
+		e.Node.Updated = updated
+		return s.Save(e)
+	}
+	return fmt.Errorf("no link matching %q", which)
 }
 
 // Mv relocates the node at ref src to ref dst, the way the shell's mv does. dst
