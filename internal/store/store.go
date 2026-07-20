@@ -27,29 +27,44 @@ const (
 	issueFile = "_issue.md"
 )
 
-// Resolve determines the data directory using this precedence:
+// DataDir resolves the directory that holds the node tree, and ConfigDir the
+// one that holds config.yaml. Both follow the same precedence:
 //
-//	dir flag  ->  global (~/.thing)  ->  THING_DIR  ->  nearest .thing/  ->  ./.thing
+//	flag  ->  env  ->  nearest .thing/ (skipped with -g)  ->  XDG default
 //
-// The returned path is not guaranteed to exist (init creates it).
-func Resolve(dir string, global bool) (string, error) {
-	if dir != "" {
-		return dir, nil
+// The XDG defaults are $XDG_DATA_HOME/thing (else ~/.local/share/thing) for data
+// and $XDG_CONFIG_HOME/thing (else ~/.config/thing) for config. A found project
+// .thing/ holds both, so DataDir and ConfigDir agree there. Returned paths are
+// not guaranteed to exist (init creates them).
+func DataDir(flag string, global bool) (string, error) {
+	return resolveDir(flag, global, "THING_DATA_DIR", "XDG_DATA_HOME", ".local/share/thing")
+}
+
+// ConfigDir resolves the directory that holds config.yaml. See DataDir.
+func ConfigDir(flag string, global bool) (string, error) {
+	return resolveDir(flag, global, "THING_CONFIG_DIR", "XDG_CONFIG_HOME", ".config/thing")
+}
+
+func resolveDir(flag string, global bool, env, xdgVar, homeRel string) (string, error) {
+	if flag != "" {
+		return flag, nil
 	}
-	if global {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("resolve global dir: %w", err)
+	if v := os.Getenv(env); v != "" {
+		return v, nil
+	}
+	if !global {
+		if found, ok := searchUp(); ok {
+			return found, nil
 		}
-		return filepath.Join(home, ".thing"), nil
 	}
-	if env := os.Getenv("THING_DIR"); env != "" {
-		return env, nil
+	if xdg := os.Getenv(xdgVar); filepath.IsAbs(xdg) {
+		return filepath.Join(xdg, "thing"), nil
 	}
-	if found, ok := searchUp(); ok {
-		return found, nil
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve dir: %w", err)
 	}
-	return ".thing", nil
+	return filepath.Join(home, filepath.FromSlash(homeRel)), nil
 }
 
 // searchUp walks up from the working directory looking for a .thing directory,
