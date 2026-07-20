@@ -110,28 +110,32 @@ type Node struct {
 }
 
 // EffectiveStatus is the status to display for a node. An explicit Status wins.
-// Otherwise an epic rolls its status up from its issues, and any other node
-// defaults to Todo. It is a read-time derivation and is never persisted, so
-// setting an epic's priority does not freeze its rolled-up status onto disk.
+// Otherwise a parent (epic or issue) rolls its status up from its children —
+// an epic from its issues, an issue from its tasks — and a task defaults to
+// Todo. Rollup recurses, so a statusless epic reflects its tasks through its
+// issues. It is a read-time derivation and is never persisted, so setting a
+// node's priority does not freeze its rolled-up status onto disk.
 func (n *Node) EffectiveStatus() Status {
 	if n.Status != "" {
 		return n.Status
 	}
-	if n.Type == Epic {
+	if n.Type == Epic || n.Type == Issue {
 		return rollup(n.Children)
 	}
 	return Todo
 }
 
-// rollup derives an epic's status from its issues:
-// all done -> done; any doing -> doing; all todo -> todo; otherwise doing.
-func rollup(issues []*Node) Status {
-	if len(issues) == 0 {
+// rollup derives a parent's status from its children's effective status:
+// all done -> done; any doing -> doing; all todo -> todo; otherwise doing. The
+// final case covers any mix as well as a paused child, so a paused child rolls
+// up as doing.
+func rollup(nodes []*Node) Status {
+	if len(nodes) == 0 {
 		return Todo
 	}
 	allDone, allTodo, anyDoing := true, true, false
-	for _, is := range issues {
-		st := is.EffectiveStatus()
+	for _, n := range nodes {
+		st := n.EffectiveStatus()
 		if st != Done {
 			allDone = false
 		}

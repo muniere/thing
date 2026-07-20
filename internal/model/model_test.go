@@ -80,6 +80,49 @@ func TestEffectiveStatus(t *testing.T) {
 	if got := pinned.EffectiveStatus(); got != Paused {
 		t.Errorf("pinned epic status = %q, want paused", got)
 	}
+
+	// An issue rolls up from its tasks, just like an epic from its issues.
+	tasks := func(sts ...Status) []*Node {
+		var ns []*Node
+		for _, s := range sts {
+			ns = append(ns, &Node{Type: Task, Status: s})
+		}
+		return ns
+	}
+	if got := (&Node{Type: Issue, Children: tasks(Done, Done)}).EffectiveStatus(); got != Done {
+		t.Errorf("issue rollup all-done = %q, want done", got)
+	}
+	if got := (&Node{Type: Issue, Children: tasks(Done, Todo)}).EffectiveStatus(); got != Doing {
+		t.Errorf("issue rollup mixed = %q, want doing", got)
+	}
+	// An explicit issue status wins over its task rollup.
+	if got := (&Node{Type: Issue, Status: Paused, Children: tasks(Done, Done)}).EffectiveStatus(); got != Paused {
+		t.Errorf("pinned issue status = %q, want paused", got)
+	}
+
+	// Rollup recurses: a statusless epic reflects its tasks through its issues.
+	deep := &Node{Type: Epic, Children: []*Node{
+		{Type: Issue, Children: tasks(Done, Done)},
+	}}
+	if got := deep.EffectiveStatus(); got != Done {
+		t.Errorf("recursive rollup = %q, want done", got)
+	}
+	// A mix two levels down propagates up as doing.
+	deepMixed := &Node{Type: Epic, Children: []*Node{
+		{Type: Issue, Children: tasks(Done, Todo)},
+	}}
+	if got := deepMixed.EffectiveStatus(); got != Doing {
+		t.Errorf("recursive mixed rollup = %q, want doing", got)
+	}
+	// Recursion honors an intermediate issue's explicit status (its own status,
+	// not a re-derived rollup of its tasks): a done issue with all-todo tasks
+	// still makes the statusless epic done.
+	deepPinned := &Node{Type: Epic, Children: []*Node{
+		{Type: Issue, Status: Done, Children: tasks(Todo, Todo)},
+	}}
+	if got := deepPinned.EffectiveStatus(); got != Done {
+		t.Errorf("recursive pinned-issue rollup = %q, want done", got)
+	}
 }
 
 func TestValueHints(t *testing.T) {
