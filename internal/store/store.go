@@ -20,6 +20,7 @@ import (
 
 	"github.com/muniere/thing/internal/frontmatter"
 	"github.com/muniere/thing/internal/model"
+	"github.com/muniere/thing/internal/slug"
 )
 
 const (
@@ -341,6 +342,178 @@ func (s *Store) CreateTask(n *model.Node, issueDir string) error {
 // omits does not write a derived status — only an explicitly set one persists.
 func (s *Store) Save(loc *Entry) error {
 	return writeNode(loc.File, loc.Node)
+}
+
+// Mv relocates the node named by src to dst, the way the shell's mv does. Each
+// ref is a slug path "<parent>/<name>" — an epic is a bare "<name>", an orphan
+// issue uses the "_orphan" parent. A changed parent moves the node; a changed
+// name renames it, rewriting "[[old]]" backlinks across the tree to follow; a
+// change to both does both. The name is the slug itself, not the title.
+func (s *Store) Mv(src, dst, updated string) error {
+	srcParent, srcName := splitRef(src)
+	dstParent, dstName := splitRef(dst)
+	if srcName == "" || dstName == "" {
+		return fmt.Errorf("mv: a source and destination are required")
+	}
+
+	e, err := s.Locate(srcName)
+	if err != nil {
+		return err
+	}
+	if e == nil {
+		return fmt.Errorf("no such node %q", srcName)
+	}
+	if srcParent != parentRef(e) {
+		return fmt.Errorf("%q is not at %q", srcName, src)
+	}
+
+	container, err := s.destContainer(e.Node.Type, dstParent)
+	if err != nil {
+		return err
+	}
+
+	newSlug := slug.Slugify(dstName)
+	if newSlug != e.Node.Slug {
+		taken, err := s.AllSlugs()
+		if err != nil {
+			return err
+		}
+		if taken[newSlug] {
+			return fmt.Errorf("slug %q already exists", newSlug)
+		}
+	}
+	return s.relocate(e, container, newSlug, updated)
+}
+
+// splitRef splits a "<parent>/<name>" ref into its parent and name; a ref with
+// no slash has an empty parent.
+func splitRef(ref string) (parent, name string) {
+	if i := strings.LastIndex(ref, "/"); i >= 0 {
+		return ref[:i], ref[i+1:]
+	}
+	return "", ref
+}
+
+// parentRef is the path-parent an entry would appear under: "" for an epic,
+// "_orphan" for an orphan issue, otherwise the parent slug.
+func parentRef(e *Entry) string {
+	switch e.Node.Type {
+	case model.Epic:
+		return ""
+	case model.Issue:
+		if e.Parent == "" {
+			return OrphanDir
+		}
+		return e.Parent
+	default: // task
+		return e.Parent
+	}
+}
+
+// destContainer resolves the directory that will hold a node of the given type
+// under dstParent, validating that dstParent is a legal parent for that type.
+func (s *Store) destContainer(typ model.NodeType, dstParent string) (string, error) {
+	switch typ {
+	case model.Epic:
+		if dstParent != "" {
+			return "", fmt.Errorf("an epic has no parent; destination must be a bare name")
+		}
+		return s.Root, nil
+	case model.Issue:
+		if dstParent == OrphanDir {
+			return filepath.Join(s.Root, OrphanDir), nil
+		}
+		p, err := s.Find(dstParent, model.Epic)
+		if err != nil {
+			return "", err
+		}
+		return p.Dir, nil
+	default: // task
+		p, err := s.Find(dstParent, model.Issue)
+		if err != nil {
+			return "", err
+		}
+		return p.Dir, nil
+	}
+}
+
+// relocate renames a node's file/dir into container under newSlug, stamps the
+// updated date, re-saves, and rewrites backlinks when the slug changed. The
+// slug is the node's on-disk name, not a frontmatter field, so after the rename
+// the node's identity already matches its location; a mid-way failure can leave
+// a stale updated date or partly-rewritten backlinks, but not a broken slug.
+func (s *Store) relocate(e *Entry, container, newSlug, updated string) error {
+	oldSlug := e.Node.Slug
+	moved := false
+	switch e.Node.Type {
+	case model.Epic, model.Issue:
+		newDir := filepath.Join(container, newSlug)
+		if newDir != e.Dir {
+			if err := os.MkdirAll(filepath.Dir(newDir), 0o755); err != nil {
+				return err
+			}
+			if err := os.Rename(e.Dir, newDir); err != nil {
+				return fmt.Errorf("mv: relocate %s: %w", e.Dir, err)
+			}
+			e.File = filepath.Join(newDir, filepath.Base(e.File))
+			e.Dir = newDir
+			moved = true
+		}
+	default: // task
+		newFile := filepath.Join(container, newSlug+".md")
+		if newFile != e.File {
+			if err := os.MkdirAll(container, 0o755); err != nil {
+				return err
+			}
+			if err := os.Rename(e.File, newFile); err != nil {
+				return fmt.Errorf("mv: relocate %s: %w", e.File, err)
+			}
+			e.File = newFile
+			e.Dir = container
+			moved = true
+		}
+	}
+	// Nothing to do: same parent and same name.
+	if !moved && newSlug == oldSlug {
+		return nil
+	}
+	e.Node.Slug = newSlug
+	e.Node.Updated = updated
+	if err := s.Save(e); err != nil {
+		return fmt.Errorf("mv: save %s: %w", e.File, err)
+	}
+	if newSlug != oldSlug {
+		if err := s.rewriteBacklinks(oldSlug, newSlug); err != nil {
+			return fmt.Errorf("mv: node moved, but backlinks were only partly rewritten: %w", err)
+		}
+	}
+	return nil
+}
+
+// rewriteBacklinks replaces every "[[oldSlug]]" with "[[newSlug]]" across all
+// node files. A file that vanished (e.g. removed concurrently) is skipped.
+func (s *Store) rewriteBacklinks(oldSlug, newSlug string) error {
+	idx, err := s.Index()
+	if err != nil {
+		return err
+	}
+	old, neu := "[["+oldSlug+"]]", "[["+newSlug+"]]"
+	for _, e := range idx {
+		data, err := os.ReadFile(e.File)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return fmt.Errorf("read %s: %w", e.File, err)
+		}
+		if !strings.Contains(string(data), old) {
+			continue
+		}
+		if err := os.WriteFile(e.File, []byte(strings.ReplaceAll(string(data), old, neu)), 0o644); err != nil {
+			return fmt.Errorf("write %s: %w", e.File, err)
+		}
+	}
+	return nil
 }
 
 func sortBySlug(nodes []*model.Node) {

@@ -371,3 +371,28 @@ func TestInitAnchorsProjectDir(t *testing.T) {
 		t.Errorf("init -g config: got %q", got)
 	}
 }
+
+func TestMvCommand(t *testing.T) {
+	dir := t.TempDir()
+	d := []string{"--data-dir", dir, "--config", dir}
+	runCLI(t, append([]string{"init"}, d...)...)
+	runCLI(t, append([]string{"epic", "add", "Alpha"}, d...)...)
+	runCLI(t, append([]string{"epic", "add", "Beta"}, d...)...)
+	runCLI(t, append([]string{"issue", "add", "One", "--epic", "alpha"}, d...)...)
+
+	// mv is silent on success (the destination is fully specified).
+	if code, out, errb := runCLI(t, append([]string{"mv", "alpha/one", "beta/planning"}, d...)...); code != 0 || out != "" {
+		t.Fatalf("mv: code=%d out=%q err=%q", code, out, errb)
+	}
+	// The move+rename is reflected: new slug under the new parent.
+	if _, out, _ := runCLI(t, append([]string{"tree"}, d...)...); !strings.Contains(out, "planning") || strings.Contains(out, "(one)") {
+		t.Errorf("tree after mv: %q", out)
+	}
+	if code, _, _ := runCLI(t, append([]string{"issue", "show", "planning"}, d...)...); code != 0 {
+		t.Error("issue show planning should succeed after mv")
+	}
+	// A bad source path errors.
+	if code, _, _ := runCLI(t, append([]string{"mv", "alpha/planning", "beta/x"}, d...)...); code == 0 {
+		t.Error("mv from a wrong parent path should fail")
+	}
+}
