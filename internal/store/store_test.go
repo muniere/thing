@@ -198,3 +198,34 @@ func TestUpwardSearch(t *testing.T) {
 		t.Errorf("-g should skip the project .thing/, got %q", got)
 	}
 }
+func TestScopedListings(t *testing.T) {
+	root := fixture(t)
+	s := Open(root)
+
+	epics, _ := s.Epics()
+	if len(epics) != 1 || epics[0].Slug != "alpha" {
+		t.Errorf("Epics = %+v", epics)
+	}
+
+	// All issues: alpha's "one","two" plus orphan "loose".
+	all, _ := s.Issues("")
+	if len(all) != 3 {
+		t.Errorf("Issues(\"\") count = %d, want 3", len(all))
+	}
+	// Scoped to alpha: only its two issues, no orphan.
+	scoped, _ := s.Issues("alpha")
+	if len(scoped) != 2 {
+		t.Errorf("Issues(alpha) count = %d, want 2", len(scoped))
+	}
+
+	// Tasks under "one".
+	tasks, _ := s.Tasks("one")
+	if len(tasks) != 1 || tasks[0].Slug != "task-a" {
+		t.Errorf("Tasks(one) = %+v", tasks)
+	}
+	// All tasks: task-a (one) + a-task,z-task (loose) = 3.
+	allTasks, _ := s.Tasks("")
+	if len(allTasks) != 3 {
+		t.Errorf("Tasks(\"\") count = %d, want 3", len(allTasks))
+	}
+}

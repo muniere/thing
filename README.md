@@ -52,12 +52,17 @@ thing init                                   create the data + config dirs and c
 thing epic   add "<title>" [--category <c>] [--priority <p>] [--tags a,b]
 thing issue  add "<title>" [--epic <slug>]  [--priority <p>] [--tags a,b]   # no --epic → orphan
 thing task   add "<title>"  --issue <slug>  [--priority <p>] [--tags a,b]
+thing epic   list                            # list epics
+thing issue  list [--epic <slug>]            # list issues (optionally scoped)
+thing task   list [--issue <slug>]           # list tasks (optionally scoped)
+thing epic   show <slug>                     # show an epic + body
+thing issue  show <slug>                     # show an issue + body
+thing task   show <slug>                     # show a task + body
 thing tree                                   # whole tree as an indented outline
 ```
 
-`<res>` is `epic`, `issue`, or `task`. The `--data-dir`, `--config`, and
-`-g` / `--global` flags apply to every command. `add` prints the created slug on
-stdout.
+The `--data-dir`, `--config`, and `-g` / `--global` flags apply to every
+command. `add` prints the created slug on stdout.
 
 An epic's status is rolled up from its issues (all done → done; any doing →
 doing; all todo → todo; otherwise doing) unless the epic sets a status

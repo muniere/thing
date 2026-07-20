@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/muniere/thing/internal/model"
+	"github.com/muniere/thing/internal/render"
 	"github.com/muniere/thing/internal/slug"
 )
 
@@ -15,8 +16,48 @@ func newEpicCmd() *cobra.Command {
 		Use:   "epic",
 		Short: "Manage epic nodes",
 	}
-	cmd.AddCommand(newEpicAddCmd())
+	cmd.AddCommand(
+		newEpicAddCmd(),
+		newEpicListCmd(),
+		newEpicShowCmd(),
+	)
 	return cmd
+}
+
+func newEpicShowCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "show <slug>",
+		Short: "Show an epic and its body",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			loc, err := locate(cmd, model.Epic, args[0])
+			if err != nil {
+				return err
+			}
+			fmt.Fprint(cmd.OutOrStdout(), render.Show(loc.Node))
+			return nil
+		},
+	}
+}
+
+func newEpicListCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "list",
+		Short: "List epics",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			st, err := openStore(cmd)
+			if err != nil {
+				return err
+			}
+			nodes, err := st.Epics()
+			if err != nil {
+				return err
+			}
+			fmt.Fprint(cmd.OutOrStdout(), render.List(nodes))
+			return nil
+		},
+	}
 }
 
 func newEpicAddCmd() *cobra.Command {

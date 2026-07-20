@@ -377,3 +377,56 @@ func rollupStatus(issues []*model.Node) model.Status {
 func sortBySlug(nodes []*model.Node) {
 	sort.Slice(nodes, func(i, j int) bool { return nodes[i].Slug < nodes[j].Slug })
 }
+
+// Epics returns the top-level epics.
+func (s *Store) Epics() ([]*model.Node, error) {
+	top, err := s.Load()
+	if err != nil {
+		return nil, err
+	}
+	var out []*model.Node
+	for _, n := range top {
+		if n.Type == model.Epic {
+			out = append(out, n)
+		}
+	}
+	return out, nil
+}
+
+// Issues returns issues scoped to epicSlug, or every issue (including orphans)
+// when epicSlug is empty.
+func (s *Store) Issues(epicSlug string) ([]*model.Node, error) {
+	top, err := s.Load()
+	if err != nil {
+		return nil, err
+	}
+	var out []*model.Node
+	for _, n := range top {
+		switch n.Type {
+		case model.Epic:
+			if epicSlug == "" || n.Slug == epicSlug {
+				out = append(out, n.Children...)
+			}
+		case model.Issue: // orphan
+			if epicSlug == "" {
+				out = append(out, n)
+			}
+		}
+	}
+	return out, nil
+}
+
+// Tasks returns tasks scoped to issueSlug, or every task when issueSlug is empty.
+func (s *Store) Tasks(issueSlug string) ([]*model.Node, error) {
+	issues, err := s.Issues("")
+	if err != nil {
+		return nil, err
+	}
+	var out []*model.Node
+	for _, is := range issues {
+		if issueSlug == "" || is.Slug == issueSlug {
+			out = append(out, is.Children...)
+		}
+	}
+	return out, nil
+}

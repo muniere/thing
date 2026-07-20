@@ -97,6 +97,31 @@ func TestSlugUniqueness(t *testing.T) {
 	}
 }
 
+func TestListAndShow(t *testing.T) {
+	dir := t.TempDir()
+	d := []string{"--data-dir", dir, "--config", dir}
+	runCLI(t, append([]string{"init"}, d...)...)
+	runCLI(t, append([]string{"epic", "add", "Web"}, d...)...)
+	runCLI(t, append([]string{"issue", "add", "Roll", "--epic", "web"}, d...)...)
+	runCLI(t, append([]string{"task", "add", "Do", "--issue", "roll"}, d...)...)
+
+	// list is scoped per resource.
+	if _, out, _ := runCLI(t, append([]string{"epic", "list"}, d...)...); !strings.Contains(out, "web") {
+		t.Errorf("epic list: %q", out)
+	}
+	if _, out, _ := runCLI(t, append([]string{"task", "list", "--issue", "roll"}, d...)...); !strings.Contains(out, "do") {
+		t.Errorf("task list --issue: %q", out)
+	}
+
+	// show reflects a node; the resource acts as a type guard.
+	if _, out, _ := runCLI(t, append([]string{"task", "show", "do"}, d...)...); !strings.Contains(out, "Do") {
+		t.Errorf("show: %q", out)
+	}
+	if code, _, _ := runCLI(t, append([]string{"epic", "show", "do"}, d...)...); code == 0 {
+		t.Error("epic show on a task slug should fail")
+	}
+}
+
 func TestVersionAndUsage(t *testing.T) {
 	if code, out, _ := runCLI(t, "--version"); code != 0 || strings.TrimSpace(out) == "" {
 		t.Errorf("version: code=%d out=%q", code, out)

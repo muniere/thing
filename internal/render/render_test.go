@@ -49,3 +49,49 @@ func TestTreeDefaultTitle(t *testing.T) {
 		t.Errorf("default title: %q", out)
 	}
 }
+
+func TestList(t *testing.T) {
+	nodes := []*model.Node{
+		{Slug: "one", Title: "One", Status: model.Done, Priority: model.High},
+		{Slug: "two", Status: model.Todo}, // untitled: no title suffix
+	}
+	got := List(nodes)
+	want := "[x] one  One !high\n[ ] two\n"
+	if got != want {
+		t.Errorf("List = %q, want %q", got, want)
+	}
+}
+
+func TestShow(t *testing.T) {
+	n := &model.Node{
+		Type: model.Issue, Slug: "monitor", Title: "Monitor", Status: model.Doing,
+		Priority: model.High, Tags: []string{"a", "b"}, Updated: "2026-07-19",
+		Links: []model.Link{{URL: "https://x.test", Label: "Doc"}, {URL: "https://y.test"}},
+		Body:  "Body line.\n",
+	}
+	got := Show(n)
+	for _, want := range []string{
+		"issue monitor\n",
+		"title:    Monitor\n",
+		"status:   doing\n",
+		"tags:     a, b\n",
+		"links:\n",
+		"  - https://x.test (Doc)\n",
+		"  - https://y.test\n",
+		"\nBody line.\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("Show missing %q\n--- got ---\n%s", want, got)
+		}
+	}
+}
+
+func TestShowNoBody(t *testing.T) {
+	got := Show(&model.Node{Type: model.Task, Slug: "t", Title: "T", Status: model.Todo})
+	if strings.Contains(got, "priority:") {
+		t.Errorf("empty priority should be omitted: %q", got)
+	}
+	if strings.HasSuffix(got, "\n\n") {
+		t.Errorf("no trailing blank line without body: %q", got)
+	}
+}
