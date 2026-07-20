@@ -69,6 +69,19 @@ func listLine(n *model.Node) string {
 	return s
 }
 
+// Links renders a node's related links as a numbered list.
+func Links(links []model.Link) string {
+	var b strings.Builder
+	for i, l := range links {
+		if l.Label != "" {
+			fmt.Fprintf(&b, "%d. %s (%s)\n", i+1, l.URL, l.Label)
+		} else {
+			fmt.Fprintf(&b, "%d. %s\n", i+1, l.URL)
+		}
+	}
+	return b.String()
+}
+
 // Show renders a single node's fields followed by its Markdown body.
 func Show(n *model.Node) string {
 	var b strings.Builder

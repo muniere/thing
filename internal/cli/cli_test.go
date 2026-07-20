@@ -458,3 +458,35 @@ func TestRmCommand(t *testing.T) {
 		t.Error("rm on an unknown path should fail")
 	}
 }
+
+func TestLinkCommand(t *testing.T) {
+	dir := t.TempDir()
+	d := []string{"--data-dir", dir, "--config", dir}
+	runCLI(t, append([]string{"init"}, d...)...)
+	runCLI(t, append([]string{"add", "Web"}, d...)...)
+
+	// list on a node with no links prints nothing and succeeds.
+	if code, out, _ := runCLI(t, append([]string{"link", "list", "web"}, d...)...); code != 0 || out != "" {
+		t.Errorf("link list (empty): code=%d out=%q", code, out)
+	}
+
+	// add and rm are silent; list prints a numbered list.
+	if code, out, errb := runCLI(t, append([]string{"link", "add", "web", "https://x", "--label", "X"}, d...)...); code != 0 || out != "" {
+		t.Fatalf("link add: code=%d out=%q err=%q", code, out, errb)
+	}
+	runCLI(t, append([]string{"link", "add", "web", "https://y"}, d...)...)
+	if _, out, _ := runCLI(t, append([]string{"link", "list", "web"}, d...)...); !strings.Contains(out, "1. https://x (X)") || !strings.Contains(out, "2. https://y") {
+		t.Errorf("link list: %q", out)
+	}
+
+	// Remove by index, then confirm.
+	runCLI(t, append([]string{"link", "rm", "web", "1"}, d...)...)
+	if _, out, _ := runCLI(t, append([]string{"link", "list", "web"}, d...)...); strings.Contains(out, "https://x") || !strings.Contains(out, "https://y") {
+		t.Errorf("link list after rm: %q", out)
+	}
+
+	// An unknown ref errors.
+	if code, _, _ := runCLI(t, append([]string{"link", "add", "nope", "https://z"}, d...)...); code == 0 {
+		t.Error("link add on an unknown ref should fail")
+	}
+}

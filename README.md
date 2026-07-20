@@ -66,6 +66,9 @@ thing status   <ref> <todo|doing|done|paused>
 thing priority <ref> <high|medium|low>
 thing mv <src> <dst>                         # move and/or rename a node (src/dst are refs)
 thing rm <ref>                               # remove a node (an epic/issue takes its subtree)
+thing link add  <ref> <url> [--label <l>]    # add or update a related link
+thing link rm   <ref> <url|index>            # remove a link by URL, or 1-based index
+thing link list <ref>                        # list a node's related links
 thing tree                                   # whole tree as an indented outline
 ```
 

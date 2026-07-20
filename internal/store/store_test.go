@@ -478,3 +478,73 @@ func TestRemove(t *testing.T) {
 		t.Error("orphan issue '_orphan/loose' should survive")
 	}
 }
+
+func TestLinks(t *testing.T) {
+	s := Open(fixture(t))
+	reload := func() *Entry { e, _ := s.Locate("alpha/one"); return e }
+
+	if err := s.AddLink(reload(), "https://a", "A", "2026-07-20"); err != nil {
+		t.Fatalf("AddLink: %v", err)
+	}
+	if err := s.AddLink(reload(), "https://b", "", "2026-07-20"); err != nil {
+		t.Fatalf("AddLink: %v", err)
+	}
+	e := reload()
+	if len(e.Node.Links) != 2 || e.Node.Updated != "2026-07-20" {
+		t.Fatalf("after adds: links=%+v updated=%q", e.Node.Links, e.Node.Updated)
+	}
+
+	// Adding a duplicate URL updates its label (and re-stamps updated) rather
+	// than appending.
+	if err := s.AddLink(reload(), "https://a", "A2", "2026-07-21"); err != nil {
+		t.Fatal(err)
+	}
+	if e := reload(); len(e.Node.Links) != 2 || e.Node.Links[0].Label != "A2" || e.Node.Updated != "2026-07-21" {
+		t.Errorf("dup add: links=%+v updated=%q", e.Node.Links, e.Node.Updated)
+	}
+	// Re-adding with an empty label clears the existing one.
+	s.AddLink(reload(), "https://a", "", "2026-07-21")
+	if e := reload(); e.Node.Links[0].Label != "" {
+		t.Errorf("empty-label add did not clear the label: %+v", e.Node.Links[0])
+	}
+
+	// Remove by URL, then by 1-based index.
+	if err := s.RemoveLink(reload(), "https://a", "2026-07-21"); err != nil {
+		t.Fatal(err)
+	}
+	if e := reload(); len(e.Node.Links) != 1 || e.Node.Links[0].URL != "https://b" {
+		t.Errorf("rm by url: %+v", e.Node.Links)
+	}
+	if err := s.RemoveLink(reload(), "1", "2026-07-21"); err != nil {
+		t.Fatal(err)
+	}
+	if e := reload(); len(e.Node.Links) != 0 {
+		t.Errorf("rm by index: %+v", e.Node.Links)
+	}
+
+	// An out-of-range index and a non-matching ref both error.
+	if err := s.RemoveLink(reload(), "1", "x"); err == nil {
+		t.Error("expected out-of-range error")
+	}
+	if err := s.RemoveLink(reload(), "https://nope", "x"); err == nil {
+		t.Error("expected no-match error")
+	}
+}
+
+// A link whose URL is numeric is still matched by URL before the index
+// fallback, so RemoveLink("1") deletes the URL-"1" link, not the first by index.
+func TestRemoveLinkURLBeatsIndex(t *testing.T) {
+	s := Open(fixture(t))
+	e, _ := s.Locate("alpha/one")
+	s.AddLink(e, "https://first", "", "2026-07-20")
+	e, _ = s.Locate("alpha/one")
+	s.AddLink(e, "1", "", "2026-07-20") // a link whose URL is literally "1"
+	e, _ = s.Locate("alpha/one")
+	if err := s.RemoveLink(e, "1", "2026-07-20"); err != nil {
+		t.Fatal(err)
+	}
+	e, _ = s.Locate("alpha/one")
+	if len(e.Node.Links) != 1 || e.Node.Links[0].URL != "https://first" {
+		t.Errorf("URL match should win over index: %+v", e.Node.Links)
+	}
+}
