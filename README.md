@@ -64,6 +64,7 @@ thing show <slug>                            # show a node + body
 thing status   <slug> <todo|doing|done|paused>
 thing priority <slug> <high|medium|low>
 thing mv <src> <dst>                         # move and/or rename a node (like mv)
+thing rm <slug>                              # remove a node (an epic/issue takes its subtree)
 thing tree                                   # whole tree as an indented outline
 ```
 

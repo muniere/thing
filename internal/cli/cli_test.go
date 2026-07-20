@@ -426,3 +426,34 @@ func TestMvCommand(t *testing.T) {
 		t.Error("mv from a wrong parent path should fail")
 	}
 }
+
+func TestRmCommand(t *testing.T) {
+	dir := t.TempDir()
+	d := []string{"--data-dir", dir, "--config", dir}
+	runCLI(t, append([]string{"init"}, d...)...)
+	runCLI(t, append([]string{"add", "Web"}, d...)...)
+	runCLI(t, append([]string{"add", "web/Roll"}, d...)...)
+	runCLI(t, append([]string{"add", "roll/Do"}, d...)...)
+
+	// rm is silent on success; a task removal leaves its issue.
+	if code, out, errb := runCLI(t, append([]string{"rm", "do"}, d...)...); code != 0 || out != "" {
+		t.Fatalf("rm task: code=%d out=%q err=%q", code, out, errb)
+	}
+	if code, _, _ := runCLI(t, append([]string{"show", "do"}, d...)...); code == 0 {
+		t.Error("task 'do' should be gone")
+	}
+	if code, _, _ := runCLI(t, append([]string{"show", "roll"}, d...)...); code != 0 {
+		t.Error("issue 'roll' should survive removing its task")
+	}
+
+	// Removing the epic takes its subtree.
+	runCLI(t, append([]string{"rm", "web"}, d...)...)
+	if code, _, _ := runCLI(t, append([]string{"show", "roll"}, d...)...); code == 0 {
+		t.Error("issue 'roll' should be gone with its epic")
+	}
+
+	// Removing an unknown slug errors.
+	if code, _, _ := runCLI(t, append([]string{"rm", "nope"}, d...)...); code == 0 {
+		t.Error("rm on an unknown slug should fail")
+	}
+}
