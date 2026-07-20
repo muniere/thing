@@ -334,6 +334,14 @@ func (s *Store) CreateTask(n *model.Node, issueDir string) error {
 	return writeNode(filepath.Join(issueDir, n.Slug+".md"), n)
 }
 
+// Save re-serializes a located node back to its own file. Callers set the
+// node's fields (and its Updated date) before calling. Because Load leaves
+// Status exactly as the file holds it, saving a node whose status the file
+// omits does not write a derived status — only an explicitly set one persists.
+func (s *Store) Save(loc *Located) error {
+	return writeNode(loc.File, loc.Node)
+}
+
 func sortBySlug(nodes []*model.Node) {
 	sort.Slice(nodes, func(i, j int) bool { return nodes[i].Slug < nodes[j].Slug })
 }

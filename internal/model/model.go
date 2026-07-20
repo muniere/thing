@@ -2,6 +2,8 @@
 // the Epic > Issue > Task node and the small enumerations that describe it.
 package model
 
+import "strings"
+
 // NodeType is the kind of a node in the tree.
 type NodeType string
 
@@ -33,6 +35,16 @@ const (
 // Statuses lists every valid status in display order.
 var Statuses = []Status{Todo, Doing, Done, Paused}
 
+// StatusValues renders the valid statuses as a "todo|doing|done|paused" hint
+// for error messages, kept in sync with Statuses.
+func StatusValues() string {
+	parts := make([]string, len(Statuses))
+	for i, s := range Statuses {
+		parts[i] = string(s)
+	}
+	return strings.Join(parts, "|")
+}
+
 // Valid reports whether s is one of the known statuses.
 func (s Status) Valid() bool {
 	switch s {
@@ -53,6 +65,16 @@ const (
 
 // Priorities lists every valid priority in display order.
 var Priorities = []Priority{High, Medium, Low}
+
+// PriorityValues renders the valid priorities as a "high|medium|low" hint for
+// error messages, kept in sync with Priorities.
+func PriorityValues() string {
+	parts := make([]string, len(Priorities))
+	for i, p := range Priorities {
+		parts[i] = string(p)
+	}
+	return strings.Join(parts, "|")
+}
 
 // Valid reports whether p is one of the known priorities.
 func (p Priority) Valid() bool {

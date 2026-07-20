@@ -62,8 +62,17 @@ thing task   list [--issue <slug>]           # list tasks (optionally scoped)
 thing epic   show <slug>                     # show an epic + body
 thing issue  show <slug>                     # show an issue + body
 thing task   show <slug>                     # show a task + body
+thing epic   status <slug> <todo|doing|done|paused>    # set an epic's status
+thing issue  status <slug> <todo|doing|done|paused>    # set an issue's status
+thing task   status <slug> <todo|doing|done|paused>    # set a task's status
+thing epic   priority <slug> <high|medium|low>         # set an epic's priority
+thing issue  priority <slug> <high|medium|low>         # set an issue's priority
+thing task   priority <slug> <high|medium|low>         # set a task's priority
 thing tree                                   # whole tree as an indented outline
 ```
+
+The resource (`epic` / `issue` / `task`) acts as a type guard on the slug for
+`show`, `status`, and `priority`.
 
 The `--data-dir`, `--config`, and `-g` / `--global` flags apply to every
 command. `add` prints the created slug on stdout.

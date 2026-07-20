@@ -81,3 +81,12 @@ func TestEffectiveStatus(t *testing.T) {
 		t.Errorf("pinned epic status = %q, want paused", got)
 	}
 }
+
+func TestValueHints(t *testing.T) {
+	if got := StatusValues(); got != "todo|doing|done|paused" {
+		t.Errorf("StatusValues = %q", got)
+	}
+	if got := PriorityValues(); got != "high|medium|low" {
+		t.Errorf("PriorityValues = %q", got)
+	}
+}
