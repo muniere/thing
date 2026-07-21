@@ -1,0 +1,87 @@
+#compdef thing
+# zsh completion for thing
+# Install: place this file (named `_thing`) in a directory on your $fpath,
+#          e.g. /usr/local/share/zsh/site-functions/, then restart zsh.
+
+_thing() {
+    local -a commands link_verbs statuses priorities global_flags
+
+    commands=(
+        'init:create the data + config dirs and a starter config.yaml'
+        'add:add a node addressed by a path'
+        'ls:list a node'\''s children, or the top level'
+        'show:show a node and its body'
+        'status:set a node'\''s status'
+        'priority:set a node'\''s priority'
+        'mv:move and/or rename a node'
+        'rm:remove a node (an epic/issue takes its subtree)'
+        'link:manage a node'\''s related links'
+        'find:fuzzy-search titles, slugs, and tags'
+        'tree:print the whole tree as an outline'
+        'export:print the whole tree as JSON'
+        'import:bulk-create nodes from a JSON batch'
+    )
+    link_verbs=(add rm list)
+    statuses=(todo doing done paused)
+    priorities=(high medium low)
+    global_flags=(
+        '--data-dir[data directory]:directory:_files -/'
+        '--config[config directory]:directory:_files -/'
+        '(-g --global)'{-g,--global}'[use the global directories]'
+    )
+
+    _arguments -C \
+        '1: :->command' \
+        '*:: :->args' && return
+
+    case "$state" in
+        command)
+            _describe -t commands 'thing command' commands
+            ;;
+        args)
+            case "$words[1]" in
+                status)
+                    if (( CURRENT == 3 )); then
+                        _values 'status' $statuses
+                    else
+                        _arguments $global_flags
+                    fi
+                    ;;
+                priority)
+                    if (( CURRENT == 3 )); then
+                        _values 'priority' $priorities
+                    else
+                        _arguments $global_flags
+                    fi
+                    ;;
+                add)
+                    _arguments $global_flags \
+                        '--category[category (epics only)]:category:' \
+                        '--priority[priority]:priority:(high medium low)' \
+                        '--tags[comma-separated tags]:tags:'
+                    ;;
+                link)
+                    if (( CURRENT == 2 )); then
+                        _describe -t verbs 'link verb' link_verbs
+                    else
+                        _arguments $global_flags '--label[link label]:label:'
+                    fi
+                    ;;
+                find)
+                    _arguments $global_flags '--json[output a ranked JSON array]'
+                    ;;
+                import)
+                    _arguments $global_flags \
+                        '--dry-run[validate and assign refs without writing]' \
+                        '*:batch file:_files -g "*.json"'
+                    ;;
+                *)
+                    # ls, show, mv, rm, init, tree, export: global flags only.
+                    _arguments $global_flags
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_thing "$@"

@@ -23,6 +23,9 @@ This installs `thing` into your Go bin directory (`go env GOBIN`, else
 `$GOPATH/bin`); make sure it is on your `PATH`. Use `make build` to produce a
 local `bin/thing` instead.
 
+Shell completions live under [`completions/`](completions/): source
+`thing.bash` from your `~/.bashrc`, or put `_thing` on your zsh `$fpath`.
+
 ## Directories
 
 `thing` keeps the node tree in a **data** directory and `config.yaml` in a
