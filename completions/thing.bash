@@ -1,0 +1,84 @@
+# bash completion for thing
+# Install: source this file from your ~/.bashrc, or drop it into a
+#          bash_completion.d directory (e.g. "$(brew --prefix)/etc/bash_completion.d/"
+#          on Homebrew, or /etc/bash_completion.d/ on most Linux distros).
+
+# When bash-completion is not loaded, provide a minimal _filedir so file and
+# directory completion still degrades gracefully instead of erroring.
+if ! declare -F _filedir >/dev/null 2>&1; then
+    _filedir() {
+        if [[ "$1" == -d ]]; then
+            COMPREPLY=($(compgen -d -- "$cur"))
+        else
+            COMPREPLY=($(compgen -f -- "$cur"))
+        fi
+    }
+fi
+
+_thing() {
+    local cur prev words cword
+    _init_completion 2>/dev/null || {
+        cur="${COMP_WORDS[COMP_CWORD]}"
+        prev="${COMP_WORDS[COMP_CWORD-1]}"
+        words=("${COMP_WORDS[@]}")
+        cword=$COMP_CWORD
+    }
+
+    local commands="init add ls show status priority mv rm link find tree export import help --version"
+    local link_verbs="add rm list"
+    local statuses="todo doing done paused"
+    local priorities="high medium low"
+    local global_flags="--data-dir --config -g --global"
+
+    # Complete flag values regardless of position.
+    case "$prev" in
+        --data-dir|--config) _filedir -d; return ;;
+        --priority) COMPREPLY=($(compgen -W "$priorities" -- "$cur")); return ;;
+    esac
+
+    # Top-level command.
+    if [[ $cword -eq 1 ]]; then
+        COMPREPLY=($(compgen -W "$commands" -- "$cur"))
+        return
+    fi
+
+    local cmd="${words[1]}"
+    case "$cmd" in
+        status)
+            # thing status <ref> <status>
+            [[ $cword -eq 3 && "$cur" != -* ]] && COMPREPLY=($(compgen -W "$statuses" -- "$cur"))
+            [[ "$cur" == -* ]] && COMPREPLY=($(compgen -W "$global_flags" -- "$cur"))
+            ;;
+        priority)
+            # thing priority <ref> <priority>
+            [[ $cword -eq 3 && "$cur" != -* ]] && COMPREPLY=($(compgen -W "$priorities" -- "$cur"))
+            [[ "$cur" == -* ]] && COMPREPLY=($(compgen -W "$global_flags" -- "$cur"))
+            ;;
+        add)
+            [[ "$cur" == -* ]] && COMPREPLY=($(compgen -W "$global_flags --category --priority --tags" -- "$cur"))
+            ;;
+        link)
+            if [[ $cword -eq 2 ]]; then
+                COMPREPLY=($(compgen -W "$link_verbs" -- "$cur"))
+                return
+            fi
+            [[ "$cur" == -* ]] && COMPREPLY=($(compgen -W "$global_flags --label" -- "$cur"))
+            ;;
+        find)
+            [[ "$cur" == -* ]] && COMPREPLY=($(compgen -W "$global_flags --json" -- "$cur"))
+            ;;
+        import)
+            if [[ "$cur" == -* ]]; then
+                COMPREPLY=($(compgen -W "$global_flags --dry-run" -- "$cur"))
+            else
+                _filedir json
+            fi
+            ;;
+        *)
+            # ls, show, mv, rm, init, tree, export: global flags only.
+            [[ "$cur" == -* ]] && COMPREPLY=($(compgen -W "$global_flags" -- "$cur"))
+            ;;
+    esac
+}
+
+complete -F _thing thing
