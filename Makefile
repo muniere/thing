@@ -2,10 +2,13 @@
 
 build:
 	go build -o bin/thing ./cmd/thing
+	go build -o bin/thingd ./cmd/thingd
 
-# serve runs the web UI dev server (Vite on :5173). The frontend lives in web/.
-# It is a scaffold for now: the tree/detail UI and its thingd backend land in
-# later commits, so this serves the app shell only, with no API to talk to yet.
+# serve runs the web UI dev server (Vite on :5173). The frontend is still a shell
+# that does not call the API yet, so this needs no thingd. The integrated dev
+# loop — thingd on :4319 as the single entry, reverse-proxying to Vite for HMR —
+# is wired with the browse/edit UI in a later commit. To run the API server on
+# its own, use `make build && ./bin/thingd`.
 serve:
 	@[ -d web/node_modules ] || (cd web && npm install)
 	npm --prefix web run dev

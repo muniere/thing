@@ -13,11 +13,10 @@ export interface Node {
     priority?: Priority;
     /**
      * The node's full slug-path identity (e.g. "epic/issue/task"), used to
-     * address it in the API. A slug is unique only among siblings; the ref is
-     * unique across the tree.
+     * address it in the API. Its bare slug is the last segment; the ref is
+     * unique across the tree, a slug only among siblings.
      */
     ref:       string;
-    slug:      string;
     status:    Status;
     tags?:     string[];
     title:     string;
