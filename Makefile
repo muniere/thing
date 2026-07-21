@@ -1,7 +1,14 @@
-.PHONY: build install test gen check fmt fmt-check vet clean
+.PHONY: build serve install test gen check fmt fmt-check vet clean
 
 build:
 	go build -o bin/thing ./cmd/thing
+
+# serve runs the web UI dev server (Vite on :5173). The frontend lives in web/.
+# It is a scaffold for now: the tree/detail UI and its thingd backend land in
+# later commits, so this serves the app shell only, with no API to talk to yet.
+serve:
+	@[ -d web/node_modules ] || (cd web && npm install)
+	npm --prefix web run dev
 
 # install builds and installs the binaries into the Go bin directory
 # (`go env GOBIN`, else `$GOPATH/bin`).

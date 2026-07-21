@@ -26,6 +26,18 @@ local `bin/thing` instead.
 Shell completions live under [`completions/`](completions/): source
 `thing.bash` from your `~/.bashrc`, or put `_thing` on your zsh `$fpath`.
 
+## Web
+
+The web UI (React + Vite + TypeScript) lives in [`web/`](web/); its types are
+hand-written in `web/src/domain/generated.ts`. Run the dev server with:
+
+```
+make serve            # Vite on http://localhost:5173
+```
+
+This is a scaffold for now — the tree/detail UI and its `thingd` backend land in
+later commits, so it serves the app shell only.
+
 ## Directories
 
 `thing` keeps the node tree in a **data** directory and `config.yaml` in a
