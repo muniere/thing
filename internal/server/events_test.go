@@ -40,6 +40,10 @@ func TestEventsStreamsReloadOnMutation(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
+	if ct := resp.Header.Get("Content-Type"); ct != "text/event-stream" {
+		t.Errorf("Content-Type = %q, want text/event-stream", ct)
+	}
+
 	br := bufio.NewReader(resp.Body)
 	// First frame is the hello greeting.
 	if line := readEvent(t, br); !strings.Contains(line, "hello") {
@@ -164,7 +168,8 @@ func TestFingerprintStable(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "a.md"), []byte("one"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if fingerprint(root) != fingerprint(root) {
+	first, second := fingerprint(root), fingerprint(root)
+	if first != second {
 		t.Fatal("fingerprint of an unchanged tree differs between calls")
 	}
 }

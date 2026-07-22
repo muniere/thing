@@ -34,20 +34,33 @@ layer as the CLI, so the two never disagree. The frontend lives in
 [`web/`](web/) (React + Vite + TypeScript; types hand-written in
 `web/src/domain/generated.ts`).
 
-thingd is the single entry point on **:4319** in both modes. Open
-`http://localhost:4319`:
+### Development
 
 ```
-make serve                     # dev: thingd + Vite HMR behind it (open :4319)
+make serve                     # Vite dev server (HMR) + thingd API
 make serve DIR=<path>          # ... against a specific data dir
 ```
 
-In dev, thingd serves `/api` and `/events` itself and reverse-proxies everything
-else to the Vite dev server (`--dev`), so you edit the frontend with hot-reload
-but still open one URL. `--open` opens the browser; `--port N` pins the port. To
-run the API without the frontend build, use `make build && ./bin/thingd --dir
-<path>` (the embedded SPA lands in a later commit). Without `--port`, thingd
-falls back to the next free port so several trees can serve at once.
+`make serve` runs the Vite dev server on **:4319** (serving the frontend with
+hot-reload) and thingd's API on **:4320** behind it; Vite proxies `/api` and
+`/events` to thingd. Open `http://localhost:4319` — the same URL as production,
+so nothing changes between dev and prod. Ctrl-C stops both. Both ports are
+overridable if something else has them (e.g. another tool also defaulting to
+4319): `make serve THINGD_WEB_PORT=4400 THINGD_API_PORT=4401`.
+
+### Production
+
+`make build` will embed the built SPA into `thingd` so a single binary serves
+the whole app (that embedding lands in a later commit; until then `./bin/thingd`
+is API-only):
+
+```
+make build
+./bin/thingd --dir <path>      # http://localhost:4319 (API only for now)
+```
+
+`--open` opens the browser; `--port N` pins the port; without it thingd falls
+back to the next free port so several trees can serve at once.
 
 ### API
 

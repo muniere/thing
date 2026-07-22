@@ -4,16 +4,19 @@ build:
 	go build -o bin/thing ./cmd/thing
 	go build -o bin/thingd ./cmd/thingd
 
-# serve runs the dev loop: thingd is the single entry on :4319 (serving /api and
-# /events and reverse-proxying everything else to Vite for HMR), with Vite on
-# :5173 behind it. Open http://localhost:4319; Ctrl-C stops both. Pass DIR=<path>
-# to pick the data dir. (Go changes need a manual restart until air lands.)
+# serve runs the dev loop: the Vite dev server holds THINGD_WEB_PORT (default
+# 4319, HMR) and proxies /api and /events to thingd's API on THINGD_API_PORT
+# (default 4320). So the dev URL is the same http://localhost:4319 as prod.
+# Override either on a collision, e.g. `make serve THINGD_WEB_PORT=4400
+# THINGD_API_PORT=4401`. Ctrl-C stops both; DIR=<path> picks the data dir. (Go
+# changes need a manual restart until air lands.)
+THINGD_WEB_PORT ?= 4319
+THINGD_API_PORT ?= 4320
 serve:
 	@[ -d web/node_modules ] || (cd web && npm install)
-	@echo "→ open http://localhost:4319 (thingd single entry; Vite HMR behind it)"
 	@trap 'kill 0' INT TERM EXIT; \
-		go run ./cmd/thingd --port 4319 --dev http://localhost:5173 $(if $(DIR),--dir $(DIR)) & \
-		npm --prefix web run dev & \
+		go run ./cmd/thingd --port $(THINGD_API_PORT) $(if $(DIR),--dir $(DIR)) & \
+		THINGD_WEB_PORT=$(THINGD_WEB_PORT) THINGD_API_PORT=$(THINGD_API_PORT) npm --prefix web run dev & \
 		wait
 
 # install builds and installs the binaries into the Go bin directory
