@@ -1,6 +1,6 @@
 // Package server implements thingd's HTTP layer: a JSON API over the shared Go
-// data layer, an SSE reload stream, and static serving of the built SPA (wired
-// in a later commit). It is transport only — every read goes through
+// data layer, an SSE reload stream, and (in the default build) static serving of
+// the embedded SPA. It is transport only — every read goes through
 // internal/exporter and every write through internal/store, so the web and the
 // CLI share identical semantics.
 //
@@ -350,10 +350,10 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 }
 
 // handleStatic serves the embedded SPA for any path not handled by the API,
-// falling back to index.html for unknown paths so client-side routing works.
-// (The embedded bundle is wired in a later commit; until then Static is nil and
-// non-API paths 404. In development the Vite dev server serves the frontend and
-// proxies /api and /events here, so this handler is not exercised.)
+// falling back to index.html for unknown paths so client-side routing works. The
+// default build embeds the bundle (Static set); a -tags modular build leaves Static
+// nil and non-API paths 404, since in development the Vite dev server serves the
+// frontend and proxies /api and /events here instead.
 func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 	if s.static == nil {
 		http.NotFound(w, r)

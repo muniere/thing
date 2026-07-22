@@ -1,8 +1,17 @@
-.PHONY: build serve install test gen check fmt fmt-check vet clean
+.PHONY: build bundle serve install test gen check fmt fmt-check vet clean
 
-build:
+# build produces the release binaries: the default build embeds the freshly built
+# SPA into thingd, so bin/thingd serves the whole app on its own. Because
+# embedding is the default, plain `go build`/`test`/`vet` need web/dist — the dev
+# and test paths below pass -tags modular to embed nothing (thingd as a bare
+# API server) and stay frontend-free.
+build: bundle
 	go build -o bin/thing ./cmd/thing
 	go build -o bin/thingd ./cmd/thingd
+
+# bundle builds the SPA into web/dist, which build embeds into thingd.
+bundle:
+	cd web && npm install && npm run build
 
 # serve runs the dev loop: the Vite dev server holds THINGD_WEB_PORT (default
 # 4319, HMR) and proxies /api and /events to thingd's API on THINGD_API_PORT
@@ -15,7 +24,7 @@ THINGD_API_PORT ?= 4320
 serve:
 	@[ -d web/node_modules ] || (cd web && npm install)
 	@trap 'kill 0' INT TERM EXIT; \
-		go run ./cmd/thingd --port $(THINGD_API_PORT) $(if $(DIR),--dir $(DIR)) & \
+		go run -tags modular ./cmd/thingd --port $(THINGD_API_PORT) $(if $(DIR),--dir $(DIR)) & \
 		THINGD_WEB_PORT=$(THINGD_WEB_PORT) THINGD_API_PORT=$(THINGD_API_PORT) npm --prefix web run dev & \
 		wait
 
@@ -25,7 +34,7 @@ install:
 	go install ./cmd/thing
 
 test:
-	go test ./...
+	go test -tags modular ./...
 
 # Regenerate code from the shared JSON Schema (schema/*.json).
 # Wired to quicktype in a later commit; a no-op until schema/ exists.
@@ -40,11 +49,17 @@ fmt-check:
 	if [ -n "$$out" ]; then echo "gofmt needed:"; echo "$$out"; exit 1; fi
 
 vet:
-	go vet ./...
+	go vet -tags modular ./...
 
 # check verifies the tree is clean: formatting, vet, tests, and that
-# `make gen` produces no diff (guards against generated-code drift).
+# `make gen` produces no diff (guards against generated-code drift). vet/test run
+# under -tags modular (frontend-free), which never compiles the default embed file
+# (assets.go); compile it too against a placeholder web/dist so a break there
+# (embed path, signature) can't escape check. web/dist is gitignored, so this
+# does not dirty the tree.
 check: fmt-check vet test
+	@mkdir -p web/dist && [ -e web/dist/index.html ] || : > web/dist/index.html
+	@go build -o /dev/null ./cmd/thingd
 	@$(MAKE) gen
 	@if [ -n "$$(git status --porcelain)" ]; then \
 		echo "make gen produced a diff or working tree is dirty:"; \

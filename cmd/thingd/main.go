@@ -1,5 +1,7 @@
 // Command thingd is the human-facing web server for a thing tree. It serves a
-// JSON API over the shared Go data layer and (in a later commit) the built SPA.
+// JSON API over the shared Go data layer and the bundled SPA — the default build
+// embeds the SPA (so `make build` yields one self-contained binary); a -tags
+// modular build serves the API only, for use with `vite dev`.
 package main
 
 import (
@@ -14,6 +16,7 @@ import (
 	"runtime"
 	"time"
 
+	thing "github.com/muniere/thing"
 	"github.com/muniere/thing/internal/server"
 	"github.com/muniere/thing/internal/store"
 )
@@ -64,6 +67,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 	st := store.Open(root)
 	srv := server.New(st, server.Options{
+		Static: thing.WebAssets(),
 		Now:    func() string { return time.Now().Format("2006-01-02") },
 		Logger: log.New(stderr, "", log.LstdFlags),
 	})
