@@ -1,0 +1,31 @@
+# air drives the dev loop: it rebuilds the single embedded binary and restarts
+# thingd on any Go or frontend change, so dev runs the exact same artifact as
+# prod on one port. The browser reloads itself over SSE — thingd sends a
+# per-process bootID in its hello frame and the client reloads when it changes
+# (see web/src/live.ts) — so no live-reload proxy is needed.
+#
+# `make serve` runs `air -- --port <p> [--dir <d>]`; args after `--` are appended
+# to the built binary.
+root = "."
+tmp_dir = "tmp"
+
+[build]
+# `make bundle` rebuilds the SPA only when a web source changed, then relinks the
+# binary, so a Go-only edit skips `vite build` (see the Makefile). air has one
+# build command and can't branch on the changed file, so the skipping lives in
+# make's timestamp check rather than here.
+cmd = "make bundle"
+bin = "./tmp/thingd"
+# json covers package.json / tsconfig.json so a dependency or config edit rebuilds
+# too (a new dependency still needs a manual `npm install` — the build cmd only
+# runs `npm run build`).
+include_ext = ["go", "ts", "tsx", "css", "html", "json"]
+# web/dist is the build output and tmp holds the binary — watching either would
+# loop. node_modules and the data/plan dirs are noise.
+exclude_dir = ["tmp", "bin", "web/dist", "web/node_modules", ".git", ".thing", ".tray", ".hako", "completions"]
+exclude_regex = ["_test\\.go$"]
+stop_on_error = true
+delay = 300
+
+[misc]
+clean_on_exit = true

@@ -1,6 +1,6 @@
 // Package server implements thingd's HTTP layer: a JSON API over the shared Go
-// data layer, an SSE reload stream, and (in the default build) static serving of
-// the embedded SPA. It is transport only — every read goes through
+// data layer, an SSE reload stream, and static serving of the embedded SPA. It
+// is transport only — every read goes through
 // internal/exporter and every write through internal/store, so the web and the
 // CLI share identical semantics.
 //
@@ -11,6 +11,8 @@
 package server
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,6 +21,7 @@ import (
 	"mime"
 	"net/http"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -42,6 +45,13 @@ type Server struct {
 	logger *log.Logger
 	hub    *hub
 	mux    *http.ServeMux
+	// bootID is a random nonce minted when the Server is constructed (once per
+	// process in the real binary) and sent in the SSE hello frame. A client that
+	// reconnects and sees a different bootID knows the server was replaced (a new
+	// binary — e.g. air rebuilt it in dev) and reloads to pick up the new assets;
+	// a reconnect to the same process keeps the same id and only refetches. It is
+	// not persistence, just "is this the process I last talked to".
+	bootID string
 }
 
 // New builds a Server over the given store.
@@ -55,6 +65,7 @@ func New(st *store.Store, opts Options) *Server {
 		now:    opts.Now,
 		logger: opts.Logger,
 		hub:    newHub(),
+		bootID: newBootID(),
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/tree", s.handleTree)
@@ -65,6 +76,20 @@ func New(st *store.Store, opts Options) *Server {
 	mux.HandleFunc("/", s.handleStatic)
 	s.mux = mux
 	return s
+}
+
+// newBootID mints the per-Server nonce sent in the SSE hello frame. crypto/rand
+// makes it distinct per construction independent of the wall clock, so restart
+// detection never turns on clock resolution (two builds relaunched back-to-back
+// still get different ids).
+func newBootID() string {
+	var b [8]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		// crypto/rand is effectively infallible; if it ever isn't, a timestamp
+		// still yields a near-unique id rather than an empty one.
+		return strconv.FormatInt(time.Now().UnixNano(), 36)
+	}
+	return hex.EncodeToString(b[:])
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -351,9 +376,8 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 
 // handleStatic serves the embedded SPA for any path not handled by the API,
 // falling back to index.html for unknown paths so client-side routing works. The
-// default build embeds the bundle (Static set); a -tags modular build leaves Static
-// nil and non-API paths 404, since in development the Vite dev server serves the
-// frontend and proxies /api and /events here instead.
+// real binary always sets Static (thingd embeds web/dist); Static is nil only in
+// tests that construct a Server without assets, where non-API paths 404.
 func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 	if s.static == nil {
 		http.NotFound(w, r)

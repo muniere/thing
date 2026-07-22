@@ -1,7 +1,7 @@
 // Command thingd is the human-facing web server for a thing tree. It serves a
-// JSON API over the shared Go data layer and the bundled SPA — the default build
-// embeds the SPA (so `make build` yields one self-contained binary); a -tags
-// modular build serves the API only, for use with `vite dev`.
+// JSON API over the shared Go data layer and the bundled SPA, which it embeds, so
+// `make build` yields one self-contained binary and `make serve` runs that same
+// binary under air.
 package main
 
 import (
