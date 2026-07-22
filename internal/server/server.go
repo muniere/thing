@@ -1,7 +1,8 @@
 // Package server implements thingd's HTTP layer: a JSON API over the shared Go
-// data layer plus static serving of the built SPA (wired in a later commit). It
-// is transport only — every read goes through internal/exporter and every write
-// through internal/store, so the web and the CLI share identical semantics.
+// data layer, an SSE reload stream, and static serving of the built SPA (wired
+// in a later commit). It is transport only — every read goes through
+// internal/exporter and every write through internal/store, so the web and the
+// CLI share identical semantics.
 //
 // Nodes are addressed by their ref (a slug-path like "epic/issue/task"), which
 // is used verbatim as the URL path: /api/nodes/<ref>. Because a ref spans
@@ -39,6 +40,7 @@ type Server struct {
 	static fs.FS
 	now    func() string
 	logger *log.Logger
+	hub    *hub
 	mux    *http.ServeMux
 }
 
@@ -52,9 +54,11 @@ func New(st *store.Store, opts Options) *Server {
 		static: opts.Static,
 		now:    opts.Now,
 		logger: opts.Logger,
+		hub:    newHub(),
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/tree", s.handleTree)
+	mux.HandleFunc("GET /events", s.handleEvents)
 	mux.HandleFunc("POST /api/nodes/{parent...}", s.handleCreate)
 	mux.HandleFunc("PATCH /api/nodes/{ref...}", s.handleUpdate)
 	mux.HandleFunc("DELETE /api/nodes/{ref...}", s.handleRemove)
@@ -67,7 +71,41 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if s.logger != nil {
 		s.logger.Printf("%s %s", r.Method, r.URL.Path)
 	}
-	s.mux.ServeHTTP(w, r)
+	rec := &statusRecorder{ResponseWriter: w, code: http.StatusOK}
+	s.mux.ServeHTTP(rec, r)
+	// A successful mutating request may have changed the tree; wake SSE clients
+	// immediately rather than waiting for the filesystem poller to notice.
+	if r.Method != http.MethodGet && r.Method != http.MethodHead &&
+		rec.code >= 200 && rec.code < 300 {
+		s.hub.broadcast()
+	}
+}
+
+// statusRecorder captures the response status so ServeHTTP can tell whether a
+// mutation succeeded. It forwards Flush so SSE streaming still works.
+type statusRecorder struct {
+	http.ResponseWriter
+	code    int
+	written bool
+}
+
+func (r *statusRecorder) WriteHeader(code int) {
+	if !r.written {
+		r.code = code
+		r.written = true
+	}
+	r.ResponseWriter.WriteHeader(code)
+}
+
+func (r *statusRecorder) Write(b []byte) (int, error) {
+	r.written = true
+	return r.ResponseWriter.Write(b)
+}
+
+func (r *statusRecorder) Flush() {
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
 }
 
 // --- reads ---
