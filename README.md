@@ -55,9 +55,11 @@ GET    /api/tree                whole tree as JSON (each node carries its ref)
 POST   /api/nodes/<parent>      create a child; the parent decides the type
 PATCH  /api/nodes/<ref>         {status|priority|title|category|body|move|addLink|removeLink}
 DELETE /api/nodes/<ref>         remove (an epic/issue takes its subtree)
+GET    /events                  Server-Sent Events reload stream
 ```
 
-The UI and SSE live-reload land in later commits.
+Open browsers live-reload over SSE whenever the tree changes — whether the edit
+came from the web, the CLI, or an editor. The web UI lands in a later commit.
 
 ## Directories
 

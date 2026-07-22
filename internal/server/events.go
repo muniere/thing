@@ -1,0 +1,165 @@
+package server
+
+import (
+	"context"
+	"fmt"
+	"hash/fnv"
+	"io"
+	"io/fs"
+	"net/http"
+	"path/filepath"
+	"sort"
+	"strconv"
+	"sync"
+	"time"
+)
+
+// heartbeatInterval is how often an idle SSE stream sends a comment frame, to
+// keep the connection alive through proxies and surface a dead peer as a write
+// error even when no reload fires.
+const heartbeatInterval = 30 * time.Second
+
+// hub is a minimal SSE fan-out: subscribers register a channel and receive a
+// signal whenever the tree changes. It carries no payload — clients refetch
+// /api/tree on any event.
+type hub struct {
+	mu   sync.Mutex
+	subs map[chan struct{}]struct{}
+}
+
+func newHub() *hub {
+	return &hub{subs: make(map[chan struct{}]struct{})}
+}
+
+func (h *hub) subscribe() chan struct{} {
+	ch := make(chan struct{}, 1)
+	h.mu.Lock()
+	h.subs[ch] = struct{}{}
+	h.mu.Unlock()
+	return ch
+}
+
+func (h *hub) unsubscribe(ch chan struct{}) {
+	h.mu.Lock()
+	delete(h.subs, ch)
+	h.mu.Unlock()
+}
+
+// broadcast wakes every subscriber. A full buffer means a signal is already
+// pending, so the send is dropped — coalescing bursts into one refetch.
+func (h *hub) broadcast() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for ch := range h.subs {
+		select {
+		case ch <- struct{}{}:
+		default:
+		}
+	}
+}
+
+// handleEvents streams reload signals over Server-Sent Events until the client
+// disconnects.
+func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		s.fail(w, http.StatusInternalServerError, fmt.Errorf("streaming unsupported"))
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	ch := s.hub.subscribe()
+	defer s.hub.unsubscribe(ch)
+
+	// send writes one frame and flushes; a write error means the client is gone,
+	// so the caller returns and the deferred unsubscribe cleans up.
+	send := func(frame string) bool {
+		if _, err := io.WriteString(w, frame); err != nil {
+			return false
+		}
+		flusher.Flush()
+		return true
+	}
+
+	// Greet immediately so the client knows the stream is live.
+	if !send("event: hello\ndata: connected\n\n") {
+		return
+	}
+
+	ping := time.NewTicker(heartbeatInterval)
+	defer ping.Stop()
+
+	ctx := r.Context()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ping.C:
+			if !send(": ping\n\n") {
+				return
+			}
+		case <-ch:
+			if !send("event: reload\ndata: tree\n\n") {
+				return
+			}
+		}
+	}
+}
+
+// StartWatch polls the data directory and broadcasts a reload whenever its
+// fingerprint changes, so edits made outside the web (CLI, editor) also refresh
+// open browsers. It returns when ctx is cancelled.
+func (s *Server) StartWatch(ctx context.Context, interval time.Duration) {
+	last := fingerprint(s.store.Root)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if fp := fingerprint(s.store.Root); fp != last {
+				last = fp
+				s.hub.broadcast()
+			}
+		}
+	}
+}
+
+// fingerprint hashes each file's path, size, and mtime — cheap, and enough to
+// notice a create, delete, rename, or (via mtime) content write. Per-entry walk
+// errors skip that file rather than aborting the walk, so a briefly unreadable
+// file drops out of the hash and triggers one extra reload — harmless, since a
+// reload just refetches the whole tree.
+func fingerprint(root string) uint64 {
+	type ent struct {
+		path string
+		size int64
+		mod  int64
+	}
+	var ents []ent
+	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
+		ents = append(ents, ent{path, info.Size(), info.ModTime().UnixNano()})
+		return nil
+	})
+	sort.Slice(ents, func(i, j int) bool { return ents[i].path < ents[j].path })
+	h := fnv.New64a()
+	for _, e := range ents {
+		_, _ = h.Write([]byte(e.path))
+		_, _ = h.Write([]byte{0})
+		_, _ = h.Write([]byte(strconv.FormatInt(e.size, 10)))
+		_, _ = h.Write([]byte{0})
+		_, _ = h.Write([]byte(strconv.FormatInt(e.mod, 10)))
+		_, _ = h.Write([]byte{0})
+	}
+	return h.Sum64()
+}

@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -66,6 +67,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 		Now:    func() string { return time.Now().Format("2006-01-02") },
 		Logger: log.New(stderr, "", log.LstdFlags),
 	})
+
+	// Watch the data dir so edits from the CLI or an editor live-reload open
+	// browsers over SSE. The watcher runs for the lifetime of the process.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go srv.StartWatch(ctx, time.Second)
 
 	url := fmt.Sprintf("http://%s", ln.Addr().String())
 	fmt.Fprintf(stdout, "thingd %s\n  serving %s\n  data dir %s\n", version, url, root)
