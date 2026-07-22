@@ -1,12 +1,17 @@
 # Build artifacts
 /bin/
+# air's rebuild output (the dev binary)
+/tmp/
 
 # Local tray plan (project management, not product code)
 /.tray/
 
 # Web build output & deps
 /web/node_modules/
-/web/dist/
+# web/dist is build output, but keep .gitkeep so the go:embed target always
+# exists (thingd embeds web/dist unconditionally; see assets.go).
+/web/dist/*
+!/web/dist/.gitkeep
 
 # OS / editor cruft
 .DS_Store

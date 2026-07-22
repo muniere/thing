@@ -83,8 +83,11 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		return true
 	}
 
-	// Greet immediately so the client knows the stream is live.
-	if !send("event: hello\ndata: connected\n\n") {
+	// Greet immediately so the client knows the stream is live. The data is this
+	// process's bootID: a client that reconnects to a different id knows the
+	// server was replaced (e.g. air rebuilt the binary in dev) and does a full
+	// reload rather than a plain refetch.
+	if !send("event: hello\ndata: " + s.bootID + "\n\n") {
 		return
 	}
 

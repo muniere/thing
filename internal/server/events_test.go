@@ -63,6 +63,40 @@ func TestEventsStreamsReloadOnMutation(t *testing.T) {
 	}
 }
 
+func TestHelloFrameCarriesBootID(t *testing.T) {
+	s := newServer(t)
+	if s.bootID == "" {
+		t.Fatal("bootID is empty; the hello frame would carry no id and the client could never detect a restart")
+	}
+	ts := httptest.NewServer(s)
+	defer ts.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, "GET", ts.URL+"/events", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	// The first frame is the greeting; its data must be this server's bootID, not
+	// a constant — the client compares it across reconnects to spot a restart.
+	line := readEvent(t, bufio.NewReader(resp.Body))
+	if !strings.Contains(line, "data: "+s.bootID) {
+		t.Fatalf("hello frame = %q, want data: %s", line, s.bootID)
+	}
+}
+
+func TestBootIDDistinctPerServer(t *testing.T) {
+	// Restart detection is defined by "different process => different id", so two
+	// separately constructed servers must never share a bootID.
+	a, b := newServer(t), newServer(t)
+	if a.bootID == b.bootID {
+		t.Fatalf("two servers share bootID %q; restart detection needs distinct ids", a.bootID)
+	}
+}
+
 // readEvent reads one SSE frame (up to a blank line) and returns it joined.
 func readEvent(t *testing.T, br *bufio.Reader) string {
 	t.Helper()

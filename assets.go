@@ -1,5 +1,3 @@
-//go:build !modular
-
 package thing
 
 import (
@@ -7,14 +5,14 @@ import (
 	"io/fs"
 )
 
-// webDist holds the built SPA. This is the default (release) build: thingd embeds
-// web/dist and serves the whole app from one self-contained binary, as
-// `make build` produces. Build with -tags modular to embed nothing and run the
-// frontend and API as separate pieces (so it needs no built web/dist and
-// `vite dev` serves the frontend) — see assets_modular.go.
+// webDist holds the built SPA. thingd embeds web/dist and serves the whole app
+// from one self-contained binary, so `make build` produces a single artifact and
+// dev (`make serve`) runs that same binary under air. The embed is
+// unconditional, so web/dist must exist for any go build/test/vet — a committed
+// web/dist/.gitkeep keeps it compiling before the first `make build`.
 //
 // `all:` overrides go:embed's default of skipping names that begin with "." or
-// "_", so nothing a bundler emits can be silently dropped from the bundle.
+// "_", so nothing a bundler emits (and the .gitkeep) can be silently dropped.
 //
 //go:embed all:web/dist
 var webDist embed.FS
