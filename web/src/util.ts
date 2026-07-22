@@ -22,15 +22,3 @@ export function flatten(nodes: Node[]): Node[] {
   walk(nodes);
   return out;
 }
-
-const boxes: Record<string, string> = {
-  done: "[x]",
-  doing: "[~]",
-  paused: "[-]",
-  todo: "[ ]",
-};
-
-// statusBox mirrors the CLI's outline glyphs.
-export function statusBox(status: string): string {
-  return boxes[status] ?? "[ ]";
-}

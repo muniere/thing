@@ -63,23 +63,30 @@ export function App() {
 
   return (
     <div className="app">
-      <header>
-        <h1>thing</h1>
-        <FilterBar filters={filters} categories={categories} tags={tags} onChange={setFilters} />
+      <header className="topbar">
+        <span className="brand"><span className="dot" />thing</span>
       </header>
 
       {error && <div className="error" onClick={() => setError(null)}>{error}</div>}
 
-      <div className="panes">
-        <section className="pane tree-pane">
-          <div className="add-epic">
-            <input placeholder="new epic title" value={newEpic} onChange={(e) => setNewEpic(e.target.value)} />
-            <button type="button" onClick={addEpic}>+ Epic</button>
+      <div className="split">
+        <FilterBar filters={filters} categories={categories} tags={tags} onChange={setFilters} />
+
+        <section className="tree-pane">
+          <div className="tree-add">
+            <input
+              className="input"
+              placeholder="new epic title"
+              value={newEpic}
+              onChange={(e) => setNewEpic(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addEpic()}
+            />
+            <button type="button" className="btn btn-amber" onClick={addEpic}>+ Epic</button>
           </div>
           <Tree nodes={filtered} selected={selected} onSelect={select} />
         </section>
 
-        <section className="pane detail-pane">
+        <section className="detail-pane">
           {selectedNode ? (
             <Detail key={selectedNode.ref} node={selectedNode} allNodes={tree} run={run} onSelect={select} />
           ) : (
