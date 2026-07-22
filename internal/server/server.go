@@ -18,6 +18,8 @@ import (
 	"log"
 	"mime"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"path"
 	"strings"
 	"time"
@@ -30,18 +32,20 @@ import (
 // Options configures a Server.
 type Options struct {
 	Static fs.FS         // built SPA assets; nil disables static serving
+	Dev    string        // reverse-proxy non-API requests to this URL (a Vite dev server); empty disables
 	Now    func() string // today's date stamp for write timestamps; defaults to time.Now
 	Logger *log.Logger   // access log; nil disables it
 }
 
 // Server serves the JSON API and the SPA. It is an http.Handler.
 type Server struct {
-	store  *store.Store
-	static fs.FS
-	now    func() string
-	logger *log.Logger
-	hub    *hub
-	mux    *http.ServeMux
+	store    *store.Store
+	static   fs.FS
+	devProxy *httputil.ReverseProxy
+	now      func() string
+	logger   *log.Logger
+	hub      *hub
+	mux      *http.ServeMux
 }
 
 // New builds a Server over the given store.
@@ -55,6 +59,19 @@ func New(st *store.Store, opts Options) *Server {
 		now:    opts.Now,
 		logger: opts.Logger,
 		hub:    newHub(),
+	}
+	if opts.Dev != "" {
+		// url.Parse alone is too weak — "localhost:5173" (no scheme) parses fine
+		// but yields an empty host and a proxy that 502s every request. Require an
+		// absolute http(s) URL, and disable dev with a clear message otherwise.
+		u, err := url.Parse(opts.Dev)
+		if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+			if opts.Logger != nil {
+				opts.Logger.Printf("ignoring invalid --dev target %q: need an absolute http(s) URL like http://localhost:5173", opts.Dev)
+			}
+		} else {
+			s.devProxy = httputil.NewSingleHostReverseProxy(u)
+		}
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/tree", s.handleTree)
@@ -349,9 +366,16 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-// handleStatic serves the built SPA, falling back to index.html for unknown
-// paths so client-side routing works. It never shadows /api (routed above).
+// handleStatic serves the frontend for any path not handled by the API. In dev
+// (Options.Dev set) it reverse-proxies to the Vite dev server so thingd is the
+// single entry point with HMR; otherwise it serves the embedded SPA once that is
+// wired (a later commit), falling back to index.html for unknown paths — until
+// then Static is nil and non-API paths 404.
 func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
+	if s.devProxy != nil {
+		s.devProxy.ServeHTTP(w, r)
+		return
+	}
 	if s.static == nil {
 		http.NotFound(w, r)
 		return

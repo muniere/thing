@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/muniere/thing/internal/store"
 )
@@ -304,5 +306,78 @@ func TestListenExplicitFailsWhenTaken(t *testing.T) {
 	defer ln.Close()
 	if got := ln.Addr().(*net.TCPAddr).Port; got == port {
 		t.Fatalf("fallback reused the taken port %d", got)
+	}
+}
+
+func TestDevReverseProxy(t *testing.T) {
+	// A stub standing in for the Vite dev server.
+	vite := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("vite: " + r.URL.Path))
+	}))
+	defer vite.Close()
+
+	s := New(fixture(t), Options{Dev: vite.URL, Now: func() string { return "x" }})
+
+	// Non-API paths are reverse-proxied to Vite (single entry point).
+	if w := do(t, s, "GET", "/src/main.tsx", ""); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "vite: /src/main.tsx") {
+		t.Fatalf("dev proxy = %d body=%q", w.Code, w.Body.String())
+	}
+	// The API is still served by thingd itself, not proxied.
+	if w := do(t, s, "GET", "/api/tree", ""); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"ref"`) {
+		t.Fatalf("api under dev = %d body=%q", w.Code, w.Body.String())
+	}
+}
+
+func TestDevProxyDoesNotShadowAPIorEvents(t *testing.T) {
+	// A stub that would answer if the proxy wrongly captured these paths.
+	vite := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("VITE"))
+	}))
+	defer vite.Close()
+	s := New(fixture(t), Options{Dev: vite.URL, Now: func() string { return "x" }})
+
+	// /api/tree and /events are served by thingd, never proxied to Vite.
+	if w := do(t, s, "GET", "/api/tree", ""); strings.Contains(w.Body.String(), "VITE") {
+		t.Error("/api/tree was proxied to Vite")
+	}
+	ts := httptest.NewServer(s)
+	defer ts.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, "GET", ts.URL+"/events", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if ct := resp.Header.Get("Content-Type"); !strings.Contains(ct, "text/event-stream") {
+		t.Errorf("/events content-type = %q, want SSE (was it proxied?)", ct)
+	}
+}
+
+func TestInvalidDevTargetDisablesProxy(t *testing.T) {
+	// A scheme-less target parses but is unusable; dev must stay disabled and the
+	// API must keep working (no 502s), rather than enabling a broken proxy.
+	s := New(fixture(t), Options{Dev: "localhost:5173", Now: func() string { return "x" }})
+	if s.devProxy != nil {
+		t.Fatal("a scheme-less --dev target should not enable the proxy")
+	}
+	if w := do(t, s, "GET", "/api/tree", ""); w.Code != http.StatusOK {
+		t.Errorf("api under invalid --dev = %d, want 200", w.Code)
+	}
+	// With no proxy and no static, a non-API path 404s (not 502).
+	if w := do(t, s, "GET", "/x", ""); w.Code != http.StatusNotFound {
+		t.Errorf("non-api under invalid --dev = %d, want 404", w.Code)
+	}
+}
+
+func TestDevProxyViteDownIsolatesAPI(t *testing.T) {
+	// Point --dev at a closed port: the UI 502s but /api keeps working.
+	s := New(fixture(t), Options{Dev: "http://127.0.0.1:1", Now: func() string { return "x" }})
+	if w := do(t, s, "GET", "/api/tree", ""); w.Code != http.StatusOK {
+		t.Errorf("api with Vite down = %d, want 200", w.Code)
+	}
+	if w := do(t, s, "GET", "/", ""); w.Code != http.StatusBadGateway {
+		t.Errorf("UI with Vite down = %d, want 502", w.Code)
 	}
 }

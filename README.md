@@ -28,21 +28,26 @@ Shell completions live under [`completions/`](completions/): source
 
 ## Web (thingd)
 
-`thingd` serves the tree as a local web app: a JSON API over the same Go data
-layer as the CLI, plus (in a later commit) the built SPA. The frontend lives in
+`thingd` serves the tree as a local web app: a React SPA (tree pane, full-edit
+detail pane, status/category/tag filters) over a JSON API on the same Go data
+layer as the CLI, so the two never disagree. The frontend lives in
 [`web/`](web/) (React + Vite + TypeScript; types hand-written in
 `web/src/domain/generated.ts`).
 
+thingd is the single entry point on **:4319** in both modes. Open
+`http://localhost:4319`:
+
 ```
-make build                     # build the CLI + thingd into bin/
-./bin/thingd --dir <path>      # serve the API on http://localhost:4319
+make serve                     # dev: thingd + Vite HMR behind it (open :4319)
+make serve DIR=<path>          # ... against a specific data dir
 ```
 
-thingd resolves the data directory like the CLI, and without `--port` listens on
-4319, falling back to the next free port so several trees can serve at once.
-`--open` opens the browser; `--port N` pins the port (and errors if taken). The
-frontend is still a shell that does not call the API yet — `make serve` runs the
-Vite dev server on its own, and the integrated dev loop lands with the UI.
+In dev, thingd serves `/api` and `/events` itself and reverse-proxies everything
+else to the Vite dev server (`--dev`), so you edit the frontend with hot-reload
+but still open one URL. `--open` opens the browser; `--port N` pins the port. To
+run the API without the frontend build, use `make build && ./bin/thingd --dir
+<path>` (the embedded SPA lands in a later commit). Without `--port`, thingd
+falls back to the next free port so several trees can serve at once.
 
 ### API
 
@@ -59,7 +64,7 @@ GET    /events                  Server-Sent Events reload stream
 ```
 
 Open browsers live-reload over SSE whenever the tree changes — whether the edit
-came from the web, the CLI, or an editor. The web UI lands in a later commit.
+came from the web, the CLI, or an editor.
 
 ## Directories
 

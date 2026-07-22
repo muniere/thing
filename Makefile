@@ -4,14 +4,17 @@ build:
 	go build -o bin/thing ./cmd/thing
 	go build -o bin/thingd ./cmd/thingd
 
-# serve runs the web UI dev server (Vite on :5173). The frontend is still a shell
-# that does not call the API yet, so this needs no thingd. The integrated dev
-# loop — thingd on :4319 as the single entry, reverse-proxying to Vite for HMR —
-# is wired with the browse/edit UI in a later commit. To run the API server on
-# its own, use `make build && ./bin/thingd`.
+# serve runs the dev loop: thingd is the single entry on :4319 (serving /api and
+# /events and reverse-proxying everything else to Vite for HMR), with Vite on
+# :5173 behind it. Open http://localhost:4319; Ctrl-C stops both. Pass DIR=<path>
+# to pick the data dir. (Go changes need a manual restart until air lands.)
 serve:
 	@[ -d web/node_modules ] || (cd web && npm install)
-	npm --prefix web run dev
+	@echo "→ open http://localhost:4319 (thingd single entry; Vite HMR behind it)"
+	@trap 'kill 0' INT TERM EXIT; \
+		go run ./cmd/thingd --port 4319 --dev http://localhost:5173 $(if $(DIR),--dir $(DIR)) & \
+		npm --prefix web run dev & \
+		wait
 
 # install builds and installs the binaries into the Go bin directory
 # (`go env GOBIN`, else `$GOPATH/bin`).

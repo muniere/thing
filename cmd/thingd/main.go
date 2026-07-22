@@ -33,6 +33,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	fs.BoolVar(global, "g", false, "shorthand for --global")
 	port := fs.Int("port", server.DefaultPort, "listen port")
 	open := fs.Bool("open", false, "open the URL in a browser once serving")
+	dev := fs.String("dev", "", "dev mode: reverse-proxy the UI to this Vite dev server (e.g. http://localhost:5173)")
 	showVersion := fs.Bool("version", false, "print version and exit")
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -64,6 +65,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 	st := store.Open(root)
 	srv := server.New(st, server.Options{
+		Dev:    *dev,
 		Now:    func() string { return time.Now().Format("2006-01-02") },
 		Logger: log.New(stderr, "", log.LstdFlags),
 	})
