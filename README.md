@@ -26,17 +26,38 @@ local `bin/thing` instead.
 Shell completions live under [`completions/`](completions/): source
 `thing.bash` from your `~/.bashrc`, or put `_thing` on your zsh `$fpath`.
 
-## Web
+## Web (thingd)
 
-The web UI (React + Vite + TypeScript) lives in [`web/`](web/); its types are
-hand-written in `web/src/domain/generated.ts`. Run the dev server with:
+`thingd` serves the tree as a local web app: a JSON API over the same Go data
+layer as the CLI, plus (in a later commit) the built SPA. The frontend lives in
+[`web/`](web/) (React + Vite + TypeScript; types hand-written in
+`web/src/domain/generated.ts`).
 
 ```
-make serve            # Vite on http://localhost:5173
+make build                     # build the CLI + thingd into bin/
+./bin/thingd --dir <path>      # serve the API on http://localhost:4319
 ```
 
-This is a scaffold for now — the tree/detail UI and its `thingd` backend land in
-later commits, so it serves the app shell only.
+thingd resolves the data directory like the CLI, and without `--port` listens on
+4319, falling back to the next free port so several trees can serve at once.
+`--open` opens the browser; `--port N` pins the port (and errors if taken). The
+frontend is still a shell that does not call the API yet — `make serve` runs the
+Vite dev server on its own, and the integrated dev loop lands with the UI.
+
+### API
+
+Every node is addressed by its **ref** (a slug-path like `epic/issue/task`) used
+verbatim as the URL path. Because a ref spans multiple path segments, per-field
+edits are carried in a single `PATCH` body rather than as a path suffix.
+
+```
+GET    /api/tree                whole tree as JSON (each node carries its ref)
+POST   /api/nodes/<parent>      create a child; the parent decides the type
+PATCH  /api/nodes/<ref>         {status|priority|title|category|body|move|addLink|removeLink}
+DELETE /api/nodes/<ref>         remove (an epic/issue takes its subtree)
+```
+
+The UI and SSE live-reload land in later commits.
 
 ## Directories
 

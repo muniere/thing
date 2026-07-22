@@ -41,7 +41,7 @@ func TestExportImportRoundtrip(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("export: code=%d err=%s", code, errb)
 	}
-	if !strings.Contains(out, `"slug": "infra"`) || !strings.Contains(out, `"slug": "apply"`) {
+	if !strings.Contains(out, `"ref": "infra"`) || !strings.Contains(out, `"ref": "infra/provision/apply"`) {
 		t.Fatalf("export missing imported nodes: %s", out)
 	}
 }

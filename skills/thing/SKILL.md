@@ -46,7 +46,7 @@ Output is an array of top-level nodes (epics and orphan issues). Each node:
 ```json
 {
   "type": "epic|issue|task",
-  "slug": "monitor-rollout",
+  "ref": "web-release/monitor-rollout",
   "title": "Monitor rollout",
   "status": "todo|doing|done|paused",
   "priority": "high|medium|low",   // optional

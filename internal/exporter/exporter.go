@@ -9,10 +9,12 @@ import (
 )
 
 // node is the JSON shape of one exported node. Optional fields are omitted when
-// empty; status is always the effective (displayed) status.
+// empty; status is always the effective (displayed) status. Ref is the node's
+// full slug-path identity, so a client (e.g. thingd's web UI) can address it;
+// the bare slug is its last segment and is not emitted separately.
 type node struct {
 	Type     model.NodeType `json:"type"`
-	Slug     string         `json:"slug"`
+	Ref      string         `json:"ref"`
 	Title    string         `json:"title"`
 	Status   model.Status   `json:"status"`
 	Priority model.Priority `json:"priority,omitempty"`
@@ -33,15 +35,23 @@ func Export(s *store.Store) ([]byte, error) {
 	}
 	out := make([]node, 0, len(top))
 	for _, n := range top {
-		out = append(out, convert(n))
+		parentRef := ""
+		if n.Type != model.Epic {
+			parentRef = store.OrphanDir // a top-level non-epic is an orphan issue
+		}
+		out = append(out, convert(parentRef, n))
 	}
 	return json.MarshalIndent(out, "", "  ")
 }
 
-func convert(n *model.Node) node {
+func convert(parentRef string, n *model.Node) node {
+	ref := n.Slug
+	if parentRef != "" {
+		ref = parentRef + "/" + n.Slug
+	}
 	out := node{
 		Type:     n.Type,
-		Slug:     n.Slug,
+		Ref:      ref,
 		Title:    n.Title,
 		Status:   n.EffectiveStatus(),
 		Priority: n.Priority,
@@ -52,7 +62,7 @@ func convert(n *model.Node) node {
 		Body:     n.Body,
 	}
 	for _, c := range n.Children {
-		out.Children = append(out.Children, convert(c))
+		out.Children = append(out.Children, convert(ref, c))
 	}
 	return out
 }

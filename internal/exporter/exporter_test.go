@@ -8,6 +8,30 @@ import (
 	"github.com/muniere/thing/internal/store"
 )
 
+func TestExportOrphanRef(t *testing.T) {
+	s := store.Open(t.TempDir())
+	// A top-level orphan issue is addressed under _orphan/, and its task nests.
+	iss, err := s.Add(store.OrphanDir, &model.Node{Title: "Loose"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Add(iss, &model.Node{Title: "Do"}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := Export(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []node
+	_ = json.Unmarshal(data, &got)
+	if len(got) != 1 || got[0].Ref != "_orphan/loose" {
+		t.Fatalf("orphan issue ref = %q, want _orphan/loose", got[0].Ref)
+	}
+	if len(got[0].Children) != 1 || got[0].Children[0].Ref != "_orphan/loose/do" {
+		t.Fatalf("orphan task ref = %+v", got[0].Children)
+	}
+}
+
 func TestExportNestsAndOmitsEmpties(t *testing.T) {
 	s := store.Open(t.TempDir())
 	epic, err := s.Add("", &model.Node{Title: "Web release", Category: "Project"})
@@ -34,16 +58,19 @@ func TestExportNestsAndOmitsEmpties(t *testing.T) {
 		t.Fatalf("want 1 top node, got %d", len(got))
 	}
 	e := got[0]
-	if e.Slug != "web-release" || e.Category != "Project" {
+	if e.Ref != "web-release" || e.Category != "Project" {
 		t.Errorf("epic fields: %+v", e)
 	}
-	// Children nest.
+	// Children nest, and each carries its full slug-path ref.
 	if len(e.Children) != 1 || len(e.Children[0].Children) != 1 {
 		t.Fatalf("nesting lost: %+v", e)
 	}
+	if e.Children[0].Ref != "web-release/monitor" {
+		t.Errorf("issue ref = %q", e.Children[0].Ref)
+	}
 	task := e.Children[0].Children[0]
-	if task.Priority != model.Priority("high") {
-		t.Errorf("task priority: %+v", task)
+	if task.Priority != model.Priority("high") || task.Ref != "web-release/monitor/confirm" {
+		t.Errorf("task fields: %+v", task)
 	}
 
 	// Empty optional fields are omitted from the raw JSON (no priority on the
