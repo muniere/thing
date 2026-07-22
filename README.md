@@ -42,25 +42,28 @@ make serve DIR=<path>          # ... against a specific data dir
 ```
 
 `make serve` runs the Vite dev server on **:4319** (serving the frontend with
-hot-reload) and thingd's API on **:4320** behind it; Vite proxies `/api` and
-`/events` to thingd. Open `http://localhost:4319` — the same URL as production,
-so nothing changes between dev and prod. Ctrl-C stops both. Both ports are
-overridable if something else has them (e.g. another tool also defaulting to
-4319): `make serve THINGD_WEB_PORT=4400 THINGD_API_PORT=4401`.
+hot-reload) and thingd's API on **:4320** behind it (built with `-tags modular`, so
+it embeds nothing and Vite serves the UI); Vite proxies `/api` and `/events` to
+thingd. Open `http://localhost:4319` — the same URL as production, so nothing
+changes between dev and prod. Ctrl-C stops both. Both ports are overridable if
+something else has them (e.g. another tool also defaulting to 4319): `make serve
+THINGD_WEB_PORT=4400 THINGD_API_PORT=4401`.
 
 ### Production
 
-`make build` will embed the built SPA into `thingd` so a single binary serves
-the whole app (that embedding lands in a later commit; until then `./bin/thingd`
-is API-only):
+`make build` embeds the built SPA into `thingd` (the default build), so a single
+binary serves the whole app with no external files:
 
 ```
 make build
-./bin/thingd --dir <path>      # http://localhost:4319 (API only for now)
+./bin/thingd --dir <path>      # serves the app on http://localhost:4319
 ```
 
 `--open` opens the browser; `--port N` pins the port; without it thingd falls
-back to the next free port so several trees can serve at once.
+back to the next free port so several trees can serve at once. Because embedding
+is the default, a bare `go build`/`test`/`vet` needs `web/dist`; the `-tags modular`
+build (what `make serve`, `make test`, and `make vet` use) embeds nothing and
+needs no frontend.
 
 ### API
 
