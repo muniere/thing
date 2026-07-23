@@ -28,12 +28,22 @@ export function Detail({ node, allNodes, run, onSelect }: Props) {
   const [linkURL, setLinkURL] = useState("");
   const [linkLabel, setLinkLabel] = useState("");
   const [moveTo, setMoveTo] = useState("");
+  const [editing, setEditing] = useState(false);
 
   const saveTitle = async () => {
     const t = title.trim();
     if (!t) return;
     const res = await run(api.rename(node.ref, t, isEpic ? category : undefined));
-    if (res) onSelect(res.ref);
+    if (res) {
+      setEditing(false);
+      onSelect(res.ref);
+    }
+  };
+
+  const cancelEdit = () => {
+    setTitle(node.title);
+    setCategory(node.category ?? "");
+    setEditing(false);
   };
 
   // Valid move targets: an issue moves under an epic or to orphan; a task moves
@@ -58,10 +68,38 @@ export function Detail({ node, allNodes, run, onSelect }: Props) {
     <div className="detail">
       <div className="crumb">{node.type} · {node.ref}{node.updated ? ` · updated ${node.updated}` : ""}</div>
 
-      <div className="detail-title-row">
-        <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
-        <button type="button" className="btn" onClick={saveTitle}>Save</button>
-      </div>
+      {editing ? (
+        <div className="detail-edit">
+          <input
+            className="input"
+            autoFocus
+            placeholder="title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") saveTitle();
+              else if (e.key === "Escape") cancelEdit();
+            }}
+          />
+          {isEpic && (
+            <input
+              className="input"
+              placeholder="category"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+            />
+          )}
+          <div className="detail-edit-actions">
+            <button type="button" className="btn btn-amber" onClick={saveTitle}>Save</button>
+            <button type="button" className="btn-link" onClick={cancelEdit}>cancel</button>
+          </div>
+        </div>
+      ) : (
+        <div className="detail-title-row">
+          <h2 className="detail-title">{node.title}</h2>
+          <button type="button" className="btn-link" onClick={() => setEditing(true)}>edit</button>
+        </div>
+      )}
 
       <div className="meta">
         <span className="chip-field" data-status={node.status}>
@@ -87,16 +125,7 @@ export function Detail({ node, allNodes, run, onSelect }: Props) {
             {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
         </span>
-        {isEpic && (
-          <input
-            className="input"
-            style={{ maxWidth: "12rem" }}
-            placeholder="category"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            onBlur={saveTitle}
-          />
-        )}
+        {!editing && isEpic && node.category && <span className="cat">{node.category}</span>}
         {(node.tags ?? []).map((t) => <span key={t} className="tag">#{t}</span>)}
       </div>
 
@@ -118,14 +147,16 @@ export function Detail({ node, allNodes, run, onSelect }: Props) {
       )}
 
       <div className="label">links</div>
-      <ul className="links">
-        {(node.links ?? []).map((l) => (
-          <li key={l.url}>
-            <a href={l.url} target="_blank" rel="noreferrer">{l.label || l.url}</a>
-            <button type="button" className="btn-link" onClick={() => run(api.removeLink(node.ref, l.url))}>remove</button>
-          </li>
-        ))}
-      </ul>
+      {(node.links ?? []).length > 0 && (
+        <ul className="links">
+          {(node.links ?? []).map((l) => (
+            <li key={l.url}>
+              <a href={l.url} target="_blank" rel="noreferrer">{l.label || l.url}</a>
+              <button type="button" className="btn-link" onClick={() => run(api.removeLink(node.ref, l.url))}>remove</button>
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="inline-form">
         <input className="input" placeholder="https://…" value={linkURL} onChange={(e) => setLinkURL(e.target.value)} />
         <input className="input" placeholder="label (optional)" value={linkLabel} onChange={(e) => setLinkLabel(e.target.value)} />
