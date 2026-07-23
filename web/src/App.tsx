@@ -7,6 +7,7 @@ import { findNode } from "./util.ts";
 import { Tree } from "./components/Tree.tsx";
 import { FilterBar } from "./components/FilterBar.tsx";
 import { Detail } from "./components/Detail.tsx";
+import { AddForm } from "./components/AddForm.tsx";
 
 // The active node's ref is carried in the URL path (e.g. /epic/issue/task);
 // "/" means nothing active. Refs are slug paths ([a-z0-9-] joined by "/"), so
@@ -20,7 +21,6 @@ export function App() {
   const [activeRef, setActiveRef] = useState<string | null>(() => refFromPath());
   const [filters, setFilters] = useState<Filters>(() => filtersFromQuery(window.location.search));
   const [error, setError] = useState<string | null>(null);
-  const [newEpic, setNewEpic] = useState("");
 
   const reload = useCallback(async () => {
     try {
@@ -77,16 +77,6 @@ export function App() {
   const tags = useMemo(() => collectTags(tree), [tree]);
   const activeNode = activeRef ? findNode(tree, activeRef) : null;
 
-  const addEpic = async () => {
-    const t = newEpic.trim();
-    if (!t) return;
-    const res = await run(api.create("", { title: t }));
-    if (res) {
-      setNewEpic("");
-      setActiveRef(res.ref);
-    }
-  };
-
   return (
     <div className="app">
       <header className="topbar">
@@ -100,14 +90,7 @@ export function App() {
 
         <section className="tree-pane">
           <div className="tree-add">
-            <input
-              className="input"
-              placeholder="new epic title"
-              value={newEpic}
-              onChange={(e) => setNewEpic(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addEpic()}
-            />
-            <button type="button" className="btn btn-amber" onClick={addEpic}>+ Epic</button>
+            <AddForm parent="" noun="Epic" amber run={run} onCreated={activate} />
           </div>
           <Tree nodes={filtered} activeRef={activeRef} onSelect={activate} />
         </section>

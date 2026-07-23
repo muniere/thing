@@ -543,6 +543,39 @@ textarea.input {
   min-width: 8rem;
 }
 
+/* AddForm — a toggle button that expands into this stacked create form
+   (see AddForm.tsx). Used for the epic add (tree pane) and the issue/task add
+   (detail pane). */
+.add-form {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+}
+.add-form-row {
+  display: flex;
+  gap: 0.4rem;
+}
+/* Share the row evenly and let both shrink — .filter-select is width:100% in the
+   sidebar, which would otherwise overflow the form here. */
+.add-form-row > * {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+}
+.add-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.detail-add {
+  margin-top: 0.4rem;
+}
+
 .body-panel {
   background: var(--panel);
   border: 1px solid var(--line);
