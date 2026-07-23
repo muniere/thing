@@ -4,6 +4,7 @@ import { Priority, Status, Type } from "../domain/generated.ts";
 import { api } from "../api.ts";
 import { renderMarkdown } from "../markdown.ts";
 import { flatten } from "../util.ts";
+import { AddForm } from "./AddForm.tsx";
 
 interface Props {
   node: Node;
@@ -27,24 +28,12 @@ export function Detail({ node, allNodes, run, onSelect }: Props) {
   const [linkURL, setLinkURL] = useState("");
   const [linkLabel, setLinkLabel] = useState("");
   const [moveTo, setMoveTo] = useState("");
-  const [childTitle, setChildTitle] = useState("");
 
   const saveTitle = async () => {
     const t = title.trim();
     if (!t) return;
     const res = await run(api.rename(node.ref, t, isEpic ? category : undefined));
     if (res) onSelect(res.ref);
-  };
-
-  const addChild = async () => {
-    const t = childTitle.trim();
-    if (!t) return;
-    // The parent (this node) decides the child's type on the server.
-    const res = await run(api.create(node.ref, { title: t }));
-    if (res) {
-      setChildTitle("");
-      onSelect(res.ref);
-    }
   };
 
   // Valid move targets: an issue moves under an epic or to orphan; a task moves
@@ -155,13 +144,9 @@ export function Detail({ node, allNodes, run, onSelect }: Props) {
       </div>
 
       {node.type !== Type.Task && (
-        <>
-          <div className="label">add {isEpic ? "issue" : "task"}</div>
-          <div className="inline-form">
-            <input className="input" placeholder="title" value={childTitle} onChange={(e) => setChildTitle(e.target.value)} />
-            <button type="button" className="btn" onClick={addChild}>Add</button>
-          </div>
-        </>
+        <div className="detail-add">
+          <AddForm parent={node.ref} noun={isEpic ? "issue" : "task"} run={run} onCreated={onSelect} />
+        </div>
       )}
 
       {!isEpic && (
