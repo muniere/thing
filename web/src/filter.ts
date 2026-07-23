@@ -4,12 +4,13 @@ export interface Filters {
   statuses: Set<string>; // empty = all statuses
   category: string; // "" = all categories (applies to epics)
   tag: string; // "" = all tags
+  query: string; // "" = no text search (matches title/tags/ref)
 }
 
-export const emptyFilters: Filters = { statuses: new Set(), category: "", tag: "" };
+export const emptyFilters: Filters = { statuses: new Set(), category: "", tag: "", query: "" };
 
 export function filtersActive(f: Filters): boolean {
-  return f.statuses.size > 0 || f.category !== "" || f.tag !== "";
+  return f.statuses.size > 0 || f.category !== "" || f.tag !== "" || f.query !== "";
 }
 
 // filtersToQuery / filtersFromQuery round-trip the filters through the URL query
@@ -20,6 +21,7 @@ export function filtersToQuery(f: Filters): string {
   if (f.statuses.size > 0) p.set("status", [...f.statuses].join(","));
   if (f.category !== "") p.set("category", f.category);
   if (f.tag !== "") p.set("tag", f.tag);
+  if (f.query !== "") p.set("q", f.query);
   const s = p.toString();
   return s ? `?${s}` : "";
 }
@@ -31,14 +33,20 @@ export function filtersFromQuery(search: string): Filters {
     statuses: new Set(status ? status.split(",").filter(Boolean) : []),
     category: p.get("category") ?? "",
     tag: p.get("tag") ?? "",
+    query: p.get("q") ?? "",
   };
 }
 
-// selfMatches tests a node's own status and tags against the filters. Category
-// is handled as an epic-level prune in filterTree, not here.
+// selfMatches tests a node's own status, tags, and the text query against the
+// filters (the query matches title/tags/ref). Category is handled as an
+// epic-level prune in filterTree, not here.
 function selfMatches(n: Node, f: Filters): boolean {
   if (f.statuses.size > 0 && !f.statuses.has(n.status)) return false;
   if (f.tag !== "" && !(n.tags ?? []).includes(f.tag)) return false;
+  if (f.query !== "") {
+    const hay = `${n.title} ${(n.tags ?? []).join(" ")} ${n.ref}`.toLowerCase();
+    if (!hay.includes(f.query.toLowerCase())) return false;
+  }
   return true;
 }
 

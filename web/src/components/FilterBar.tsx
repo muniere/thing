@@ -10,8 +10,9 @@ interface Props {
 
 const STATUSES = [Status.Todo, Status.Doing, Status.Done, Status.Paused];
 
-// FilterBar is the left sidebar: status facet toggles plus category and tag
-// pulldowns. Status facets read their dot color from the global data-status map.
+// FilterBar is the left sidebar: a text search plus status facet toggles and
+// category/tag pulldowns. Status facets read their dot color from the global
+// data-status map.
 export function FilterBar({ filters, categories, tags, onChange }: Props) {
   const toggleStatus = (s: string) => {
     const next = new Set(filters.statuses);
@@ -22,6 +23,17 @@ export function FilterBar({ filters, categories, tags, onChange }: Props) {
 
   return (
     <aside className="filter-pane">
+      <div className="filter-group">
+        <span className="filter-heading">Search</span>
+        <input
+          className="input"
+          type="search"
+          placeholder="title, tag, ref…"
+          value={filters.query}
+          onChange={(e) => onChange({ ...filters, query: e.target.value })}
+        />
+      </div>
+
       <div className="filter-group">
         <span className="filter-heading">Status</span>
         {STATUSES.map((s) => (
