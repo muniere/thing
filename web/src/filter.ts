@@ -12,6 +12,28 @@ export function filtersActive(f: Filters): boolean {
   return f.statuses.size > 0 || f.category !== "" || f.tag !== "";
 }
 
+// filtersToQuery / filtersFromQuery round-trip the filters through the URL query
+// string so a filtered view survives a reload and is shareable. Empty facets are
+// omitted, so no filter yields "" (a bare path).
+export function filtersToQuery(f: Filters): string {
+  const p = new URLSearchParams();
+  if (f.statuses.size > 0) p.set("status", [...f.statuses].join(","));
+  if (f.category !== "") p.set("category", f.category);
+  if (f.tag !== "") p.set("tag", f.tag);
+  const s = p.toString();
+  return s ? `?${s}` : "";
+}
+
+export function filtersFromQuery(search: string): Filters {
+  const p = new URLSearchParams(search);
+  const status = p.get("status");
+  return {
+    statuses: new Set(status ? status.split(",").filter(Boolean) : []),
+    category: p.get("category") ?? "",
+    tag: p.get("tag") ?? "",
+  };
+}
+
 // selfMatches tests a node's own status and tags against the filters. Category
 // is handled as an epic-level prune in filterTree, not here.
 function selfMatches(n: Node, f: Filters): boolean {

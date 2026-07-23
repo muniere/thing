@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Node } from "./domain/generated.ts";
 import { api } from "./api.ts";
 import { useLiveReload } from "./live.ts";
-import { collectCategories, collectTags, emptyFilters, filterTree, type Filters } from "./filter.ts";
+import { collectCategories, collectTags, filterTree, filtersFromQuery, filtersToQuery, type Filters } from "./filter.ts";
 import { findNode } from "./util.ts";
 import { Tree } from "./components/Tree.tsx";
 import { FilterBar } from "./components/FilterBar.tsx";
@@ -18,7 +18,7 @@ function refFromPath(): string | null {
 export function App() {
   const [tree, setTree] = useState<Node[]>([]);
   const [activeRef, setActiveRef] = useState<string | null>(() => refFromPath());
-  const [filters, setFilters] = useState<Filters>(emptyFilters);
+  const [filters, setFilters] = useState<Filters>(() => filtersFromQuery(window.location.search));
   const [error, setError] = useState<string | null>(null);
   const [newEpic, setNewEpic] = useState("");
 
@@ -55,17 +55,19 @@ export function App() {
   // and detail fire it when the user picks a node.
   const activate = useCallback((ref: string) => setActiveRef(ref || null), []);
 
-  // Persist the active node's ref in the URL path (/<ref>) so the focused node
-  // survives a reload and is shareable. The query string is preserved, so this
-  // composes with filters/search there. replaceState keeps each change out of the
-  // history stack.
+  // Mirror the view into the URL so it survives a reload and is shareable: the
+  // active node is the path (/<ref>) and the filters are the query string.
+  // replaceState keeps each change out of the history stack.
   useEffect(() => {
-    window.history.replaceState(null, "", `/${activeRef ?? ""}${window.location.search}`);
-  }, [activeRef]);
+    window.history.replaceState(null, "", `/${activeRef ?? ""}${filtersToQuery(filters)}`);
+  }, [activeRef, filters]);
 
-  // Restore the active node from the path on back/forward navigation.
+  // Restore the active node (path) and filters (query) on back/forward.
   useEffect(() => {
-    const onPop = () => setActiveRef(refFromPath());
+    const onPop = () => {
+      setActiveRef(refFromPath());
+      setFilters(filtersFromQuery(window.location.search));
+    };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
