@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc --noEmit && vite build",
+    "postbuild": "node -e \"require('fs').writeFileSync('dist/.gitkeep','')\"",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
