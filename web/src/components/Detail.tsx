@@ -63,119 +63,132 @@ export function Detail({ node, allNodes, run, onSelect }: Props) {
     return [];
   };
 
+  const priority = node.priority ?? "";
+
   return (
     <div className="detail">
-      <div className="detail-head">
-        <span className={`badge ${node.type}`}>{node.type}</span>
-        <code className="slug">{node.ref}</code>
-        {node.updated && <span className="updated">updated {node.updated}</span>}
+      <div className="crumb">{node.type} · {node.ref}{node.updated ? ` · updated ${node.updated}` : ""}</div>
+
+      <div className="detail-title-row">
+        <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
+        <button type="button" className="btn" onClick={saveTitle}>Save</button>
       </div>
 
-      <label className="field">
-        <span>title</span>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} />
-      </label>
-      {isEpic && (
-        <label className="field">
-          <span>category</span>
-          <input value={category} onChange={(e) => setCategory(e.target.value)} />
-        </label>
-      )}
-      <button type="button" onClick={saveTitle}>Save title{isEpic ? " & category" : ""}</button>
-
-      <div className="row2">
-        <label className="field">
-          <span>status</span>
-          <select value={node.status} onChange={(e) => run(api.status(node.ref, e.target.value))}>
+      <div className="meta">
+        <span className="chip-field" data-status={node.status}>
+          <select
+            className="chip status-chip"
+            data-status={node.status}
+            aria-label="status"
+            value={node.status}
+            onChange={(e) => run(api.status(node.ref, e.target.value))}
+          >
             {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
-        </label>
-        <label className="field">
-          <span>priority</span>
-          <select value={node.priority ?? ""} onChange={(e) => run(api.priority(node.ref, e.target.value))}>
-            <option value="" disabled>—</option>
+        </span>
+        <span className={`chip-field ${priority ? "" : "no-fill"}`}>
+          <select
+            className="chip priority-chip"
+            data-priority={priority}
+            aria-label="priority"
+            value={priority}
+            onChange={(e) => run(api.priority(node.ref, e.target.value))}
+          >
+            <option value="" disabled>priority</option>
             {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
-        </label>
+        </span>
+        {isEpic && (
+          <input
+            className="input"
+            style={{ maxWidth: "12rem" }}
+            placeholder="category"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            onBlur={saveTitle}
+          />
+        )}
+        {(node.tags ?? []).map((t) => <span key={t} className="tag">#{t}</span>)}
       </div>
 
-      <section>
-        <div className="section-head">
-          <h3>body</h3>
-          <button type="button" onClick={() => setPreview((p) => !p)}>{preview ? "Edit" : "Preview"}</button>
+      <div className="section-head">
+        <span className="label" style={{ margin: 0 }}>body</span>
+        <button type="button" className="btn-link" onClick={() => setPreview((p) => !p)}>
+          {preview ? "edit" : "preview"}
+        </button>
+      </div>
+      {preview ? (
+        <div className="body-panel markdown" dangerouslySetInnerHTML={{ __html: renderMarkdown(node.body ?? "") }} />
+      ) : (
+        <div className="field">
+          <textarea className="input" value={body} onChange={(e) => setBody(e.target.value)} rows={10} />
+          <div>
+            <button type="button" className="btn btn-amber" onClick={() => run(api.body(node.ref, body))}>Save body</button>
+          </div>
         </div>
-        {preview ? (
-          <div className="markdown" dangerouslySetInnerHTML={{ __html: renderMarkdown(node.body ?? "") }} />
-        ) : (
-          <>
-            <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={10} />
-            <button type="button" onClick={() => run(api.body(node.ref, body))}>Save body</button>
-          </>
-        )}
-      </section>
+      )}
 
-      <section>
-        <h3>links</h3>
-        <ul className="links">
-          {(node.links ?? []).map((l) => (
-            <li key={l.url}>
-              <a href={l.url} target="_blank" rel="noreferrer">{l.label || l.url}</a>
-              <button type="button" onClick={() => run(api.removeLink(node.ref, l.url))}>remove</button>
-            </li>
-          ))}
-        </ul>
-        <div className="addlink">
-          <input placeholder="https://…" value={linkURL} onChange={(e) => setLinkURL(e.target.value)} />
-          <input placeholder="label (optional)" value={linkLabel} onChange={(e) => setLinkLabel(e.target.value)} />
-          <button
-            type="button"
-            onClick={async () => {
-              if (!linkURL.trim()) return;
-              await run(api.addLink(node.ref, linkURL.trim(), linkLabel.trim()));
-              setLinkURL("");
-              setLinkLabel("");
-            }}
-          >
-            Add link
-          </button>
-        </div>
-      </section>
+      <div className="label">links</div>
+      <ul className="links">
+        {(node.links ?? []).map((l) => (
+          <li key={l.url}>
+            <a href={l.url} target="_blank" rel="noreferrer">{l.label || l.url}</a>
+            <button type="button" className="btn-link" onClick={() => run(api.removeLink(node.ref, l.url))}>remove</button>
+          </li>
+        ))}
+      </ul>
+      <div className="inline-form">
+        <input className="input" placeholder="https://…" value={linkURL} onChange={(e) => setLinkURL(e.target.value)} />
+        <input className="input" placeholder="label (optional)" value={linkLabel} onChange={(e) => setLinkLabel(e.target.value)} />
+        <button
+          type="button"
+          className="btn"
+          onClick={async () => {
+            if (!linkURL.trim()) return;
+            await run(api.addLink(node.ref, linkURL.trim(), linkLabel.trim()));
+            setLinkURL("");
+            setLinkLabel("");
+          }}
+        >
+          Add link
+        </button>
+      </div>
 
       {node.type !== Type.Task && (
-        <section>
-          <h3>add {isEpic ? "issue" : "task"}</h3>
-          <div className="addlink">
-            <input placeholder="title" value={childTitle} onChange={(e) => setChildTitle(e.target.value)} />
-            <button type="button" onClick={addChild}>Add</button>
+        <>
+          <div className="label">add {isEpic ? "issue" : "task"}</div>
+          <div className="inline-form">
+            <input className="input" placeholder="title" value={childTitle} onChange={(e) => setChildTitle(e.target.value)} />
+            <button type="button" className="btn" onClick={addChild}>Add</button>
           </div>
-        </section>
+        </>
       )}
 
       {!isEpic && (
-        <section>
-          <h3>move</h3>
-          <div className="addlink">
-            <select value={moveTo} onChange={(e) => setMoveTo(e.target.value)}>
+        <>
+          <div className="label">move</div>
+          <div className="inline-form">
+            <select className="filter-select" style={{ maxWidth: "16rem" }} value={moveTo} onChange={(e) => setMoveTo(e.target.value)}>
               <option value="">choose new parent…</option>
               {moveTargets().map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
-            <button type="button" disabled={!moveTo} onClick={() => run(api.move(node.ref, moveTo))}>Move</button>
+            <button type="button" className="btn" disabled={!moveTo} onClick={() => run(api.move(node.ref, moveTo))}>Move</button>
           </div>
-        </section>
+        </>
       )}
 
-      <section className="danger">
-        <button
-          type="button"
-          onClick={async () => {
-            if (!confirm(`Delete ${node.type} "${node.title}"${node.type !== "task" ? " and its subtree" : ""}?`)) return;
-            await run(api.remove(node.ref));
-            onSelect("");
-          }}
-        >
-          Delete {node.type}
-        </button>
-      </section>
+      <div className="label">danger</div>
+      <button
+        type="button"
+        className="btn btn-danger"
+        onClick={async () => {
+          if (!confirm(`Delete ${node.type} "${node.title}"${node.type !== "task" ? " and its subtree" : ""}?`)) return;
+          await run(api.remove(node.ref));
+          onSelect("");
+        }}
+      >
+        Delete {node.type}
+      </button>
     </div>
   );
 }
