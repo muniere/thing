@@ -1,14 +1,14 @@
 # thing web frontend
 
-The React + Vite + TypeScript SPA served by `thingd`. There is no Go here; the
-frontend talks to thingd's ref-based JSON API and consumes the hand-written
-types in `src/domain/generated.ts`.
+The React + TypeScript SPA served by `thingd`. There is no Go here; the frontend
+talks to thingd's ref-based JSON API and consumes the hand-written types in
+`src/domain/generated.ts`.
 
-Vite is only the bundler — it builds `dist/`, which `thingd` embeds. There is no
-Vite dev server: the dev loop runs the one embedded binary under
-[air](https://github.com/air-verse/air), which rebuilds it on any change, and the
-browser reloads itself over SSE (see `src/live.ts`). So the same binary serves
-the app in dev and prod.
+[esbuild](https://esbuild.github.io/) bundles the SPA into `dist/` (see
+`build.mjs`), which `thingd` embeds. There is no dev server: the dev loop runs
+the one embedded binary under [air](https://github.com/air-verse/air), which
+rebuilds it on any change, and the browser reloads itself over SSE (see
+`src/live.ts`). So the same binary serves the app in dev and prod.
 
 ## Develop
 
@@ -28,6 +28,10 @@ live-reloads over SSE when the data changes from any source (web, CLI, editor).
 npm run build       # type-check then build to dist/
 npm run typecheck   # tsc --noEmit
 ```
+
+Install deps with a plain `npm install` / `npm ci`. Do **not** pass
+`--omit=optional` / `--no-optional`: esbuild's platform binary ships as an
+optionalDependency, and the build fails without it.
 
 ## Production
 

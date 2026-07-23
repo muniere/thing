@@ -10,8 +10,8 @@ build:
 	go build -o bin/thingd ./cmd/thingd
 
 # web/dist holds the embedded SPA, rebuilt only when a web source is newer than
-# it (make skips the recipe otherwise), so a Go-only change doesn't run vite.
-WEB_SRC := $(shell find web/src -type f 2>/dev/null) web/index.html web/package.json web/tsconfig.json web/vite.config.ts
+# it (make skips the recipe otherwise), so a Go-only change doesn't rebundle.
+WEB_SRC := $(shell find web/src -type f 2>/dev/null) web/index.html web/package.json web/tsconfig.json web/build.mjs
 web/dist/index.html: $(WEB_SRC)
 	cd web && npm run build
 
