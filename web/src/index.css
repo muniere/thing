@@ -609,8 +609,53 @@ textarea.input {
   align-items: center;
   gap: 0.6rem;
 }
-.detail-add {
-  margin-top: 0.4rem;
+/* Child list in the detail pane (styled after tray's): an epic's issues / an
+   issue's tasks, each a clickable card with a status-colored left rail that
+   activates the child. */
+.child-list {
+  list-style: none;
+  margin: 0.2rem 0 0.6rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.child-row {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  text-align: left;
+  background: var(--panel);
+  border: 0;
+  border-radius: 9px;
+  padding: 0.5rem 0.7rem 0.5rem 0.85rem;
+  cursor: pointer;
+  color: var(--ink);
+}
+/* status-colored rail — --c comes from the row's data-status via the token map */
+.child-row::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--c, var(--todo));
+}
+.child-row:hover {
+  background: var(--panel-2);
+}
+.child-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.88rem;
+  font-weight: 500;
 }
 
 .body-panel {
