@@ -8,9 +8,16 @@ import { Tree } from "./components/Tree.tsx";
 import { FilterBar } from "./components/FilterBar.tsx";
 import { Detail } from "./components/Detail.tsx";
 
+// The active node's ref is carried in the URL path (e.g. /epic/issue/task);
+// "/" means nothing active. Refs are slug paths ([a-z0-9-] joined by "/"), so
+// they are URL-safe as-is. Filters and search live in the query string instead.
+function refFromPath(): string | null {
+  return window.location.pathname.replace(/^\/+/, "").replace(/\/+$/, "") || null;
+}
+
 export function App() {
   const [tree, setTree] = useState<Node[]>([]);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [activeRef, setActiveRef] = useState<string | null>(() => refFromPath());
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [error, setError] = useState<string | null>(null);
   const [newEpic, setNewEpic] = useState("");
@@ -44,12 +51,29 @@ export function App() {
     [reload],
   );
 
-  const select = useCallback((ref: string) => setSelected(ref || null), []);
+  // activate makes a node the focused one (or clears it when given ""); the tree
+  // and detail fire it when the user picks a node.
+  const activate = useCallback((ref: string) => setActiveRef(ref || null), []);
+
+  // Persist the active node's ref in the URL path (/<ref>) so the focused node
+  // survives a reload and is shareable. The query string is preserved, so this
+  // composes with filters/search there. replaceState keeps each change out of the
+  // history stack.
+  useEffect(() => {
+    window.history.replaceState(null, "", `/${activeRef ?? ""}${window.location.search}`);
+  }, [activeRef]);
+
+  // Restore the active node from the path on back/forward navigation.
+  useEffect(() => {
+    const onPop = () => setActiveRef(refFromPath());
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   const filtered = useMemo(() => filterTree(tree, filters), [tree, filters]);
   const categories = useMemo(() => collectCategories(tree), [tree]);
   const tags = useMemo(() => collectTags(tree), [tree]);
-  const selectedNode = selected ? findNode(tree, selected) : null;
+  const activeNode = activeRef ? findNode(tree, activeRef) : null;
 
   const addEpic = async () => {
     const t = newEpic.trim();
@@ -57,7 +81,7 @@ export function App() {
     const res = await run(api.create("", { title: t }));
     if (res) {
       setNewEpic("");
-      setSelected(res.ref);
+      setActiveRef(res.ref);
     }
   };
 
@@ -83,12 +107,12 @@ export function App() {
             />
             <button type="button" className="btn btn-amber" onClick={addEpic}>+ Epic</button>
           </div>
-          <Tree nodes={filtered} selected={selected} onSelect={select} />
+          <Tree nodes={filtered} activeRef={activeRef} onSelect={activate} />
         </section>
 
         <section className="detail-pane">
-          {selectedNode ? (
-            <Detail key={selectedNode.ref} node={selectedNode} allNodes={tree} run={run} onSelect={select} />
+          {activeNode ? (
+            <Detail key={activeNode.ref} node={activeNode} allNodes={tree} run={run} onSelect={activate} />
           ) : (
             <p className="empty">Select a node to view and edit it.</p>
           )}
