@@ -11,9 +11,9 @@ tmp_dir = "tmp"
 
 [build]
 # `make bundle` rebuilds the SPA only when a web source changed, then relinks the
-# binary, so a Go-only edit skips `vite build` (see the Makefile). air has one
-# build command and can't branch on the changed file, so the skipping lives in
-# make's timestamp check rather than here.
+# binary, so a Go-only edit skips the esbuild bundle (see the Makefile). air has
+# one build command and can't branch on the changed file, so the skipping lives
+# in make's timestamp check rather than here.
 cmd = "make bundle"
 bin = "./tmp/thingd"
 # json covers package.json / tsconfig.json so a dependency or config edit rebuilds

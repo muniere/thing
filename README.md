@@ -31,7 +31,7 @@ Shell completions live under [`completions/`](completions/): source
 `thingd` serves the tree as a local web app: a React SPA (tree pane, full-edit
 detail pane, status/category/tag filters) over a JSON API on the same Go data
 layer as the CLI, so the two never disagree. The frontend lives in
-[`web/`](web/) (React + Vite + TypeScript; types hand-written in
+[`web/`](web/) (React + TypeScript, bundled with esbuild; types hand-written in
 `web/src/domain/generated.ts`).
 
 ### Development
