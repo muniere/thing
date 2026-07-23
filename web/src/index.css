@@ -271,10 +271,14 @@ textarea.input {
   width: 100%;
   appearance: none;
   -webkit-appearance: none;
-  background: var(--panel);
+  /* custom caret so the select reads as an interactive control (appearance:none
+     drops the native arrow). */
+  background: var(--panel)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%237a6e5a' stroke-width='1.5'/%3E%3C/svg%3E")
+    no-repeat right 0.65rem center;
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 0.4rem 0.6rem;
+  padding: 0.4rem 1.7rem 0.4rem 0.6rem;
   font-size: 0.82rem;
   color: var(--ink);
   cursor: pointer;
@@ -437,11 +441,44 @@ textarea.input {
 .detail-title-row {
   display: flex;
   gap: 0.5rem;
-  align-items: flex-start;
+  align-items: center;
 }
-.detail-title-row .input {
+.detail-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
   font-size: 1.15rem;
   font-weight: 600;
+  line-height: 1.3;
+}
+/* Edit mode (toggled from the title's "edit" link): the title, plus category for
+   an epic, become inputs above a Save/cancel row. Status/priority stay direct. */
+.detail-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.detail-edit .input {
+  font-size: 1rem;
+}
+.detail-edit-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+/* Read-only category, shown as a pill in the meta row (edited via the title's
+   edit mode, not inline). */
+.cat {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-2);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
 }
 .meta {
   display: flex;
