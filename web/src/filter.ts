@@ -77,6 +77,21 @@ export function collectCategories(nodes: Node[]): string[] {
   return [...set].sort();
 }
 
+// collectStatusCounts tallies how many nodes (at any depth) carry each status,
+// for the counts shown on the status filter facets. Parent statuses are
+// rolled-up, matching what the status filter tests against.
+export function collectStatusCounts(nodes: Node[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  const walk = (ns: Node[]) => {
+    for (const n of ns) {
+      counts[n.status] = (counts[n.status] ?? 0) + 1;
+      walk(n.children ?? []);
+    }
+  };
+  walk(nodes);
+  return counts;
+}
+
 export function collectTags(nodes: Node[]): string[] {
   const set = new Set<string>();
   const walk = (ns: Node[]) => {

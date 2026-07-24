@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Node } from "./domain/generated.ts";
 import { api } from "./api.ts";
 import { useLiveReload } from "./live.ts";
-import { collectCategories, collectTags, filterTree, filtersFromQuery, filtersToQuery, type Filters } from "./filter.ts";
+import { collectCategories, collectStatusCounts, collectTags, filterTree, filtersFromQuery, filtersToQuery, type Filters } from "./filter.ts";
 import { findNode } from "./util.ts";
 import { Tree } from "./components/Tree.tsx";
 import { FilterBar } from "./components/FilterBar.tsx";
@@ -75,6 +75,7 @@ export function App() {
   const filtered = useMemo(() => filterTree(tree, filters), [tree, filters]);
   const categories = useMemo(() => collectCategories(tree), [tree]);
   const tags = useMemo(() => collectTags(tree), [tree]);
+  const statusCounts = useMemo(() => collectStatusCounts(tree), [tree]);
   const activeNode = activeRef ? findNode(tree, activeRef) : null;
 
   return (
@@ -86,7 +87,7 @@ export function App() {
       {error && <div className="error" onClick={() => setError(null)}>{error}</div>}
 
       <div className="split">
-        <FilterBar filters={filters} categories={categories} tags={tags} onChange={setFilters} />
+        <FilterBar filters={filters} categories={categories} tags={tags} statusCounts={statusCounts} onChange={setFilters} />
 
         <section className="tree-pane">
           <div className="tree-add">

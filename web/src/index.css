@@ -267,6 +267,13 @@ textarea.input {
 .facet .status-badge {
   flex: 1;
 }
+/* count of nodes in each status, pushed to the right of the facet */
+.facet-count {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--ink-3);
+}
 .filter-select {
   width: 100%;
   appearance: none;
