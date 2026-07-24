@@ -2,15 +2,22 @@ import type { Node } from "./domain/generated.ts";
 
 export interface Filters {
   statuses: Set<string>; // empty = all statuses
+  priorities: Set<string>; // empty = all priorities
   category: string; // "" = all categories (applies to epics)
   tag: string; // "" = all tags
   query: string; // "" = no text search (matches title/tags/ref)
 }
 
-export const emptyFilters: Filters = { statuses: new Set(), category: "", tag: "", query: "" };
+export const emptyFilters: Filters = {
+  statuses: new Set(),
+  priorities: new Set(),
+  category: "",
+  tag: "",
+  query: "",
+};
 
 export function filtersActive(f: Filters): boolean {
-  return f.statuses.size > 0 || f.category !== "" || f.tag !== "" || f.query !== "";
+  return f.statuses.size > 0 || f.priorities.size > 0 || f.category !== "" || f.tag !== "" || f.query !== "";
 }
 
 // filtersToQuery / filtersFromQuery round-trip the filters through the URL query
@@ -19,6 +26,7 @@ export function filtersActive(f: Filters): boolean {
 export function filtersToQuery(f: Filters): string {
   const p = new URLSearchParams();
   if (f.statuses.size > 0) p.set("status", [...f.statuses].join(","));
+  if (f.priorities.size > 0) p.set("priority", [...f.priorities].join(","));
   if (f.category !== "") p.set("category", f.category);
   if (f.tag !== "") p.set("tag", f.tag);
   if (f.query !== "") p.set("q", f.query);
@@ -29,8 +37,10 @@ export function filtersToQuery(f: Filters): string {
 export function filtersFromQuery(search: string): Filters {
   const p = new URLSearchParams(search);
   const status = p.get("status");
+  const priority = p.get("priority");
   return {
     statuses: new Set(status ? status.split(",").filter(Boolean) : []),
+    priorities: new Set(priority ? priority.split(",").filter(Boolean) : []),
     category: p.get("category") ?? "",
     tag: p.get("tag") ?? "",
     query: p.get("q") ?? "",
@@ -42,6 +52,7 @@ export function filtersFromQuery(search: string): Filters {
 // epic-level prune in filterTree, not here.
 function selfMatches(n: Node, f: Filters): boolean {
   if (f.statuses.size > 0 && !f.statuses.has(n.status)) return false;
+  if (f.priorities.size > 0 && !f.priorities.has(n.priority ?? "")) return false;
   if (f.tag !== "" && !(n.tags ?? []).includes(f.tag)) return false;
   if (f.query !== "") {
     const hay = `${n.title} ${(n.tags ?? []).join(" ")} ${n.ref}`.toLowerCase();
@@ -85,6 +96,20 @@ export function collectStatusCounts(nodes: Node[]): Record<string, number> {
   const walk = (ns: Node[]) => {
     for (const n of ns) {
       counts[n.status] = (counts[n.status] ?? 0) + 1;
+      walk(n.children ?? []);
+    }
+  };
+  walk(nodes);
+  return counts;
+}
+
+// collectPriorityCounts tallies nodes by priority (only those that have one),
+// for the counts on the priority filter facets.
+export function collectPriorityCounts(nodes: Node[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  const walk = (ns: Node[]) => {
+    for (const n of ns) {
+      if (n.priority) counts[n.priority] = (counts[n.priority] ?? 0) + 1;
       walk(n.children ?? []);
     }
   };

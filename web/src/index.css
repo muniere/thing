@@ -274,6 +274,19 @@ textarea.input {
   font-size: 0.7rem;
   color: var(--ink-3);
 }
+/* priority facet label — mono, colored by data-priority (mirrors .prio) */
+.prio-badge {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-2);
+}
+.prio-badge[data-priority="high"] { color: var(--high); }
+.prio-badge[data-priority="medium"] { color: var(--amber); }
+.prio-badge[data-priority="low"] { color: var(--ink-3); }
 .filter-select {
   width: 100%;
   appearance: none;
