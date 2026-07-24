@@ -4,7 +4,7 @@ import { api } from "./api.ts";
 import { useLiveReload } from "./live.ts";
 import { collectCategories, collectPriorityCounts, collectStatusCounts, collectTags, filterTree, filtersActive, filtersFromQuery, filtersToQuery, type Filters } from "./filter.ts";
 import { findNode } from "./util.ts";
-import { useTreeFold } from "./tree.ts";
+import { useTreeFold, useTreeNav } from "./tree.ts";
 import { Tree } from "./components/Tree.tsx";
 import { FilterBar } from "./components/FilterBar.tsx";
 import { Detail } from "./components/Detail.tsx";
@@ -80,6 +80,14 @@ export function App() {
   const priorityCounts = useMemo(() => collectPriorityCounts(tree), [tree]);
   const activeNode = activeRef ? findNode(tree, activeRef) : null;
   const fold = useTreeFold(tree, filtersActive(filters), activeRef);
+  useTreeNav(filtered, fold, activeRef, activate);
+
+  // Keep the active row on screen: when the selection moves (via keyboard nav
+  // especially), scroll the least amount needed to reveal it.
+  useEffect(() => {
+    if (!activeRef) return;
+    document.querySelector(".tree-pane .row.selected")?.scrollIntoView({ block: "nearest" });
+  }, [activeRef]);
 
   return (
     <div className="app">
