@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Node } from "./domain/generated.ts";
 import { api } from "./api.ts";
 import { useLiveReload } from "./live.ts";
-import { collectCategories, collectPriorityCounts, collectStatusCounts, collectTags, filterTree, filtersFromQuery, filtersToQuery, type Filters } from "./filter.ts";
+import { collectCategories, collectPriorityCounts, collectStatusCounts, collectTags, filterTree, filtersActive, filtersFromQuery, filtersToQuery, type Filters } from "./filter.ts";
 import { findNode } from "./util.ts";
+import { useTreeFold } from "./tree.ts";
 import { Tree } from "./components/Tree.tsx";
 import { FilterBar } from "./components/FilterBar.tsx";
 import { Detail } from "./components/Detail.tsx";
@@ -78,6 +79,7 @@ export function App() {
   const statusCounts = useMemo(() => collectStatusCounts(tree), [tree]);
   const priorityCounts = useMemo(() => collectPriorityCounts(tree), [tree]);
   const activeNode = activeRef ? findNode(tree, activeRef) : null;
+  const fold = useTreeFold(tree, filtersActive(filters), activeRef);
 
   return (
     <div className="app">
@@ -101,7 +103,7 @@ export function App() {
         />
 
         <section className="tree-pane">
-          <Tree nodes={filtered} activeRef={activeRef} onSelect={activate} />
+          <Tree nodes={filtered} activeRef={activeRef} onSelect={activate} expanded={fold.expanded} onToggle={fold.toggle} />
         </section>
 
         <section className="detail-pane">
