@@ -164,7 +164,15 @@ export function Detail({ node, allNodes, run, onSelect }: Props) {
               ))}
             </ul>
           )}
-          <AddForm parent={node.ref} noun={isEpic ? "issue" : "task"} run={run} onCreated={onSelect} />
+          <div className="child-add">
+            <AddForm
+              parent={node.ref}
+              noun={isEpic ? "issue" : "task"}
+              label={`+ Add a new ${isEpic ? "issue" : "task"}`}
+              run={run}
+              onCreated={onSelect}
+            />
+          </div>
         </>
       )}
 

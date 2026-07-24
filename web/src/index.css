@@ -684,6 +684,11 @@ textarea.input {
   font-size: 0.88rem;
   font-weight: 500;
 }
+/* the collapsed +issue/+task button spans the child list's width, left-aligned */
+.child-add > .btn {
+  width: 100%;
+  text-align: left;
+}
 
 .body-panel {
   background: var(--panel);
