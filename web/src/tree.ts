@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Node } from "./domain/generated.ts";
 
 // ancestorRefs("epic/issue/task") => ["epic", "epic/issue"]. A ref is a slug
@@ -75,4 +75,106 @@ export function useTreeFold(tree: Node[], filtersActive: boolean, activeRef: str
   }, []);
 
   return { expanded, toggle };
+}
+
+const NAV_KEYS = new Set([
+  "j", "k", "h", "l", "g", "G", "Enter", "ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight",
+]);
+
+// A keystroke inside a text field or select is left to that field, not swallowed
+// as navigation.
+function inFormField(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  if (!el) return false;
+  return el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable;
+}
+
+// parentRef("epic/issue/task") => "epic/issue"; "" for a top-level node.
+function parentRef(ref: string): string {
+  const i = ref.lastIndexOf("/");
+  return i < 0 ? "" : ref.slice(0, i);
+}
+
+// useTreeNav installs vim/arrow keyboard navigation over the visible rows.
+// j/k (and Down/Up) move the selection; g/G jump to the first/last row; h/l (and
+// Left/Right) fold, unfold, or step to the parent/first child. Moving the cursor
+// activates the row, keeping the detail pane in sync. It ignores keystrokes with a
+// modifier or while a form field is focused.
+export function useTreeNav(
+  filtered: Node[],
+  fold: TreeFold,
+  activeRef: string | null,
+  activate: (ref: string) => void,
+): void {
+  // The refs the keyboard can reach, in visual order: a node is present when
+  // visible (it survived the filter prune) and its children follow only when it
+  // is expanded, mirroring what the tree renders.
+  const rows = useMemo(() => {
+    const out: { ref: string; hasChildren: boolean }[] = [];
+    const walk = (nodes: Node[]) => {
+      for (const n of nodes) {
+        const kids = n.children ?? [];
+        out.push({ ref: n.ref, hasChildren: kids.length > 0 });
+        if (kids.length > 0 && fold.expanded(n.ref)) walk(kids);
+      }
+    };
+    walk(filtered);
+    return out;
+  }, [filtered, fold.expanded]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || inFormField(e.target)) return;
+      if (!NAV_KEYS.has(e.key)) return;
+      if (rows.length === 0) return;
+
+      const i = rows.findIndex((r) => r.ref === activeRef);
+      if (i < 0) {
+        activate(rows[0].ref);
+        e.preventDefault();
+        return;
+      }
+      const cur = rows[i];
+
+      switch (e.key) {
+        case "j":
+        case "ArrowDown":
+          activate(rows[Math.min(i + 1, rows.length - 1)].ref);
+          break;
+        case "k":
+        case "ArrowUp":
+          activate(rows[Math.max(i - 1, 0)].ref);
+          break;
+        case "g":
+          activate(rows[0].ref);
+          break;
+        case "G":
+          activate(rows[rows.length - 1].ref);
+          break;
+        case "Enter":
+          activate(cur.ref);
+          break;
+        case "h":
+        case "ArrowLeft":
+          if (cur.hasChildren && fold.expanded(cur.ref)) {
+            fold.toggle(cur.ref);
+          } else {
+            const p = parentRef(cur.ref);
+            if (p && rows.some((r) => r.ref === p)) activate(p);
+          }
+          break;
+        case "l":
+        case "ArrowRight":
+          if (cur.hasChildren && !fold.expanded(cur.ref)) {
+            fold.toggle(cur.ref);
+          } else if (cur.hasChildren) {
+            activate(rows[Math.min(i + 1, rows.length - 1)].ref);
+          }
+          break;
+      }
+      e.preventDefault();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [rows, activeRef, activate, fold.expanded, fold.toggle]);
 }
