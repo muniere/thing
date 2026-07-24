@@ -192,11 +192,14 @@ textarea.input {
   border-color: transparent;
 }
 .btn-danger {
-  color: var(--high);
-  border-color: color-mix(in srgb, var(--high) 55%, var(--line));
+  background: var(--high);
+  border-color: transparent;
+  color: var(--bg);
+  font-weight: 600;
 }
 .btn-danger:hover {
-  border-color: var(--high);
+  filter: brightness(1.08);
+  border-color: transparent;
 }
 .btn-link {
   background: none;
@@ -354,13 +357,20 @@ textarea.input {
 }
 
 /* ---- tree pane ---- */
-.tree-add {
-  display: flex;
-  gap: 0.4rem;
-  margin-bottom: 1.2rem;
+/* +Epic lives in the top bar as the global "new" action; its form drops down
+   from the button rather than expanding inline. */
+.topbar-add {
+  position: relative;
+  margin-left: auto;
 }
-.tree-add .input {
-  font-size: 0.82rem;
+.topbar-add .add-form {
+  position: absolute;
+  top: calc(100% + 0.6rem);
+  right: 0;
+  width: 22rem;
+  z-index: 30;
+  background: var(--panel);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
 }
 .group-label {
   font-family: var(--mono);
@@ -676,6 +686,11 @@ textarea.input {
   white-space: nowrap;
   font-size: 0.88rem;
   font-weight: 500;
+}
+/* the collapsed +issue/+task button spans the child list's width, left-aligned */
+.child-add > .btn {
+  width: 100%;
+  text-align: left;
 }
 
 .body-panel {

@@ -83,6 +83,9 @@ export function App() {
     <div className="app">
       <header className="topbar">
         <span className="brand"><span className="dot" />thing</span>
+        <div className="topbar-add">
+          <AddForm parent="" noun="Epic" amber run={run} onCreated={activate} />
+        </div>
       </header>
 
       {error && <div className="error" onClick={() => setError(null)}>{error}</div>}
@@ -98,9 +101,6 @@ export function App() {
         />
 
         <section className="tree-pane">
-          <div className="tree-add">
-            <AddForm parent="" noun="Epic" amber run={run} onCreated={activate} />
-          </div>
           <Tree nodes={filtered} activeRef={activeRef} onSelect={activate} />
         </section>
 

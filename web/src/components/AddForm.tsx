@@ -6,8 +6,11 @@ import type { CreateInput } from "../api.ts";
 interface Props {
   // The parent ref the new node is created under; "" creates a top-level epic.
   parent: string;
-  // The word shown on the toggle button and in the title placeholder.
+  // The word used in the title placeholder ("<noun> title") and, by default, the
+  // toggle button ("+ <noun>").
   noun: string;
+  // Overrides the collapsed toggle's text (default "+ <noun>").
+  label?: string;
   // Style the toggle as the primary (amber) button — used for the epic add.
   amber?: boolean;
   run: <T>(p: Promise<T>) => Promise<T | undefined>;
@@ -21,7 +24,7 @@ const PRIORITIES = [Priority.High, Priority.Medium, Priority.Low];
 // top-level epic (parent === ""), matching the server, which rejects a category
 // on anything else. Every field but the title is optional; on success the form
 // collapses and the new node is activated.
-export function AddForm({ parent, noun, amber, run, onCreated }: Props) {
+export function AddForm({ parent, noun, label, amber, run, onCreated }: Props) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState("");
@@ -55,7 +58,7 @@ export function AddForm({ parent, noun, amber, run, onCreated }: Props) {
   if (!open) {
     return (
       <button type="button" className={amber ? "btn btn-amber" : "btn"} onClick={() => setOpen(true)}>
-        + {noun}
+        {label ?? `+ ${noun}`}
       </button>
     );
   }
