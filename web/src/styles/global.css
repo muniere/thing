@@ -1,0 +1,26 @@
+/* Truly global rules: the box-sizing reset, the document shell, and the shared
+   form-element defaults. Everything component-specific lives in a co-located
+   *.module.css instead. */
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  height: 100%;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px / 1.55 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* form elements don't inherit font/color by default; make them match the page */
+input,
+textarea,
+select,
+button {
+  font: inherit;
+  color: var(--ink);
+}

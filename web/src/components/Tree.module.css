@@ -1,0 +1,147 @@
+/* The tree pane: category groups of status-railed epic cards, each holding a
+   fold-aware outline of rows. Status accents come from the global [data-status]
+   → --c map; the status dot and priority label are their own badge components. */
+.tree {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.tree ul {
+  list-style: none;
+  margin: 0;
+  padding-left: 0.9rem;
+}
+
+.groupLabel {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  color: var(--ink-3);
+  padding: 0 0.5rem;
+  margin: 2.4rem 0 0.55rem;
+}
+.groupLabel:first-child {
+  margin-top: 0;
+}
+
+.epicCard {
+  position: relative;
+  overflow: hidden;
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 0.4rem 0.5rem 0.55rem;
+  margin-bottom: 0.8rem;
+}
+.epicCard:not([data-status="todo"]) {
+  background: color-mix(in srgb, var(--c) 6%, var(--panel));
+}
+.epicCard::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--c);
+}
+
+.rowWrap {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+}
+.caret {
+  flex: none;
+  width: 1.3rem;
+  height: 1.3rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.caret::before {
+  content: "\25BE"; /* ▾ expanded */
+  font-size: 1.1rem;
+  line-height: 1;
+}
+.caret[data-open="false"]::before {
+  content: "\25B8"; /* ▸ collapsed */
+}
+.caret:hover {
+  color: var(--ink);
+}
+.caretSpacer {
+  flex: none;
+  width: 1.3rem;
+}
+
+.row {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  background: none;
+  border: 0;
+  color: var(--ink);
+  text-align: left;
+  padding: 0.35rem 0.5rem;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.row:hover {
+  background: var(--panel-2);
+}
+.row[data-selected] {
+  background: color-mix(in srgb, var(--c) 16%, var(--panel));
+  box-shadow: inset 2px 0 0 var(--c);
+}
+.title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 550;
+  font-size: 0.9rem;
+}
+.row[data-kind="epic"] .title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  color: var(--ink-2);
+}
+.row[data-kind="task"] .title {
+  font-weight: 450;
+  color: var(--ink-2);
+}
+
+/* child count on a tree row (an epic's issues / an issue's tasks) */
+.count {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  color: var(--ink-3);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.02rem 0.4rem;
+}
+.tag {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  color: var(--ink-3);
+}
+
+.empty {
+  color: var(--ink-3);
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  padding: 2rem 0.2rem;
+}

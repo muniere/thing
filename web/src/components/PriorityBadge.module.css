@@ -1,0 +1,21 @@
+/* priority: quiet inline mono text, colored by level. Colors are keyed off the
+   data-priority attribute so they are self-contained here (unlike status, whose
+   palette is a shared global token). */
+.priority {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--ink-3);
+  flex: none;
+  white-space: nowrap;
+}
+.priority[data-priority="high"] { color: var(--high); }
+.priority[data-priority="medium"] { color: var(--amber); }
+.priority[data-priority="low"] { color: var(--ink-3); }
+
+/* filter facet: grow to fill the row, quieter mono to match the facet label */
+.fill {
+  flex: 1;
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+}

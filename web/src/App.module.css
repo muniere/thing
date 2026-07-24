@@ -1,0 +1,91 @@
+/* The application shell: the top bar, the error strip, and the 3-pane split
+   (filter sidebar · tree · detail). The filter sidebar styles itself (see
+   FilterBar.module.css); this owns the tree/detail pane wrappers. */
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.topbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 0.8rem 1.5rem;
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: 0.01em;
+}
+.dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--amber);
+  box-shadow: 0 0 9px var(--amber);
+}
+
+/* +Epic lives in the top bar as the global "new" action; the wrapper anchors its
+   drop-down form (AddForm's floating variant positions the form itself). */
+.topbarAdd {
+  position: relative;
+  margin-left: auto;
+}
+
+.error {
+  flex: none;
+  padding: 0.5rem 1.5rem;
+  background: color-mix(in srgb, var(--high) 22%, var(--panel));
+  border-bottom: 1px solid var(--high);
+  color: var(--ink);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.split {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+.treePane {
+  flex: none;
+  width: 40%;
+  min-width: 16rem;
+  overflow-y: auto;
+  padding: 1.4rem 1.2rem 3rem;
+  border-right: 1px solid var(--line);
+}
+.detailPane {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 1.8rem 2rem 3rem;
+}
+
+.empty {
+  color: var(--ink-3);
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  padding: 2rem 0.2rem;
+}
+
+@media (max-width: 820px) {
+  .split {
+    flex-direction: column;
+  }
+  .treePane {
+    width: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+}

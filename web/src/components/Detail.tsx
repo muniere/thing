@@ -5,6 +5,8 @@ import { api } from "../api.ts";
 import { renderMarkdown } from "../markdown.ts";
 import { flatten } from "../util.ts";
 import { AddForm } from "./AddForm.tsx";
+import { PriorityBadge } from "./PriorityBadge.tsx";
+import s from "./Detail.module.css";
 
 interface Props {
   node: Node;
@@ -66,13 +68,13 @@ export function Detail({ node, allNodes, run, onSelect }: Props) {
   const children = node.children ?? [];
 
   return (
-    <div className="detail">
-      <div className="crumb">{node.type} · {node.ref}{node.updated ? ` · updated ${node.updated}` : ""}</div>
+    <div className={s.detail}>
+      <div className={s.crumb}>{node.type} · {node.ref}{node.updated ? ` · updated ${node.updated}` : ""}</div>
 
       {editing ? (
-        <div className="detail-edit">
+        <div className={s.edit}>
           <input
-            className="input"
+            className={s.input}
             autoFocus
             placeholder="title"
             value={title}
@@ -84,39 +86,39 @@ export function Detail({ node, allNodes, run, onSelect }: Props) {
           />
           {isEpic && (
             <input
-              className="input"
+              className={s.input}
               placeholder="category"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
             />
           )}
-          <div className="detail-edit-actions">
-            <button type="button" className="btn btn-amber" onClick={saveTitle}>Save</button>
-            <button type="button" className="btn-link" onClick={cancelEdit}>cancel</button>
+          <div className={s.editActions}>
+            <button type="button" className={`${s.btn} ${s.btnAmber}`} onClick={saveTitle}>Save</button>
+            <button type="button" className={s.btnLink} onClick={cancelEdit}>cancel</button>
           </div>
         </div>
       ) : (
-        <div className="detail-title-row">
-          <h2 className="detail-title">{node.title}</h2>
-          <button type="button" className="btn-link" onClick={() => setEditing(true)}>edit</button>
+        <div className={s.titleRow}>
+          <h2 className={s.title}>{node.title}</h2>
+          <button type="button" className={s.btnLink} onClick={() => setEditing(true)}>edit</button>
         </div>
       )}
 
-      <div className="meta">
-        <span className="chip-field" data-status={node.status}>
+      <div className={s.meta}>
+        <span className={s.chipField} data-status={node.status}>
           <select
-            className="chip status-chip"
+            className={`${s.chip} ${s.statusChip}`}
             data-status={node.status}
             aria-label="status"
             value={node.status}
             onChange={(e) => run(api.status(node.ref, e.target.value))}
           >
-            {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+            {STATUSES.map((st) => <option key={st} value={st}>{st}</option>)}
           </select>
         </span>
-        <span className={`chip-field ${priority ? "" : "no-fill"}`}>
+        <span className={`${s.chipField} ${priority ? "" : s.noFill}`}>
           <select
-            className="chip priority-chip"
+            className={`${s.chip} ${s.priorityChip}`}
             data-priority={priority}
             aria-label="priority"
             value={priority}
@@ -126,49 +128,50 @@ export function Detail({ node, allNodes, run, onSelect }: Props) {
             {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
         </span>
-        {!editing && isEpic && node.category && <span className="cat">{node.category}</span>}
-        {(node.tags ?? []).map((t) => <span key={t} className="tag">#{t}</span>)}
+        {!editing && isEpic && node.category && <span className={s.cat}>{node.category}</span>}
+        {(node.tags ?? []).map((t) => <span key={t} className={s.tag}>#{t}</span>)}
       </div>
 
-      <div className="section-head">
-        <span className="label" style={{ margin: 0 }}>body</span>
-        <button type="button" className="btn-link" onClick={() => setPreview((p) => !p)}>
+      <div className={s.sectionHead}>
+        <span className={s.label} style={{ margin: 0 }}>body</span>
+        <button type="button" className={s.btnLink} onClick={() => setPreview((p) => !p)}>
           {preview ? "edit" : "preview"}
         </button>
       </div>
       {preview ? (
-        <div className="body-panel markdown" dangerouslySetInnerHTML={{ __html: renderMarkdown(node.body ?? "") }} />
+        <div className={`${s.bodyPanel} markdown`} dangerouslySetInnerHTML={{ __html: renderMarkdown(node.body ?? "") }} />
       ) : (
-        <div className="field">
-          <textarea className="input" value={body} onChange={(e) => setBody(e.target.value)} rows={10} />
+        <div className={s.field}>
+          <textarea className={s.input} value={body} onChange={(e) => setBody(e.target.value)} rows={10} />
           <div>
-            <button type="button" className="btn btn-amber" onClick={() => run(api.body(node.ref, body))}>Save body</button>
+            <button type="button" className={`${s.btn} ${s.btnAmber}`} onClick={() => run(api.body(node.ref, body))}>Save body</button>
           </div>
         </div>
       )}
 
       {node.type !== Type.Task && (
         <>
-          <div className="label">
+          <div className={s.label}>
             {isEpic ? "issues" : "tasks"}{children.length ? ` · ${children.length}` : ""}
           </div>
           {children.length > 0 && (
-            <ul className="child-list">
+            <ul className={s.childList}>
               {children.map((c) => (
                 <li key={c.ref}>
-                  <button type="button" className="child-row" data-status={c.status} onClick={() => onSelect(c.ref)}>
-                    <span className="child-title">{c.title}</span>
-                    {c.priority && <span className="prio" data-priority={c.priority}>{c.priority}</span>}
+                  <button type="button" className={s.childRow} data-status={c.status} onClick={() => onSelect(c.ref)}>
+                    <span className={s.childTitle}>{c.title}</span>
+                    {c.priority && <PriorityBadge priority={c.priority} />}
                   </button>
                 </li>
               ))}
             </ul>
           )}
-          <div className="child-add">
+          <div className={s.childAdd}>
             <AddForm
               parent={node.ref}
               noun={isEpic ? "issue" : "task"}
               label={`+ Add a new ${isEpic ? "issue" : "task"}`}
+              block
               run={run}
               onCreated={onSelect}
             />
@@ -176,23 +179,23 @@ export function Detail({ node, allNodes, run, onSelect }: Props) {
         </>
       )}
 
-      <div className="label">links</div>
+      <div className={s.label}>links</div>
       {(node.links ?? []).length > 0 && (
-        <ul className="links">
+        <ul className={s.links}>
           {(node.links ?? []).map((l) => (
             <li key={l.url}>
               <a href={l.url} target="_blank" rel="noreferrer">{l.label || l.url}</a>
-              <button type="button" className="btn-link" onClick={() => run(api.removeLink(node.ref, l.url))}>remove</button>
+              <button type="button" className={s.btnLink} onClick={() => run(api.removeLink(node.ref, l.url))}>remove</button>
             </li>
           ))}
         </ul>
       )}
-      <div className="inline-form">
-        <input className="input" placeholder="https://…" value={linkURL} onChange={(e) => setLinkURL(e.target.value)} />
-        <input className="input" placeholder="label (optional)" value={linkLabel} onChange={(e) => setLinkLabel(e.target.value)} />
+      <div className={s.inlineForm}>
+        <input className={s.input} placeholder="https://…" value={linkURL} onChange={(e) => setLinkURL(e.target.value)} />
+        <input className={s.input} placeholder="label (optional)" value={linkLabel} onChange={(e) => setLinkLabel(e.target.value)} />
         <button
           type="button"
-          className="btn"
+          className={s.btn}
           onClick={async () => {
             if (!linkURL.trim()) return;
             await run(api.addLink(node.ref, linkURL.trim(), linkLabel.trim()));
@@ -206,21 +209,21 @@ export function Detail({ node, allNodes, run, onSelect }: Props) {
 
       {!isEpic && (
         <>
-          <div className="label">move</div>
-          <div className="inline-form">
-            <select className="filter-select" style={{ maxWidth: "16rem" }} value={moveTo} onChange={(e) => setMoveTo(e.target.value)}>
+          <div className={s.label}>move</div>
+          <div className={s.inlineForm}>
+            <select className={s.select} value={moveTo} onChange={(e) => setMoveTo(e.target.value)}>
               <option value="">choose new parent…</option>
               {moveTargets().map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
-            <button type="button" className="btn" disabled={!moveTo} onClick={() => run(api.move(node.ref, moveTo))}>Move</button>
+            <button type="button" className={s.btn} disabled={!moveTo} onClick={() => run(api.move(node.ref, moveTo))}>Move</button>
           </div>
         </>
       )}
 
-      <div className="label">danger</div>
+      <div className={s.label}>danger</div>
       <button
         type="button"
-        className="btn btn-danger"
+        className={`${s.btn} ${s.btnDanger}`}
         onClick={async () => {
           if (!confirm(`Delete ${node.type} "${node.title}"${node.type !== "task" ? " and its subtree" : ""}?`)) return;
           await run(api.remove(node.ref));

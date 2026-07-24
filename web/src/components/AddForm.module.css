@@ -1,0 +1,117 @@
+/* AddForm — a toggle button that expands into a stacked create form. Used for the
+   epic add (top bar, floating drop-down) and the issue/task add (detail pane,
+   full-width block toggle). The button/input primitives live here rather than in a
+   shared layer, so the component owns its own look. */
+.btn {
+  cursor: pointer;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.82rem;
+  color: var(--ink);
+}
+.btn:hover {
+  border-color: var(--ink-3);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.btnAmber {
+  background: var(--amber);
+  border-color: transparent;
+  color: var(--bg);
+  font-weight: 600;
+}
+.btnAmber:hover {
+  filter: brightness(1.08);
+  border-color: transparent;
+}
+/* the collapsed +issue/+task toggle spans the child list's width, left-aligned */
+.block {
+  width: 100%;
+  text-align: left;
+}
+.btnLink {
+  background: none;
+  border: 0;
+  padding: 0.2rem 0.1rem;
+  font-size: 0.76rem;
+  color: var(--amber);
+  cursor: pointer;
+}
+.btnLink:hover {
+  text-decoration: underline;
+}
+
+.form {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+}
+/* floating: the top-bar epic add drops its form down from the button */
+.floating {
+  position: absolute;
+  top: calc(100% + 0.6rem);
+  right: 0;
+  width: 22rem;
+  z-index: 30;
+  background: var(--panel);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+}
+.row {
+  display: flex;
+  gap: 0.4rem;
+}
+/* share the row evenly and let both shrink so the select doesn't overflow */
+.row > * {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+}
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.input {
+  width: 100%;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.85rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.input::placeholder {
+  color: var(--ink-3);
+}
+.input:focus {
+  outline: none;
+  border-color: var(--amber);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--amber) 18%, transparent);
+}
+.select {
+  width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--panel)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%237a6e5a' stroke-width='1.5'/%3E%3C/svg%3E")
+    no-repeat right 0.65rem center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.4rem 1.7rem 0.4rem 0.6rem;
+  font-size: 0.82rem;
+  color: var(--ink);
+  cursor: pointer;
+}
+.select:focus {
+  outline: none;
+  border-color: var(--amber);
+}

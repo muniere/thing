@@ -1,0 +1,33 @@
+/* status = signal light: colored dot + mono label. The dot color comes from the
+   global [data-status] → --c map (the badge sets data-status), so this module only
+   shapes the badge and its per-context variants. */
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--ink-2);
+}
+/* --c is set by the global [data-status] token map; the fallback only applies if
+   that map ever fails to match. */
+.status::before {
+  content: "";
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--c, var(--todo));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--c, var(--todo)) 20%, transparent);
+}
+
+/* variants (after the base so they win on equal specificity) */
+.dot {
+  font-size: 0;
+  gap: 0;
+} /* tree rows: bare dot, label hidden */
+.fill {
+  flex: 1;
+} /* filter facets: grow to fill the row */
