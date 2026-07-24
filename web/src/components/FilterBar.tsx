@@ -1,4 +1,4 @@
-import { Status } from "../domain/generated.ts";
+import { Priority, Status } from "../domain/generated.ts";
 import { emptyFilters, filtersActive, type Filters } from "../filter.ts";
 
 interface Props {
@@ -6,20 +6,23 @@ interface Props {
   categories: string[];
   tags: string[];
   statusCounts: Record<string, number>;
+  priorityCounts: Record<string, number>;
   onChange: (f: Filters) => void;
 }
 
 const STATUSES = [Status.Todo, Status.Doing, Status.Done, Status.Paused];
+const PRIORITIES = [Priority.High, Priority.Medium, Priority.Low];
 
-// FilterBar is the left sidebar: a text search plus status facet toggles (each
-// with a node count) and category/tag pulldowns. Status facets read their dot
-// color from the global data-status map.
-export function FilterBar({ filters, categories, tags, statusCounts, onChange }: Props) {
-  const toggleStatus = (s: string) => {
-    const next = new Set(filters.statuses);
-    if (next.has(s)) next.delete(s);
-    else next.add(s);
-    onChange({ ...filters, statuses: next });
+// FilterBar is the left sidebar: a text search plus status and priority facet
+// toggles (each with a node count) and category/tag pulldowns. Facets read their
+// accent from the global data-status / data-priority maps.
+export function FilterBar({ filters, categories, tags, statusCounts, priorityCounts, onChange }: Props) {
+  // toggleFacet flips one value in a multi-select facet set (statuses/priorities).
+  const toggleFacet = (key: "statuses" | "priorities", v: string) => {
+    const next = new Set(filters[key]);
+    if (next.has(v)) next.delete(v);
+    else next.add(v);
+    onChange({ ...filters, [key]: next });
   };
 
   return (
@@ -43,13 +46,30 @@ export function FilterBar({ filters, categories, tags, statusCounts, onChange }:
             type="button"
             className="facet"
             aria-pressed={filters.statuses.has(s)}
-            onClick={() => toggleStatus(s)}
+            onClick={() => toggleFacet("statuses", s)}
           >
             <span className="check" />
             <span className="status-badge" data-status={s}>
               {s}
             </span>
             <span className="facet-count">{statusCounts[s] ?? 0}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="filter-group">
+        <span className="filter-heading">Priority</span>
+        {PRIORITIES.map((p) => (
+          <button
+            key={p}
+            type="button"
+            className="facet"
+            aria-pressed={filters.priorities.has(p)}
+            onClick={() => toggleFacet("priorities", p)}
+          >
+            <span className="check" />
+            <span className="prio-badge" data-priority={p}>{p}</span>
+            <span className="facet-count">{priorityCounts[p] ?? 0}</span>
           </button>
         ))}
       </div>
