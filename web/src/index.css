@@ -355,6 +355,17 @@ textarea.input {
   font-size: 0.68rem;
   color: var(--ink-3);
 }
+/* child count on a tree row (an epic's issues / an issue's tasks) */
+.count {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  color: var(--ink-3);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.02rem 0.4rem;
+}
 
 /* ---- tree pane ---- */
 /* +Epic lives in the top bar as the global "new" action; its form drops down
