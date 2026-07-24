@@ -216,7 +216,20 @@ export function Detail({ node, allNodes, run, onSelect, hrefFor }: Props) {
               <option value="">choose new parent…</option>
               {moveTargets().map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
-            <button type="button" className={s.btn} disabled={!moveTo} onClick={() => run(api.move(node.ref, moveTo))}>Move</button>
+            <button
+              type="button"
+              className={s.btn}
+              disabled={!moveTo}
+              onClick={async () => {
+                // A move re-slugs the node (its ref carries the parent path), so
+                // follow the returned new ref — otherwise the selection points at
+                // the old ref and the pane goes blank after the reload.
+                const res = await run(api.move(node.ref, moveTo));
+                if (res) onSelect(res.ref);
+              }}
+            >
+              Move
+            </button>
           </div>
         </>
       )}
