@@ -61,17 +61,21 @@ export function AddForm({ parent, noun, label, amber, block, floating, run, onCr
     }
   };
 
-  if (!open) {
-    const cls = [s.btn, amber ? s.btnAmber : "", block ? s.block : ""].filter(Boolean).join(" ");
-    return (
-      <button type="button" className={cls} onClick={() => setOpen(true)}>
-        {label ?? `+ ${noun}`}
-      </button>
-    );
-  }
+  // Floating mode overlays the form, so the toggle stays mounted to hold the top
+  // bar's height; inline mode replaces the toggle with the form in normal flow.
+  const toggleCls = [s.btn, amber ? s.btnAmber : "", block ? s.block : ""].filter(Boolean).join(" ");
+  const toggle = (!open || floating) && (
+    <button type="button" className={toggleCls} onClick={() => setOpen(true)}>
+      {label ?? `+ ${noun}`}
+    </button>
+  );
+
+  if (!open) return toggle || null;
 
   return (
-    <div className={`${s.form} ${floating ? s.floating : ""}`}>
+    <>
+      {toggle}
+      <div className={`${s.form} ${floating ? s.floating : ""}`}>
       <input
         className={s.input}
         autoFocus
@@ -97,6 +101,7 @@ export function AddForm({ parent, noun, label, amber, block, floating, run, onCr
         <button type="button" className={`${s.btn} ${s.btnAmber}`} onClick={submit} disabled={!title.trim()}>Add</button>
         <button type="button" className={s.btnLink} onClick={close}>Cancel</button>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
