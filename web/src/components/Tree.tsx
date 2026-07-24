@@ -7,7 +7,7 @@ import s from "./Tree.module.css";
 interface Props {
   nodes: Node[];
   activeRef: string | null;
-  onSelect: (ref: string) => void;
+  hrefFor: (ref: string) => string;
   expanded: (ref: string) => boolean;
   onToggle: (ref: string) => void;
 }
@@ -18,7 +18,7 @@ const UNCATEGORIZED = " uncategorized";
 // grouped under category headings; nodes without an epic category (category-less
 // epics and orphan issues) fall under an unlabeled group. Rows color themselves
 // from data-status via the global token map.
-export function Tree({ nodes, activeRef, onSelect, expanded, onToggle }: Props) {
+export function Tree({ nodes, activeRef, hrefFor, expanded, onToggle }: Props) {
   if (nodes.length === 0) {
     return <p className={s.empty}>No nodes match.</p>;
   }
@@ -42,7 +42,7 @@ export function Tree({ nodes, activeRef, onSelect, expanded, onToggle }: Props) 
           {key !== UNCATEGORIZED && <div className={s.groupLabel}>{key}</div>}
           {groups.get(key)!.map((n) => (
             <div className={s.epicCard} data-status={n.status} key={n.ref}>
-              <Row node={n} activeRef={activeRef} onSelect={onSelect} expanded={expanded} onToggle={onToggle} />
+              <Row node={n} activeRef={activeRef} hrefFor={hrefFor} expanded={expanded} onToggle={onToggle} />
             </div>
           ))}
         </div>
@@ -52,10 +52,10 @@ export function Tree({ nodes, activeRef, onSelect, expanded, onToggle }: Props) 
 }
 
 function Row(
-  { node, activeRef, onSelect, expanded, onToggle }: {
+  { node, activeRef, hrefFor, expanded, onToggle }: {
     node: Node;
     activeRef: string | null;
-    onSelect: (ref: string) => void;
+    hrefFor: (ref: string) => string;
     expanded: (ref: string) => boolean;
     onToggle: (ref: string) => void;
   },
@@ -81,26 +81,25 @@ function Row(
         ) : (
           <span className={s.caretSpacer} />
         )}
-        <button
-          type="button"
+        <a
           className={s.row}
+          href={hrefFor(node.ref)}
           data-kind={node.type}
           data-status={node.status}
           data-selected={activeRef === node.ref ? "" : undefined}
-          onClick={() => onSelect(node.ref)}
         >
           <StatusBadge status={node.status} variant="dot" />
           <span className={s.title}>{node.title}</span>
           {hasChildren && <span className={s.count}>{children.length}</span>}
           {node.priority && <PriorityBadge priority={node.priority} />}
           {(node.tags ?? []).map((t) => <span key={t} className={s.tag}>#{t}</span>)}
-        </button>
+        </a>
       </div>
       {open && (
         <ul>
           {children.map((c) => (
             <li key={c.ref}>
-              <Row node={c} activeRef={activeRef} onSelect={onSelect} expanded={expanded} onToggle={onToggle} />
+              <Row node={c} activeRef={activeRef} hrefFor={hrefFor} expanded={expanded} onToggle={onToggle} />
             </li>
           ))}
         </ul>

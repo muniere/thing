@@ -13,6 +13,7 @@ interface Props {
   allNodes: Node[];
   run: <T>(p: Promise<T>) => Promise<T | undefined>;
   onSelect: (ref: string) => void;
+  hrefFor: (ref: string) => string;
 }
 
 const STATUSES = [Status.Todo, Status.Doing, Status.Done, Status.Paused];
@@ -20,7 +21,7 @@ const PRIORITIES = [Priority.High, Priority.Medium, Priority.Low];
 
 // Detail is the full-edit pane for one node. It is remounted per selection (via
 // a key on the element), so its draft state resets cleanly when the node changes.
-export function Detail({ node, allNodes, run, onSelect }: Props) {
+export function Detail({ node, allNodes, run, onSelect, hrefFor }: Props) {
   const isEpic = node.type === Type.Epic;
 
   const [title, setTitle] = useState(node.title);
@@ -158,10 +159,10 @@ export function Detail({ node, allNodes, run, onSelect }: Props) {
             <ul className={s.childList}>
               {children.map((c) => (
                 <li key={c.ref}>
-                  <button type="button" className={s.childRow} data-status={c.status} onClick={() => onSelect(c.ref)}>
+                  <a className={s.childRow} href={hrefFor(c.ref)} data-status={c.status}>
                     <span className={s.childTitle}>{c.title}</span>
                     {c.priority && <PriorityBadge priority={c.priority} />}
-                  </button>
+                  </a>
                 </li>
               ))}
             </ul>

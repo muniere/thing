@@ -57,22 +57,20 @@ export function App() {
   // and detail fire it when the user picks a node.
   const activate = useCallback((ref: string) => setActiveRef(ref || null), []);
 
-  // Mirror the view into the URL so it survives a reload and is shareable: the
-  // active node is the path (/<ref>) and the filters are the query string.
-  // replaceState keeps each change out of the history stack.
+  // hrefFor is the URL a node's anchor points at: its ref as the path plus the
+  // current filters as the query. Tree rows, child rows, and the logo are real
+  // <a> links, so clicking one is a normal navigation — the browser handles the
+  // history stack (Back/Forward work for free), and thingd's SPA fallback boots
+  // the app at that path with the query's filters. The query keeps the filtered
+  // view across the navigation.
+  const hrefFor = useCallback((ref: string) => `/${ref}${filtersToQuery(filters)}`, [filters]);
+
+  // Keyboard nav, filter toggles, and create/delete/rename change the view without
+  // a navigation, so mirror them into the current URL in place — no history entry,
+  // no reload — keeping it shareable and correct if the page is then reloaded.
   useEffect(() => {
     window.history.replaceState(null, "", `/${activeRef ?? ""}${filtersToQuery(filters)}`);
   }, [activeRef, filters]);
-
-  // Restore the active node (path) and filters (query) on back/forward.
-  useEffect(() => {
-    const onPop = () => {
-      setActiveRef(refFromPath());
-      setFilters(filtersFromQuery(window.location.search));
-    };
-    window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
-  }, []);
 
   const filtered = useMemo(() => filterTree(tree, filters), [tree, filters]);
   const categories = useMemo(() => collectCategories(tree), [tree]);
@@ -94,7 +92,9 @@ export function App() {
   return (
     <div className={s.app}>
       <header className={s.topbar}>
-        <span className={s.brand}><span className={s.dot} />thing</span>
+        <a className={s.brand} href={hrefFor("")}>
+          <span className={s.dot} />thing
+        </a>
         <div className={s.topbarAdd}>
           <AddForm parent="" noun="Epic" amber floating run={run} onCreated={activate} />
         </div>
@@ -113,12 +113,12 @@ export function App() {
         />
 
         <section className={s.treePane}>
-          <Tree nodes={filtered} activeRef={activeRef} onSelect={activate} expanded={fold.expanded} onToggle={fold.toggle} />
+          <Tree nodes={filtered} activeRef={activeRef} hrefFor={hrefFor} expanded={fold.expanded} onToggle={fold.toggle} />
         </section>
 
         <section className={s.detailPane}>
           {activeNode ? (
-            <Detail key={activeNode.ref} node={activeNode} allNodes={tree} run={run} onSelect={activate} />
+            <Detail key={activeNode.ref} node={activeNode} allNodes={tree} run={run} onSelect={activate} hrefFor={hrefFor} />
           ) : (
             <p className={s.empty}>Select a node to view and edit it.</p>
           )}

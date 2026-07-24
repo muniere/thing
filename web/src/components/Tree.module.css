@@ -90,6 +90,7 @@
   background: none;
   border: 0;
   color: var(--ink);
+  text-decoration: none;
   text-align: left;
   padding: 0.35rem 0.5rem;
   border-radius: 7px;
