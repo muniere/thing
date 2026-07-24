@@ -5,15 +5,16 @@ interface Props {
   filters: Filters;
   categories: string[];
   tags: string[];
+  statusCounts: Record<string, number>;
   onChange: (f: Filters) => void;
 }
 
 const STATUSES = [Status.Todo, Status.Doing, Status.Done, Status.Paused];
 
-// FilterBar is the left sidebar: a text search plus status facet toggles and
-// category/tag pulldowns. Status facets read their dot color from the global
-// data-status map.
-export function FilterBar({ filters, categories, tags, onChange }: Props) {
+// FilterBar is the left sidebar: a text search plus status facet toggles (each
+// with a node count) and category/tag pulldowns. Status facets read their dot
+// color from the global data-status map.
+export function FilterBar({ filters, categories, tags, statusCounts, onChange }: Props) {
   const toggleStatus = (s: string) => {
     const next = new Set(filters.statuses);
     if (next.has(s)) next.delete(s);
@@ -48,6 +49,7 @@ export function FilterBar({ filters, categories, tags, onChange }: Props) {
             <span className="status-badge" data-status={s}>
               {s}
             </span>
+            <span className="facet-count">{statusCounts[s] ?? 0}</span>
           </button>
         ))}
       </div>
