@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Priority } from "../domain/generated.ts";
 import { api } from "../api.ts";
 import type { CreateInput } from "../api.ts";
+import s from "./AddForm.module.css";
 
 interface Props {
   // The parent ref the new node is created under; "" creates a top-level epic.
@@ -13,6 +14,11 @@ interface Props {
   label?: string;
   // Style the toggle as the primary (amber) button — used for the epic add.
   amber?: boolean;
+  // Full-width, left-aligned toggle — used for the detail pane's child add.
+  block?: boolean;
+  // Drop the expanded form down from the toggle as a floating panel — used for the
+  // top-bar epic add.
+  floating?: boolean;
   run: <T>(p: Promise<T>) => Promise<T | undefined>;
   onCreated: (ref: string) => void;
 }
@@ -24,7 +30,7 @@ const PRIORITIES = [Priority.High, Priority.Medium, Priority.Low];
 // top-level epic (parent === ""), matching the server, which rejects a category
 // on anything else. Every field but the title is optional; on success the form
 // collapses and the new node is activated.
-export function AddForm({ parent, noun, label, amber, run, onCreated }: Props) {
+export function AddForm({ parent, noun, label, amber, block, floating, run, onCreated }: Props) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState("");
@@ -56,17 +62,18 @@ export function AddForm({ parent, noun, label, amber, run, onCreated }: Props) {
   };
 
   if (!open) {
+    const cls = [s.btn, amber ? s.btnAmber : "", block ? s.block : ""].filter(Boolean).join(" ");
     return (
-      <button type="button" className={amber ? "btn btn-amber" : "btn"} onClick={() => setOpen(true)}>
+      <button type="button" className={cls} onClick={() => setOpen(true)}>
         {label ?? `+ ${noun}`}
       </button>
     );
   }
 
   return (
-    <div className="add-form">
+    <div className={`${s.form} ${floating ? s.floating : ""}`}>
       <input
-        className="input"
+        className={s.input}
         autoFocus
         placeholder={`${noun} title`}
         value={title}
@@ -76,19 +83,19 @@ export function AddForm({ parent, noun, label, amber, run, onCreated }: Props) {
           else if (e.key === "Escape") close();
         }}
       />
-      <div className="add-form-row">
-        <select className="filter-select" aria-label="priority" value={priority} onChange={(e) => setPriority(e.target.value)}>
+      <div className={s.row}>
+        <select className={s.select} aria-label="priority" value={priority} onChange={(e) => setPriority(e.target.value)}>
           <option value="">priority —</option>
           {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
         </select>
         {isEpic && (
-          <input className="input" placeholder="category" value={category} onChange={(e) => setCategory(e.target.value)} />
+          <input className={s.input} placeholder="category" value={category} onChange={(e) => setCategory(e.target.value)} />
         )}
       </div>
-      <input className="input" placeholder="tags (comma-separated)" value={tags} onChange={(e) => setTags(e.target.value)} />
-      <div className="add-form-actions">
-        <button type="button" className="btn btn-amber" onClick={submit} disabled={!title.trim()}>Add</button>
-        <button type="button" className="btn-link" onClick={close}>Cancel</button>
+      <input className={s.input} placeholder="tags (comma-separated)" value={tags} onChange={(e) => setTags(e.target.value)} />
+      <div className={s.actions}>
+        <button type="button" className={`${s.btn} ${s.btnAmber}`} onClick={submit} disabled={!title.trim()}>Add</button>
+        <button type="button" className={s.btnLink} onClick={close}>Cancel</button>
       </div>
     </div>
   );

@@ -1,0 +1,48 @@
+/* Design tokens: the warm dark amber palette, type, and radius every component
+   reads through var(). Global on purpose — this is the shared theme layer, not a
+   component. Ported from the tray web frontend (status-colored rails and dots,
+   mono accents, a 3-pane layout). */
+:root {
+  color-scheme: dark light;
+  --bg: #17130d;
+  --panel: #211b13;
+  --panel-2: #2a2219;
+  --line: #392f22;
+  --ink: #efe7d8;
+  --ink-2: #b3a690;
+  --ink-3: #7a6e5a;
+  --amber: #f5a524;
+  --todo: #8b8172;
+  --doing: #f26a24;
+  --done: #4fb286;
+  --paused: #cc7a3b;
+  --high: #d9705f;
+  --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --radius: 11px;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #ece6db;
+    --panel: #fbf8f1;
+    --panel-2: #f2ece0;
+    --line: #dcd3c2;
+    --ink: #221b11;
+    --ink-2: #6c6252;
+    --ink-3: #9a8f7a;
+    --amber: #b56b12;
+    --todo: #8a7f6d;
+    --doing: #e65100;
+    --done: #2b8f63;
+    --paused: #ad5f26;
+    --high: #c0533f;
+  }
+}
+
+/* status → accent color, exposed as --c so any element carrying data-status
+   (epic rails, rows, dots, child rails, the status chip) reads it through the
+   cascade. Global because it is a theme concern shared across components. */
+[data-status="todo"] { --c: var(--todo); }
+[data-status="doing"] { --c: var(--doing); }
+[data-status="done"] { --c: var(--done); }
+[data-status="paused"] { --c: var(--paused); }

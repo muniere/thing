@@ -9,6 +9,7 @@ import { Tree } from "./components/Tree.tsx";
 import { FilterBar } from "./components/FilterBar.tsx";
 import { Detail } from "./components/Detail.tsx";
 import { AddForm } from "./components/AddForm.tsx";
+import s from "./App.module.css";
 
 // The active node's ref is carried in the URL path (e.g. /epic/issue/task);
 // "/" means nothing active. Refs are slug paths ([a-z0-9-] joined by "/"), so
@@ -83,24 +84,25 @@ export function App() {
   useTreeNav(filtered, fold, activeRef, activate);
 
   // Keep the active row on screen: when the selection moves (via keyboard nav
-  // especially), scroll the least amount needed to reveal it.
+  // especially), scroll the least amount needed to reveal it. The selected row
+  // carries a stable data-selected hook (its class name is hashed by CSS Modules).
   useEffect(() => {
     if (!activeRef) return;
-    document.querySelector(".tree-pane .row.selected")?.scrollIntoView({ block: "nearest" });
+    document.querySelector("[data-selected]")?.scrollIntoView({ block: "nearest" });
   }, [activeRef]);
 
   return (
-    <div className="app">
-      <header className="topbar">
-        <span className="brand"><span className="dot" />thing</span>
-        <div className="topbar-add">
-          <AddForm parent="" noun="Epic" amber run={run} onCreated={activate} />
+    <div className={s.app}>
+      <header className={s.topbar}>
+        <span className={s.brand}><span className={s.dot} />thing</span>
+        <div className={s.topbarAdd}>
+          <AddForm parent="" noun="Epic" amber floating run={run} onCreated={activate} />
         </div>
       </header>
 
-      {error && <div className="error" onClick={() => setError(null)}>{error}</div>}
+      {error && <div className={s.error} onClick={() => setError(null)}>{error}</div>}
 
-      <div className="split">
+      <div className={s.split}>
         <FilterBar
           filters={filters}
           categories={categories}
@@ -110,15 +112,15 @@ export function App() {
           onChange={setFilters}
         />
 
-        <section className="tree-pane">
+        <section className={s.treePane}>
           <Tree nodes={filtered} activeRef={activeRef} onSelect={activate} expanded={fold.expanded} onToggle={fold.toggle} />
         </section>
 
-        <section className="detail-pane">
+        <section className={s.detailPane}>
           {activeNode ? (
             <Detail key={activeNode.ref} node={activeNode} allNodes={tree} run={run} onSelect={activate} />
           ) : (
-            <p className="empty">Select a node to view and edit it.</p>
+            <p className={s.empty}>Select a node to view and edit it.</p>
           )}
         </section>
       </div>

@@ -1,0 +1,49 @@
+/* Styling for the note body, which Detail renders from Markdown to sanitized
+   HTML and injects via dangerouslySetInnerHTML. The rules target raw element tags
+   under a global .markdown scope — that HTML is generated, not component-authored,
+   so its hook stays a literal global class rather than a hashed module one. */
+.markdown > :first-child { margin-top: 0; }
+.markdown > :last-child { margin-bottom: 0; }
+.markdown h1, .markdown h2, .markdown h3,
+.markdown h4, .markdown h5, .markdown h6 {
+  color: var(--ink);
+  font-weight: 650;
+  line-height: 1.3;
+  margin: 1.3em 0 0.5em;
+}
+.markdown h1 { font-size: 1.25rem; }
+.markdown h2 { font-size: 1.12rem; }
+.markdown h3 { font-size: 1rem; }
+.markdown p { margin: 0.6em 0; }
+.markdown ul, .markdown ol { margin: 0.6em 0; padding-left: 1.5em; }
+.markdown li { margin: 0.2em 0; }
+.markdown a { color: var(--amber); text-decoration: none; }
+.markdown a:hover { text-decoration: underline; }
+.markdown code {
+  font-family: var(--mono);
+  font-size: 0.85em;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 0.1em 0.35em;
+}
+.markdown pre {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.7rem 0.85rem;
+  overflow-x: auto;
+  margin: 0.7em 0;
+}
+.markdown pre code { background: none; border: 0; padding: 0; font-size: 0.82rem; }
+.markdown blockquote {
+  margin: 0.7em 0;
+  padding: 0.1em 0.95em;
+  border-left: 3px solid var(--line);
+  color: var(--ink-3);
+}
+.markdown hr { border: 0; border-top: 1px solid var(--line); margin: 1.2em 0; }
+.markdown table { border-collapse: collapse; margin: 0.7em 0; font-size: 0.85rem; display: block; overflow-x: auto; }
+.markdown th, .markdown td { border: 1px solid var(--line); padding: 0.35em 0.6em; text-align: left; }
+.markdown th { background: var(--panel-2); color: var(--ink); font-weight: 600; }
+.markdown img { max-width: 100%; height: auto; border-radius: 8px; }

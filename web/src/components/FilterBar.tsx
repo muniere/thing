@@ -1,5 +1,8 @@
 import { Priority, Status } from "../domain/generated.ts";
 import { emptyFilters, filtersActive, type Filters } from "../filter.ts";
+import { StatusBadge } from "./StatusBadge.tsx";
+import { PriorityBadge } from "./PriorityBadge.tsx";
+import s from "./FilterBar.module.css";
 
 interface Props {
   filters: Filters;
@@ -14,8 +17,8 @@ const STATUSES = [Status.Todo, Status.Doing, Status.Done, Status.Paused];
 const PRIORITIES = [Priority.High, Priority.Medium, Priority.Low];
 
 // FilterBar is the left sidebar: a text search plus status and priority facet
-// toggles (each with a node count) and category/tag pulldowns. Facets read their
-// accent from the global data-status / data-priority maps.
+// toggles (each with a node count) and category/tag pulldowns. The status/priority
+// badges fill the facet row and read their accent from the badge components.
 export function FilterBar({ filters, categories, tags, statusCounts, priorityCounts, onChange }: Props) {
   // toggleFacet flips one value in a multi-select facet set (statuses/priorities).
   const toggleFacet = (key: "statuses" | "priorities", v: string) => {
@@ -26,11 +29,11 @@ export function FilterBar({ filters, categories, tags, statusCounts, priorityCou
   };
 
   return (
-    <aside className="filter-pane">
-      <div className="filter-group">
-        <span className="filter-heading">Search</span>
+    <aside className={s.pane}>
+      <div className={s.group}>
+        <span className={s.heading}>Search</span>
         <input
-          className="input"
+          className={s.input}
           type="search"
           placeholder="title, tag, ref…"
           value={filters.query}
@@ -38,46 +41,44 @@ export function FilterBar({ filters, categories, tags, statusCounts, priorityCou
         />
       </div>
 
-      <div className="filter-group">
-        <span className="filter-heading">Status</span>
-        {STATUSES.map((s) => (
+      <div className={s.group}>
+        <span className={s.heading}>Status</span>
+        {STATUSES.map((st) => (
           <button
-            key={s}
+            key={st}
             type="button"
-            className="facet"
-            aria-pressed={filters.statuses.has(s)}
-            onClick={() => toggleFacet("statuses", s)}
+            className={s.facet}
+            aria-pressed={filters.statuses.has(st)}
+            onClick={() => toggleFacet("statuses", st)}
           >
-            <span className="check" />
-            <span className="status-badge" data-status={s}>
-              {s}
-            </span>
-            <span className="facet-count">{statusCounts[s] ?? 0}</span>
+            <span className={s.check} />
+            <StatusBadge status={st} variant="fill" />
+            <span className={s.count}>{statusCounts[st] ?? 0}</span>
           </button>
         ))}
       </div>
 
-      <div className="filter-group">
-        <span className="filter-heading">Priority</span>
+      <div className={s.group}>
+        <span className={s.heading}>Priority</span>
         {PRIORITIES.map((p) => (
           <button
             key={p}
             type="button"
-            className="facet"
+            className={s.facet}
             aria-pressed={filters.priorities.has(p)}
             onClick={() => toggleFacet("priorities", p)}
           >
-            <span className="check" />
-            <span className="prio-badge" data-priority={p}>{p}</span>
-            <span className="facet-count">{priorityCounts[p] ?? 0}</span>
+            <span className={s.check} />
+            <PriorityBadge priority={p} variant="fill" />
+            <span className={s.count}>{priorityCounts[p] ?? 0}</span>
           </button>
         ))}
       </div>
 
-      <div className="filter-group">
-        <span className="filter-heading">Category</span>
+      <div className={s.group}>
+        <span className={s.heading}>Category</span>
         <select
-          className="filter-select"
+          className={s.select}
           value={filters.category}
           onChange={(e) => onChange({ ...filters, category: e.target.value })}
         >
@@ -86,10 +87,10 @@ export function FilterBar({ filters, categories, tags, statusCounts, priorityCou
         </select>
       </div>
 
-      <div className="filter-group">
-        <span className="filter-heading">Tag</span>
+      <div className={s.group}>
+        <span className={s.heading}>Tag</span>
         <select
-          className="filter-select"
+          className={s.select}
           value={filters.tag}
           onChange={(e) => onChange({ ...filters, tag: e.target.value })}
         >
@@ -99,7 +100,7 @@ export function FilterBar({ filters, categories, tags, statusCounts, priorityCou
       </div>
 
       {filtersActive(filters) && (
-        <button type="button" className="btn-link" onClick={() => onChange(emptyFilters)}>
+        <button type="button" className={s.clear} onClick={() => onChange(emptyFilters)}>
           clear filters
         </button>
       )}
