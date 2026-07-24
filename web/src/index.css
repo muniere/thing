@@ -421,6 +421,43 @@ textarea.input {
   margin: 0;
   padding-left: 0.9rem;
 }
+.row-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+}
+.caret {
+  flex: none;
+  width: 1.3rem;
+  height: 1.3rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.caret::before {
+  content: "\25BE"; /* ▾ expanded */
+  font-size: 1.1rem;
+  line-height: 1;
+}
+.caret[data-open="false"]::before {
+  content: "\25B8"; /* ▸ collapsed */
+}
+.caret:hover {
+  color: var(--ink);
+}
+.caret-spacer {
+  flex: none;
+  width: 1.3rem;
+}
+.row-wrap .row {
+  flex: 1;
+  min-width: 0;
+}
 .tree > ul,
 .tree {
   list-style: none;
