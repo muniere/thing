@@ -63,6 +63,7 @@ export function Detail({ node, allNodes, run, onSelect }: Props) {
   };
 
   const priority = node.priority ?? "";
+  const children = node.children ?? [];
 
   return (
     <div className="detail">
@@ -146,6 +147,27 @@ export function Detail({ node, allNodes, run, onSelect }: Props) {
         </div>
       )}
 
+      {node.type !== Type.Task && (
+        <>
+          <div className="label">
+            {isEpic ? "issues" : "tasks"}{children.length ? ` · ${children.length}` : ""}
+          </div>
+          {children.length > 0 && (
+            <ul className="child-list">
+              {children.map((c) => (
+                <li key={c.ref}>
+                  <button type="button" className="child-row" data-status={c.status} onClick={() => onSelect(c.ref)}>
+                    <span className="child-title">{c.title}</span>
+                    {c.priority && <span className="prio" data-priority={c.priority}>{c.priority}</span>}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <AddForm parent={node.ref} noun={isEpic ? "issue" : "task"} run={run} onCreated={onSelect} />
+        </>
+      )}
+
       <div className="label">links</div>
       {(node.links ?? []).length > 0 && (
         <ul className="links">
@@ -173,12 +195,6 @@ export function Detail({ node, allNodes, run, onSelect }: Props) {
           Add link
         </button>
       </div>
-
-      {node.type !== Type.Task && (
-        <div className="detail-add">
-          <AddForm parent={node.ref} noun={isEpic ? "issue" : "task"} run={run} onCreated={onSelect} />
-        </div>
-      )}
 
       {!isEpic && (
         <>
