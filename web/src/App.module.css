@@ -25,6 +25,8 @@
   font-weight: 600;
   font-size: 0.95rem;
   letter-spacing: 0.01em;
+  color: var(--ink);
+  text-decoration: none;
 }
 .dot {
   width: 0.5rem;

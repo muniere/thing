@@ -178,6 +178,7 @@
   padding: 0.5rem 0.7rem 0.5rem 0.85rem;
   cursor: pointer;
   color: var(--ink);
+  text-decoration: none;
 }
 /* status-colored rail — --c comes from the row's data-status via the token map */
 .childRow::before {
