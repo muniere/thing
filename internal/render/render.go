@@ -92,9 +92,10 @@ func groupTop(top []*model.Node, categories []string) []group {
 	return groups
 }
 
-// Tree renders the whole tree as an indented outline headed by title. When
-// categories are configured, top-level nodes are grouped under category
-// headings.
+// Tree renders the whole tree as an indented outline rooted at title: the
+// top-level nodes hang off the title. When categories are configured, each
+// category heading is an intermediate branch under the title with its epics
+// beneath it; otherwise the top-level nodes hang off the title directly.
 func Tree(nodes []*model.Node, title string, categories []string) string {
 	if title == "" {
 		title = "thing"
@@ -102,11 +103,21 @@ func Tree(nodes []*model.Node, title string, categories []string) string {
 	var b strings.Builder
 	b.WriteString(title)
 	b.WriteByte('\n')
-	for _, g := range groupTop(nodes, categories) {
-		if g.heading != "" {
-			b.WriteString("\n# " + g.heading + "\n")
+	groups := groupTop(nodes, categories)
+	// No headings (no categories configured): the nodes hang off the title.
+	if len(groups) == 1 && groups[0].heading == "" {
+		writeChildren(&b, groups[0].nodes, "")
+		return b.String()
+	}
+	// Otherwise each category heading is a branch under the title, its epics
+	// hanging under it.
+	for i, g := range groups {
+		branch, childPrefix := "├─ ", "│  "
+		if i == len(groups)-1 {
+			branch, childPrefix = "└─ ", "   "
 		}
-		writeChildren(&b, g.nodes, "")
+		b.WriteString(branch + "# " + g.heading + "\n")
+		writeChildren(&b, g.nodes, childPrefix)
 	}
 	return b.String()
 }

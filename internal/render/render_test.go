@@ -50,6 +50,26 @@ func TestTreeDefaultTitle(t *testing.T) {
 	}
 }
 
+func TestTreeCategoriesHangOffTitle(t *testing.T) {
+	top := []*model.Node{
+		{Type: model.Epic, Slug: "web", Title: "Web", Category: "Project"},
+		{Type: model.Epic, Slug: "misc", Title: "Misc"}, // no category -> uncategorized
+	}
+	out := Tree(top, "Board", []string{"Project"})
+	// The title is the root; each category heading is a branch under it with its
+	// epics hanging beneath.
+	want := strings.Join([]string{
+		"Board",
+		"├─ # Project",
+		"│  └─ [ ] Web (web)",
+		"└─ # (uncategorized)",
+		"   └─ [ ] Misc (misc)",
+	}, "\n") + "\n"
+	if out != want {
+		t.Errorf("category tree mismatch:\n--- got ---\n%s\n--- want ---\n%s", out, want)
+	}
+}
+
 func TestList(t *testing.T) {
 	nodes := []*model.Node{
 		{Slug: "one", Title: "One", Status: model.Done, Priority: model.High},
