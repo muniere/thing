@@ -124,6 +124,29 @@ func TestStatusAndPriority(t *testing.T) {
 	}
 }
 
+func TestClearStatusRevertsToRollup(t *testing.T) {
+	s := newServer(t)
+	// Pin the issue's status, then clear it with an empty status: the explicit
+	// value is dropped so it rolls up from its children again.
+	if w := do(t, s, "PATCH", "/api/nodes/alpha/one", `{"status":"paused"}`); w.Code != http.StatusOK {
+		t.Fatalf("set = %d, want 200; body=%s", w.Code, w.Body.String())
+	}
+	if e, _ := s.store.Locate("alpha/one"); e.Node.Status != "paused" {
+		t.Fatalf("status = %q, want paused", e.Node.Status)
+	}
+	if w := do(t, s, "PATCH", "/api/nodes/alpha/one", `{"status":""}`); w.Code != http.StatusOK {
+		t.Fatalf("clear = %d, want 200; body=%s", w.Code, w.Body.String())
+	}
+	e, _ := s.store.Locate("alpha/one")
+	if e.Node.Status != "" {
+		t.Errorf("status = %q, want empty (rolled up)", e.Node.Status)
+	}
+	// The child task is todo, so the reverted issue rolls up to todo.
+	if got := e.Node.EffectiveStatus(); got != "todo" {
+		t.Errorf("effective status = %q, want todo", got)
+	}
+}
+
 func TestPatchSingleOperation(t *testing.T) {
 	s := newServer(t)
 	ref := "/api/nodes/alpha/one/do-it"

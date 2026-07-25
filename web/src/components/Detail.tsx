@@ -106,17 +106,29 @@ export function Detail({ node, allNodes, run, onSelect, hrefFor }: Props) {
       )}
 
       <div className={s.meta}>
-        <span className={s.chipField} data-status={node.status}>
+        <span className={s.chipField} data-status={node.effectiveStatus}>
           <select
             className={`${s.chip} ${s.statusChip}`}
-            data-status={node.status}
+            data-status={node.effectiveStatus}
             aria-label="status"
-            value={node.status}
+            value={node.effectiveStatus}
             onChange={(e) => run(api.status(node.ref, e.target.value))}
           >
             {STATUSES.map((st) => <option key={st} value={st}>{st}</option>)}
           </select>
         </span>
+        {node.type !== Type.Task && node.status && (
+          // A parent with an explicit status can revert to rolling it up from its
+          // children (an empty status clears it server-side).
+          <button
+            type="button"
+            className={s.btnLink}
+            title="revert to the status rolled up from children"
+            onClick={() => run(api.status(node.ref, ""))}
+          >
+            auto
+          </button>
+        )}
         <span className={`${s.chipField} ${priority ? "" : s.noFill}`}>
           <select
             className={`${s.chip} ${s.priorityChip}`}
@@ -159,7 +171,7 @@ export function Detail({ node, allNodes, run, onSelect, hrefFor }: Props) {
             <ul className={s.childList}>
               {children.map((c) => (
                 <li key={c.ref}>
-                  <a className={s.childRow} href={hrefFor(c.ref)} data-status={c.status}>
+                  <a className={s.childRow} href={hrefFor(c.ref)} data-status={c.effectiveStatus}>
                     <span className={s.childTitle}>{c.title}</span>
                     {c.priority && <PriorityBadge priority={c.priority} />}
                   </a>

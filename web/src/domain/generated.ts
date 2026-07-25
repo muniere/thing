@@ -9,6 +9,11 @@ export interface Node {
     body?:     string;
     category?: string;
     children?: Node[];
+    /**
+     * The derived display status (own status, or the rollup from children). Use
+     * this to show and filter a node's status.
+     */
+    effectiveStatus: Status;
     links?:    NodeLink[];
     priority?: Priority;
     /**
@@ -17,7 +22,12 @@ export interface Node {
      * unique across the tree, a slug only among siblings.
      */
     ref:       string;
-    status:    Status;
+    /**
+     * The node's own stored status, present only when it has one. Absent means
+     * the status is rolled up from children (see effectiveStatus); a parent can be
+     * reverted to the rollup by setting an empty status.
+     */
+    status?:   Status;
     tags?:     string[];
     title:     string;
     type:      Type;
