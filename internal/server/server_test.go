@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"testing/fstest"
 
@@ -257,6 +258,60 @@ func TestNotFound(t *testing.T) {
 	s := newServer(t)
 	if w := do(t, s, "PATCH", "/api/nodes/nope", `{"status":"done"}`); w.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404", w.Code)
+	}
+}
+
+// TestConcurrentCreatesNoLostUpdate fires many creates under one parent at once,
+// all with the same title so their slugs would collide. Serialized, the store
+// deduplicates them (do-it-2, do-it-3, …) and every create survives; without the
+// write lock the read-modify-write of the sibling set races and creates overwrite
+// each other. It also runs clean under -race.
+func TestConcurrentCreatesNoLostUpdate(t *testing.T) {
+	s := newServer(t)
+	const n = 24
+	var wg sync.WaitGroup
+	codes := make([]int, n)
+	for i := range n {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			req := httptest.NewRequest("POST", "/api/nodes/alpha/one", strings.NewReader(`{"title":"dup"}`))
+			w := httptest.NewRecorder()
+			s.ServeHTTP(w, req)
+			codes[i] = w.Code
+		}(i)
+	}
+	wg.Wait()
+
+	for i, c := range codes {
+		if c != http.StatusCreated {
+			t.Fatalf("create %d: status %d, want 201", i, c)
+		}
+	}
+
+	// The issue started with one task (do-it); all n creates must be present too.
+	type tnode struct {
+		Ref      string  `json:"ref"`
+		Children []tnode `json:"children"`
+	}
+	var tree []tnode
+	if err := json.Unmarshal(do(t, s, "GET", "/api/tree", "").Body.Bytes(), &tree); err != nil {
+		t.Fatalf("tree not JSON: %v", err)
+	}
+	var count func(ns []tnode) int
+	count = func(ns []tnode) int {
+		for _, x := range ns {
+			if x.Ref == "alpha/one" {
+				return len(x.Children)
+			}
+			if c := count(x.Children); c >= 0 {
+				return c
+			}
+		}
+		return -1
+	}
+	if got := count(tree); got != n+1 {
+		t.Fatalf("alpha/one has %d children, want %d (1 seed + %d creates) — lost updates", got, n+1, n)
 	}
 }
 
