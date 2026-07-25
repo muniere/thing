@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -78,8 +79,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 	defer cancel()
 	go srv.StartWatch(ctx, time.Second)
 
-	url := fmt.Sprintf("http://%s", ln.Addr().String())
-	fmt.Fprintf(stdout, "thingd %s\n  serving %s\n  data dir %s\n", version, url, root)
+	// Show localhost (the bind host) with the actually-bound port, which may have
+	// hopped past a taken default.
+	url := fmt.Sprintf("http://localhost:%d", ln.Addr().(*net.TCPAddr).Port)
+	server.PrintStartup(stdout, version, url, root)
 	if *open {
 		openBrowser(url)
 	}
