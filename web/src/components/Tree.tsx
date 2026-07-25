@@ -34,12 +34,20 @@ export function Tree({ nodes, activeRef, hrefFor, expanded, onToggle }: Props) {
     }
     groups.get(key)!.push(n);
   }
+  // Real categories keep first-seen order; the uncategorized catch-all always
+  // sorts last. Its heading shows only when there is at least one real category
+  // (otherwise the tree is a flat, unlabeled list).
+  const categories = order.filter((k) => k !== UNCATEGORIZED);
+  const ordered = groups.has(UNCATEGORIZED) ? [...categories, UNCATEGORIZED] : categories;
+  const grouped = categories.length > 0;
 
   return (
     <div className={s.tree}>
-      {order.map((key) => (
+      {ordered.map((key) => (
         <div key={key}>
-          {key !== UNCATEGORIZED && <div className={s.groupLabel}>{key}</div>}
+          {(key !== UNCATEGORIZED || grouped) && (
+            <div className={s.groupLabel}>{key === UNCATEGORIZED ? "uncategorized" : key}</div>
+          )}
           {groups.get(key)!.map((n) => (
             <div className={s.epicCard} data-status={n.effectiveStatus} key={n.ref}>
               <Row node={n} activeRef={activeRef} hrefFor={hrefFor} expanded={expanded} onToggle={onToggle} />
