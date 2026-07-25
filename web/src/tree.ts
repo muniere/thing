@@ -52,7 +52,11 @@ export function useTreeFold(tree: Node[], filtersActive: boolean, activeRef: str
     });
   }, [tree]);
 
-  // Reveal the active node by unfolding its ancestors.
+  // Reveal the active node by unfolding its ancestors. This also depends on the
+  // tree: on a fresh load (a deep-link or a click-through, where the ref is set
+  // from the URL before the tree arrives) the seeding effect above collapses the
+  // active node's ancestors when the tree lands, so re-run afterward — it is
+  // defined after seeding, so it wins on that commit — to keep the node visible.
   useEffect(() => {
     if (!activeRef) return;
     setCollapsed((prev) => {
@@ -61,7 +65,7 @@ export function useTreeFold(tree: Node[], filtersActive: boolean, activeRef: str
       for (const a of ancestorRefs(activeRef)) if (next.delete(a)) changed = true;
       return changed ? next : prev;
     });
-  }, [activeRef]);
+  }, [activeRef, tree]);
 
   const expanded = useCallback(
     (ref: string) => filtersActive || !collapsed.has(ref),
