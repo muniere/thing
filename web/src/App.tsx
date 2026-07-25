@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type MouseEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { Node } from "./domain/generated.ts";
 import { api } from "./api.ts";
 import { useLiveReload } from "./live.ts";
 import { collectCategories, collectPriorityCounts, collectStatusCounts, collectTags, filterTree, filtersActive, filtersFromQuery, filtersToQuery, type Filters } from "./filter.ts";
-import { findNode } from "./util.ts";
+import { findNode, isPlainClick } from "./util.ts";
 import { useTreeFold, useTreeNav } from "./tree.ts";
 import { Tree } from "./components/Tree.tsx";
 import { FilterBar } from "./components/FilterBar.tsx";
@@ -82,18 +82,51 @@ export function App() {
 
   // hrefFor is the URL a node's anchor points at: its ref as the path plus the
   // current filters as the query. Tree rows, child rows, and the logo are real
-  // <a> links, so clicking one is a normal navigation — the browser handles the
-  // history stack (Back/Forward work for free), and thingd's SPA fallback boots
-  // the app at that path with the query's filters. The query keeps the filtered
-  // view across the navigation.
+  // <a> links so the URL is real (a ⌘/Ctrl/Shift/middle click opens the node in a
+  // new tab, and the link is copyable), but a plain click is intercepted (see
+  // onNav) and handled in-app rather than reloading the page.
   const hrefFor = useCallback((ref: string) => `/${ref}${filtersToQuery(filters)}`, [filters]);
 
+  // navigate selects a node and pushes a history entry, so a plain click behaves
+  // like a page navigation (Back/Forward step through visited nodes) without the
+  // reload — no refetching the tree, reopening the SSE stream, or piling requests
+  // onto the connection pool.
+  const navigate = useCallback(
+    (ref: string) => {
+      window.history.pushState(null, "", `/${ref}${filtersToQuery(filters)}`);
+      setActiveRef(ref || null);
+    },
+    [filters],
+  );
+
+  // onNav handles an anchor click: a plain click navigates in-app; a modified or
+  // middle click is left to the browser so its default (open in a new tab) stands.
+  const onNav = useCallback(
+    (e: MouseEvent, ref: string) => {
+      if (!isPlainClick(e)) return;
+      e.preventDefault();
+      navigate(ref);
+    },
+    [navigate],
+  );
+
   // Keyboard nav, filter toggles, and create/delete/rename change the view without
-  // a navigation, so mirror them into the current URL in place — no history entry,
+  // pushing history, so mirror them into the current URL in place — no new entry,
   // no reload — keeping it shareable and correct if the page is then reloaded.
   useEffect(() => {
     window.history.replaceState(null, "", `/${activeRef ?? ""}${filtersToQuery(filters)}`);
   }, [activeRef, filters]);
+
+  // Restore the view from the URL on Back/Forward (a popstate, which pushState
+  // navigation produces).
+  useEffect(() => {
+    const onPop = () => {
+      setActiveRef(refFromPath());
+      setFilters(filtersFromQuery(window.location.search));
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   const filtered = useMemo(() => filterTree(tree, filters), [tree, filters]);
   const categories = useMemo(() => collectCategories(tree), [tree]);
@@ -115,7 +148,7 @@ export function App() {
   return (
     <div className={s.app}>
       <header className={s.topbar}>
-        <a className={s.brand} href={hrefFor("")}>
+        <a className={s.brand} href={hrefFor("")} onClick={(e) => onNav(e, "")}>
           <span className={s.dot} />{title}
         </a>
         <div className={s.topbarAdd}>
@@ -137,12 +170,12 @@ export function App() {
 
         <section className={s.treePane}>
           {dir && <div className={s.dir}>{dir}</div>}
-          <Tree nodes={filtered} activeRef={activeRef} hrefFor={hrefFor} expanded={fold.expanded} onToggle={fold.toggle} />
+          <Tree nodes={filtered} activeRef={activeRef} hrefFor={hrefFor} onNav={onNav} expanded={fold.expanded} onToggle={fold.toggle} />
         </section>
 
         <section className={s.detailPane}>
           {activeNode ? (
-            <Detail key={activeNode.ref} node={activeNode} allNodes={tree} run={run} onSelect={activate} hrefFor={hrefFor} />
+            <Detail key={activeNode.ref} node={activeNode} allNodes={tree} run={run} onSelect={activate} hrefFor={hrefFor} onNav={onNav} />
           ) : (
             <p className={s.empty}>Select a node to view and edit it.</p>
           )}
