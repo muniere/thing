@@ -363,8 +363,10 @@ func TestNoStaticReturns404(t *testing.T) {
 }
 
 func TestListenExplicitFailsWhenTaken(t *testing.T) {
-	// Occupy a port, then demand it explicitly.
-	held, err := net.Listen("tcp", "127.0.0.1:0")
+	// Occupy the port on the wildcard address, as another server would. Listen
+	// binds the wildcard too, so this is what it must detect — a specific
+	// 127.0.0.1 bind would not conflict with the wildcard on some platforms.
+	held, err := net.Listen("tcp", ":0")
 	if err != nil {
 		t.Fatal(err)
 	}
