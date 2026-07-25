@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/Node",
+  "definitions": {
+    "Node": {
+      "type": "object",
+      "title": "Node",
+      "description": "A node in the exported tree (Epic > Issue > Task).",
+      "additionalProperties": false,
+      "required": ["type", "ref", "title", "effectiveStatus"],
+      "properties": {
+        "type": { "$ref": "#/definitions/Type" },
+        "ref": {
+          "type": "string",
+          "description": "The node's full slug-path identity (e.g. \"epic/issue/task\"), used to address it in the API. Its bare slug is the last segment; the ref is unique across the tree, a slug only among siblings."
+        },
+        "title": { "type": "string" },
+        "status": {
+          "$ref": "#/definitions/Status",
+          "description": "The node's own stored status, present only when it has one. Absent means the status is rolled up from children (see effectiveStatus); a parent can be reverted to the rollup by setting an empty status."
+        },
+        "effectiveStatus": {
+          "$ref": "#/definitions/Status",
+          "description": "The derived display status (own status, or the rollup from children). Use this to show and filter a node's status."
+        },
+        "priority": { "$ref": "#/definitions/Priority" },
+        "category": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "updated": { "type": "string" },
+        "links": { "type": "array", "items": { "$ref": "#/definitions/NodeLink" } },
+        "body": { "type": "string" },
+        "children": { "type": "array", "items": { "$ref": "#/definitions/Node" } }
+      }
+    },
+    "NodeLink": {
+      "type": "object",
+      "title": "NodeLink",
+      "additionalProperties": false,
+      "required": ["url"],
+      "properties": {
+        "url": { "type": "string" },
+        "label": { "type": "string" }
+      }
+    },
+    "Status": {
+      "type": "string",
+      "title": "Status",
+      "enum": ["todo", "doing", "done", "paused"]
+    },
+    "Priority": {
+      "type": "string",
+      "title": "Priority",
+      "enum": ["high", "medium", "low"]
+    },
+    "Type": {
+      "type": "string",
+      "title": "Type",
+      "enum": ["epic", "issue", "task"]
+    }
+  }
+}

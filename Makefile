@@ -43,8 +43,10 @@ install:
 test:
 	go test ./...
 
-# Regenerate code from the shared JSON Schema (schema/*.json).
-# Wired to quicktype in a later commit; a no-op until schema/ exists.
+# Regenerate the web wire types from the shared JSON Schema (schema/tree.json) via
+# quicktype; see scripts/gen.sh. `check` runs this and fails on any diff, so the
+# schema and generated.ts never drift; the Go side is held to the same schema by
+# internal/exporter's schema test.
 gen:
 	@if [ -d schema ]; then ./scripts/gen.sh; else echo "no schema/ yet; skipping gen"; fi
 
