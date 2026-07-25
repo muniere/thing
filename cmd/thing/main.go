@@ -9,7 +9,7 @@ import (
 )
 
 // version is the CLI version, overridable at build time via -ldflags.
-var version = "0.0.1-dev"
+var version = "1.0.0"
 
 func main() {
 	if err := cli.NewRootCmd(version).Execute(); err != nil {
