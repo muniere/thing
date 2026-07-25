@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Node } from "./domain/generated.ts";
+import { groupTopNodes } from "./util.ts";
 
 // ancestorRefs("epic/issue/task") => ["epic", "epic/issue"]. A ref is a slug
 // path, so its ancestors are its proper prefixes.
@@ -106,9 +107,9 @@ export function useTreeNav(
   activeRef: string | null,
   activate: (ref: string) => void,
 ): void {
-  // The refs the keyboard can reach, in visual order: a node is present when
-  // visible (it survived the filter prune) and its children follow only when it
-  // is expanded, mirroring what the tree renders.
+  // The refs the keyboard can reach, in visual order: the top level follows the
+  // same category grouping the tree renders (real categories first, uncategorized
+  // last), and a node's children follow only when it is expanded.
   const rows = useMemo(() => {
     const out: { ref: string; hasChildren: boolean }[] = [];
     const walk = (nodes: Node[]) => {
@@ -118,7 +119,7 @@ export function useTreeNav(
         if (kids.length > 0 && fold.expanded(n.ref)) walk(kids);
       }
     };
-    walk(filtered);
+    walk(groupTopNodes(filtered).flatMap((g) => g.nodes));
     return out;
   }, [filtered, fold.expanded]);
 
