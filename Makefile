@@ -35,10 +35,12 @@ serve:
 	@[ -d web/node_modules ] || (cd web && npm install)
 	air -- --port $(PORT) $(if $(DIR),--dir $(DIR))
 
-# install builds and installs the binaries into the Go bin directory
-# (`go env GOBIN`, else `$GOPATH/bin`).
+# install builds and installs both binaries into the Go bin directory
+# (`go env GOBIN`, else `$GOPATH/bin`). thingd embeds web/dist, so the SPA is
+# bundled first — otherwise an installed thingd would serve the placeholder dist.
 install:
-	go install ./cmd/thing
+	cd web && npm install && npm run build
+	go install ./cmd/thing ./cmd/thingd
 
 test:
 	go test ./...
