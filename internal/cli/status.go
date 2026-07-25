@@ -10,8 +10,8 @@ import (
 
 func newStatusCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "status <ref> <status>",
-		Short: "Set a node's status",
+		Use:   "status <ref> <status|auto>",
+		Short: "Set a node's status, or 'auto' to roll it up from children",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			st, err := openStore(cmd)
@@ -22,9 +22,14 @@ func newStatusCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			s := model.Status(args[1])
-			if !s.Valid() {
-				return fmt.Errorf("invalid status %q (want %s)", args[1], model.StatusValues())
+			// "auto" clears the explicit status so a parent reverts to rolling its
+			// status up from its children (see model.Node.EffectiveStatus).
+			s := model.Status("")
+			if args[1] != "auto" {
+				s = model.Status(args[1])
+				if !s.Valid() {
+					return fmt.Errorf("invalid status %q (want %s, or auto)", args[1], model.StatusValues())
+				}
 			}
 			loc.Node.Status = s
 			loc.Node.Updated = today()

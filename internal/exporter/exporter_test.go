@@ -85,11 +85,12 @@ func TestExportNestsAndOmitsEmpties(t *testing.T) {
 	}
 }
 
-func TestExportUsesEffectiveStatus(t *testing.T) {
+func TestExportCarriesOwnStatusOnly(t *testing.T) {
 	s := store.Open(t.TempDir())
 	epic, _ := s.Add("", &model.Node{Title: "E"})
-	// The statusless epic rolls up from its issues: its only issue is done, so
-	// the epic exports as done even though its own file sets no status.
+	// The statusless epic rolls up from its done issue, but Export is the
+	// interchange format: it carries only the stored own status, so the epic has
+	// none and never picks up the derived rollup.
 	if _, err := s.Add(epic, &model.Node{Title: "I", Status: "done"}); err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +101,46 @@ func TestExportUsesEffectiveStatus(t *testing.T) {
 	}
 	var got []node
 	_ = json.Unmarshal(data, &got)
-	if got[0].Status != model.Status("done") {
-		t.Errorf("epic effective status = %q, want done", got[0].Status)
+	if got[0].Status != "" {
+		t.Errorf("rolled-up epic own status = %q, want empty", got[0].Status)
+	}
+	if got[0].Children[0].Status != model.Status("done") {
+		t.Errorf("child own status = %q, want done", got[0].Children[0].Status)
+	}
+	// The interchange format never carries the derived status, on any node.
+	var raw []map[string]any
+	_ = json.Unmarshal(data, &raw)
+	if _, ok := raw[0]["status"]; ok {
+		t.Error("rolled-up epic should omit status entirely")
+	}
+	if _, ok := raw[0]["effectiveStatus"]; ok {
+		t.Error("Export must not carry effectiveStatus")
+	}
+}
+
+func TestExportWebAddsEffectiveStatus(t *testing.T) {
+	s := store.Open(t.TempDir())
+	epic, _ := s.Add("", &model.Node{Title: "E"})
+	if _, err := s.Add(epic, &model.Node{Title: "I", Status: "done"}); err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := ExportWeb(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []node
+	_ = json.Unmarshal(data, &got)
+	// The rolled-up epic keeps no own status but exposes the derived one for the
+	// client to display.
+	if got[0].Status != "" {
+		t.Errorf("epic own status = %q, want empty", got[0].Status)
+	}
+	if got[0].EffectiveStatus != model.Status("done") {
+		t.Errorf("epic effectiveStatus = %q, want done", got[0].EffectiveStatus)
+	}
+	// The pinned child carries both, equal to each other.
+	if c := got[0].Children[0]; c.Status != "done" || c.EffectiveStatus != "done" {
+		t.Errorf("child status=%q effectiveStatus=%q, want both done", c.Status, c.EffectiveStatus)
 	}
 }

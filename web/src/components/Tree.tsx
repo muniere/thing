@@ -41,7 +41,7 @@ export function Tree({ nodes, activeRef, hrefFor, expanded, onToggle }: Props) {
         <div key={key}>
           {key !== UNCATEGORIZED && <div className={s.groupLabel}>{key}</div>}
           {groups.get(key)!.map((n) => (
-            <div className={s.epicCard} data-status={n.status} key={n.ref}>
+            <div className={s.epicCard} data-status={n.effectiveStatus} key={n.ref}>
               <Row node={n} activeRef={activeRef} hrefFor={hrefFor} expanded={expanded} onToggle={onToggle} />
             </div>
           ))}
@@ -85,10 +85,10 @@ function Row(
           className={s.row}
           href={hrefFor(node.ref)}
           data-kind={node.type}
-          data-status={node.status}
+          data-status={node.effectiveStatus}
           data-selected={activeRef === node.ref ? "" : undefined}
         >
-          <StatusBadge status={node.status} variant="dot" />
+          <StatusBadge status={node.effectiveStatus} variant="dot" />
           <span className={s.title}>{node.title}</span>
           {hasChildren && <span className={s.count}>{children.length}</span>}
           {node.priority && <PriorityBadge priority={node.priority} />}

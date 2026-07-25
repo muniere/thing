@@ -558,3 +558,33 @@ func TestFindCommand(t *testing.T) {
 		t.Error("find with no query should fail")
 	}
 }
+
+func TestStatusAuto(t *testing.T) {
+	dir := t.TempDir()
+	d := []string{"--data-dir", dir, "--config", dir}
+	runCLI(t, append([]string{"init"}, d...)...)
+	runCLI(t, append([]string{"add", "Web"}, d...)...)
+	runCLI(t, append([]string{"add", "web/Roll"}, d...)...)
+	runCLI(t, append([]string{"add", "web/roll/Do"}, d...)...)
+
+	// Pin the issue's status; export carries only own status, so it shows up.
+	if code, _, errb := runCLI(t, append([]string{"status", "web/roll", "paused"}, d...)...); code != 0 {
+		t.Fatalf("status set: %s", errb)
+	}
+	if _, out, _ := runCLI(t, append([]string{"export"}, d...)...); !strings.Contains(out, `"status": "paused"`) {
+		t.Fatalf("expected own status paused after set, got: %s", out)
+	}
+
+	// "auto" clears it, so it rolls up again and no node carries an own status.
+	if code, _, errb := runCLI(t, append([]string{"status", "web/roll", "auto"}, d...)...); code != 0 {
+		t.Fatalf("status auto: %s", errb)
+	}
+	if _, out, _ := runCLI(t, append([]string{"export"}, d...)...); strings.Contains(out, `"status"`) {
+		t.Errorf("no node should carry an own status after auto, got: %s", out)
+	}
+
+	// A bogus status is still rejected.
+	if code, _, _ := runCLI(t, append([]string{"status", "web/roll", "bogus"}, d...)...); code == 0 {
+		t.Error("invalid status should fail")
+	}
+}

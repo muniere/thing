@@ -51,7 +51,7 @@ export function filtersFromQuery(search: string): Filters {
 // filters (the query matches title/tags/ref). Category is handled as an
 // epic-level prune in filterTree, not here.
 function selfMatches(n: Node, f: Filters): boolean {
-  if (f.statuses.size > 0 && !f.statuses.has(n.status)) return false;
+  if (f.statuses.size > 0 && !f.statuses.has(n.effectiveStatus)) return false;
   if (f.priorities.size > 0 && !f.priorities.has(n.priority ?? "")) return false;
   if (f.tag !== "" && !(n.tags ?? []).includes(f.tag)) return false;
   if (f.query !== "") {
@@ -95,7 +95,7 @@ export function collectStatusCounts(nodes: Node[]): Record<string, number> {
   const counts: Record<string, number> = {};
   const walk = (ns: Node[]) => {
     for (const n of ns) {
-      counts[n.status] = (counts[n.status] ?? 0) + 1;
+      counts[n.effectiveStatus] = (counts[n.effectiveStatus] ?? 0) + 1;
       walk(n.children ?? []);
     }
   };

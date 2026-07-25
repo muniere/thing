@@ -147,8 +147,9 @@ func (r *statusRecorder) Flush() {
 func (s *Server) handleTree(w http.ResponseWriter, _ *http.Request) {
 	// Snapshot under a read lock, then release before writing the (possibly large)
 	// body to a slow client so a reader never holds the lock across network I/O.
+	// ExportWeb adds each node's effectiveStatus for the client to display.
 	s.mu.RLock()
-	data, err := exporter.Export(s.store)
+	data, err := exporter.ExportWeb(s.store)
 	s.mu.RUnlock()
 	if err != nil {
 		s.fail(w, http.StatusInternalServerError, err)
@@ -264,7 +265,10 @@ func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
 	// Frontmatter field sets are batched into one Save.
 	dirty := false
 	if req.Status != nil {
-		if !model.Status(*req.Status).Valid() {
+		// An empty status clears the explicit value so the node reverts to its
+		// child rollup (see model.Node.EffectiveStatus); any other value must be
+		// valid.
+		if *req.Status != "" && !model.Status(*req.Status).Valid() {
 			s.fail(w, http.StatusBadRequest, fmt.Errorf("invalid status %q", *req.Status))
 			return
 		}
