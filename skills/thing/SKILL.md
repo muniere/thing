@@ -61,10 +61,14 @@ Output is an array of top-level nodes (epics and orphan issues). Each node:
 }
 ```
 
-`status` is always the **effective** (displayed) status: a parent with no
-explicit status rolls it up from its children (all done → done; any doing →
-doing; all todo → todo; otherwise doing), recursively — an epic through its
-issues, an issue through its tasks.
+`status` is the node's **own** status, present only when it is set; it is absent
+when the node has none. A node with no own status has its displayed status rolled
+up from its children (all done → done; any doing → doing; all todo → todo;
+otherwise doing), recursively — an epic through its issues, an issue through its
+tasks, a leaf task defaulting to todo. `export` carries only the own status, so
+compute the rollup yourself if you need the displayed value; set a status to pin
+it, or `thing status <ref> auto` to clear the pin. (thingd's web API additionally
+emits a computed `effectiveStatus`; the CLI `export` does not.)
 
 To find nodes by a query (fuzzy over title, slug, and tags):
 
@@ -94,7 +98,7 @@ own output too. So do not infer failure from output alone — check the exit cod
 ```
 thing init --data-dir <path> --config <path>          # create dirs + starter config.yaml
 thing add [<parent-ref>/]<title> [--priority high|medium|low] [--tags a,b] [--category <c>] --data-dir <path>
-thing status   <ref> <todo|doing|done|paused> --data-dir <path>
+thing status   <ref> <todo|doing|done|paused|auto> --data-dir <path>   # 'auto' clears the pin -> rollup
 thing priority <ref> <high|medium|low> --data-dir <path>
 thing mv <src-ref> <dst-ref> --data-dir <path>        # move and/or rename; backlinks follow
 thing rm <ref> --data-dir <path>                      # an epic/issue removes its whole subtree
@@ -154,8 +158,9 @@ dedupe before calling it.
 
 - A slug is a stable ID (the directory/file name); a ref is the path of slugs.
   Move or rename via `mv`, never by editing the filesystem directly.
-- Status values are exactly `todo`, `doing`, `done`, `paused`; priorities are
-  `high`, `medium`, `low`.
+- Status values are exactly `todo`, `doing`, `done`, `paused` (or `auto` to clear
+  a pin so the status rolls up from children); priorities are `high`, `medium`,
+  `low`.
 - Invalid input (unknown ref, missing/wrong-kind parent, bad status, unknown
   flag) exits non-zero with a message on stderr. Check the exit code; the
   state-change verbs are silent on success, so empty output is not a failure.
