@@ -21,11 +21,13 @@ import (
 	"mime"
 	"net/http"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/muniere/thing/internal/config"
 	"github.com/muniere/thing/internal/exporter"
 	"github.com/muniere/thing/internal/model"
 	"github.com/muniere/thing/internal/store"
@@ -78,6 +80,7 @@ func New(st *store.Store, opts Options) *Server {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/tree", s.handleTree)
+	mux.HandleFunc("GET /api/config", s.handleConfig)
 	mux.HandleFunc("GET /events", s.handleEvents)
 	mux.HandleFunc("POST /api/nodes/{parent...}", s.handleCreate)
 	mux.HandleFunc("PATCH /api/nodes/{ref...}", s.handleUpdate)
@@ -159,6 +162,31 @@ func (s *Server) handleTree(w http.ResponseWriter, _ *http.Request) {
 	if _, err := w.Write(data); err != nil && s.logger != nil {
 		s.logger.Printf("write /api/tree: %v", err)
 	}
+}
+
+// handleConfig serves the display config the web UI reads: the title (from
+// config.yaml in the served data directory — the project-local .thing/ holds it
+// alongside the nodes) and the data directory path itself, shown as a label. A
+// missing or title-less config yields the default "thing", so the endpoint always
+// returns a usable title.
+func (s *Server) handleConfig(w http.ResponseWriter, _ *http.Request) {
+	s.mu.RLock()
+	root := s.store.Root
+	cfg, err := config.Load(root)
+	s.mu.RUnlock()
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	title := cfg.Title
+	if title == "" {
+		title = "thing"
+	}
+	dir := root
+	if abs, err := filepath.Abs(root); err == nil {
+		dir = abs
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"title": title, "dir": dir})
 }
 
 // --- writes ---

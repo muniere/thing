@@ -355,6 +355,35 @@ func TestStaticServingAndSPAFallback(t *testing.T) {
 	}
 }
 
+func TestConfigEndpoint(t *testing.T) {
+	// No config.yaml -> the default title.
+	s := newServer(t)
+	w := do(t, s, "GET", "/api/config", "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("config = %d, want 200; body=%s", w.Code, w.Body.String())
+	}
+	var got map[string]string
+	_ = json.Unmarshal(w.Body.Bytes(), &got)
+	if got["title"] != "thing" {
+		t.Errorf("default title = %q, want thing", got["title"])
+	}
+
+	// A config.yaml title is served, along with the data dir path.
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "config.yaml"), []byte("title: My Board\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s2 := New(store.Open(root), Options{Now: func() string { return "x" }})
+	w2 := do(t, s2, "GET", "/api/config", "")
+	_ = json.Unmarshal(w2.Body.Bytes(), &got)
+	if got["title"] != "My Board" {
+		t.Errorf("title = %q, want My Board", got["title"])
+	}
+	if got["dir"] != root {
+		t.Errorf("dir = %q, want %q", got["dir"], root)
+	}
+}
+
 func TestNoStaticReturns404(t *testing.T) {
 	s := newServer(t)
 	if w := do(t, s, "GET", "/", ""); w.Code != http.StatusNotFound {
