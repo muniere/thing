@@ -23,6 +23,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/muniere/thing/internal/exporter"
@@ -45,6 +46,14 @@ type Server struct {
 	logger *log.Logger
 	hub    *hub
 	mux    *http.ServeMux
+	// mu serializes store access across concurrent HTTP requests. The store reads
+	// and writes the data dir directly, so without it two in-flight mutations (a
+	// double-submit, a second tab, two nodes racing on the same slug) could
+	// interleave their read-modify-write and clobber each other, and a read could
+	// observe a half-written tree. Writes take Lock (exclusive, held across the
+	// whole locate → mutate → save so it is atomic); the tree read takes RLock.
+	// It does not coordinate with a separate CLI process touching the same dir.
+	mu sync.RWMutex
 	// bootID is a random nonce minted when the Server is constructed (once per
 	// process in the real binary) and sent in the SSE hello frame. A client that
 	// reconnects and sees a different bootID knows the server was replaced (a new
@@ -136,7 +145,11 @@ func (r *statusRecorder) Flush() {
 // --- reads ---
 
 func (s *Server) handleTree(w http.ResponseWriter, _ *http.Request) {
+	// Snapshot under a read lock, then release before writing the (possibly large)
+	// body to a slow client so a reader never holds the lock across network I/O.
+	s.mu.RLock()
 	data, err := exporter.Export(s.store)
+	s.mu.RUnlock()
 	if err != nil {
 		s.fail(w, http.StatusInternalServerError, err)
 		return
@@ -185,6 +198,8 @@ func (s *Server) handleCreate(w http.ResponseWriter, r *http.Request) {
 		Tags:     req.Tags,
 		Updated:  s.now(),
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	ref, err := s.store.Add(parent, n)
 	if err != nil {
 		s.fail(w, http.StatusBadRequest, err)
@@ -212,12 +227,16 @@ type linkReq struct {
 }
 
 func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
-	e := s.locate(w, r)
-	if e == nil {
-		return
-	}
 	var req patchReq
 	if !decode(w, r, &req) {
+		return
+	}
+	// Hold the write lock across the whole locate → mutate → save/move so the
+	// read-modify-write is atomic against any other in-flight mutation.
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e := s.locate(w, r)
+	if e == nil {
 		return
 	}
 
@@ -323,6 +342,8 @@ func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRemove(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	e := s.locate(w, r)
 	if e == nil {
 		return
