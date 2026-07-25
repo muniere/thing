@@ -134,11 +134,6 @@
   border-radius: 999px;
   padding: 0.02rem 0.4rem;
 }
-.tag {
-  font-family: var(--mono);
-  font-size: 0.68rem;
-  color: var(--ink-3);
-}
 
 .empty {
   color: var(--ink-3);
