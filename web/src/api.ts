@@ -34,6 +34,9 @@ export interface CreateInput {
 // Slugs are URL-safe ([a-z0-9-]) so a ref needs no escaping to be a URL path.
 export const api = {
   tree: () => req<Node[]>("GET", "/api/tree"),
+  // config carries the display settings the UI reads: the title from config.yaml
+  // and the served data directory path.
+  config: () => req<{ title: string; dir: string }>("GET", "/api/config"),
   // create adds a child under the parent ref; the parent decides the type. An
   // empty parent ("") creates a top-level epic.
   create: (parent: string, input: CreateInput) =>

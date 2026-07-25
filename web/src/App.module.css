@@ -67,6 +67,14 @@
   padding: 1.4rem 1.2rem 3rem;
   border-right: 1px solid var(--line);
 }
+/* the served data directory path, shown above the tree */
+.dir {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--ink-3);
+  overflow-wrap: anywhere;
+  margin: 0 0.5rem 1rem;
+}
 .detailPane {
   flex: 1;
   min-width: 0;

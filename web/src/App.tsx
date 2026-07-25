@@ -20,6 +20,8 @@ function refFromPath(): string | null {
 
 export function App() {
   const [tree, setTree] = useState<Node[]>([]);
+  const [title, setTitle] = useState("thing");
+  const [dir, setDir] = useState("");
   const [activeRef, setActiveRef] = useState<string | null>(() => refFromPath());
   const [filters, setFilters] = useState<Filters>(() => filtersFromQuery(window.location.search));
   const [error, setError] = useState<string | null>(null);
@@ -32,10 +34,31 @@ export function App() {
     }
   }, []);
 
+  // Load the configured title and keep the browser tab in sync with it. It also
+  // roots the tree and labels the top-left logo. Refetched on live-reload since
+  // editing config.yaml changes it.
+  const loadConfig = useCallback(async () => {
+    try {
+      const c = await api.config();
+      setTitle(c.title || "thing");
+      setDir(c.dir);
+    } catch {
+      // a missing/unreachable config just leaves the defaults
+    }
+  }, []);
   useEffect(() => {
     void reload();
-  }, [reload]);
-  useLiveReload(reload);
+    void loadConfig();
+  }, [reload, loadConfig]);
+  // One SSE subscription refreshes both the tree and the config (title/dir).
+  const refresh = useCallback(() => {
+    void reload();
+    void loadConfig();
+  }, [reload, loadConfig]);
+  useLiveReload(refresh);
+  useEffect(() => {
+    document.title = title;
+  }, [title]);
 
   // run awaits a mutation, surfaces any error, then refreshes the tree.
   const run = useCallback(
@@ -93,7 +116,7 @@ export function App() {
     <div className={s.app}>
       <header className={s.topbar}>
         <a className={s.brand} href={hrefFor("")}>
-          <span className={s.dot} />thing
+          <span className={s.dot} />{title}
         </a>
         <div className={s.topbarAdd}>
           <AddForm parent="" noun="Epic" amber floating run={run} onCreated={activate} />
@@ -113,6 +136,7 @@ export function App() {
         />
 
         <section className={s.treePane}>
+          {dir && <div className={s.dir}>{dir}</div>}
           <Tree nodes={filtered} activeRef={activeRef} hrefFor={hrefFor} expanded={fold.expanded} onToggle={fold.toggle} />
         </section>
 
