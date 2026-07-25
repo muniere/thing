@@ -24,6 +24,9 @@ const PRIORITIES = [Priority.High, Priority.Medium, Priority.Low];
 // a key on the element), so its draft state resets cleanly when the node changes.
 export function Detail({ node, allNodes, run, onSelect, hrefFor, onNav }: Props) {
   const isEpic = node.type === Type.Epic;
+  // A parent (epic/issue) can roll its status up from its children, offered as an
+  // "auto" choice in the status pulldown; a task's status is always its own.
+  const isParent = node.type !== Type.Task;
 
   const [title, setTitle] = useState(node.title);
   const [category, setCategory] = useState(node.category ?? "");
@@ -71,8 +74,6 @@ export function Detail({ node, allNodes, run, onSelect, hrefFor, onNav }: Props)
 
   return (
     <div className={s.detail}>
-      <div className={s.crumb}>{node.type} · {node.ref}{node.updated ? ` · updated ${node.updated}` : ""}</div>
-
       {editing ? (
         <div className={s.edit}>
           <input
@@ -105,31 +106,23 @@ export function Detail({ node, allNodes, run, onSelect, hrefFor, onNav }: Props)
           <button type="button" className={s.btnLink} onClick={() => setEditing(true)}>edit</button>
         </div>
       )}
+      <div className={s.ref}>{node.ref}</div>
 
       <div className={s.meta}>
         <span className={s.chipField} data-status={node.effectiveStatus}>
+          {/* The chip is colored by the effective (rolled-up) status; a parent with
+              no own status reads "auto", and picking "auto" clears the pin. */}
           <select
             className={`${s.chip} ${s.statusChip}`}
             data-status={node.effectiveStatus}
             aria-label="status"
-            value={node.effectiveStatus}
-            onChange={(e) => run(api.status(node.ref, e.target.value))}
+            value={node.status || (isParent ? "auto" : node.effectiveStatus)}
+            onChange={(e) => run(api.status(node.ref, e.target.value === "auto" ? "" : e.target.value))}
           >
+            {isParent && <option value="auto">auto</option>}
             {STATUSES.map((st) => <option key={st} value={st}>{st}</option>)}
           </select>
         </span>
-        {node.type !== Type.Task && node.status && (
-          // A parent with an explicit status can revert to rolling it up from its
-          // children (an empty status clears it server-side).
-          <button
-            type="button"
-            className={s.btnLink}
-            title="revert to the status rolled up from children"
-            onClick={() => run(api.status(node.ref, ""))}
-          >
-            auto
-          </button>
-        )}
         <span className={`${s.chipField} ${priority ? "" : s.noFill}`}>
           <select
             className={`${s.chip} ${s.priorityChip}`}
@@ -144,6 +137,7 @@ export function Detail({ node, allNodes, run, onSelect, hrefFor, onNav }: Props)
         </span>
         {!editing && isEpic && node.category && <span className={s.cat}>{node.category}</span>}
         {(node.tags ?? []).map((t) => <span key={t} className={s.tag}>#{t}</span>)}
+        {node.updated && <span className={s.updated}>updated {node.updated}</span>}
       </div>
 
       <div className={s.sectionHead}>
