@@ -1,7 +1,9 @@
-// Command thingd is the human-facing web server for a thing tree. It serves a
-// JSON API over the shared Go data layer and the bundled SPA, which it embeds, so
-// `make build` yields one self-contained binary and `make serve` runs that same
-// binary under air.
+// Command thingd is the human-facing web server for thing trees. One process
+// hosts multiple projects registered in projects.yaml, each a named mount over
+// its own data directory, addressed under /<project>. It serves a JSON API over
+// the shared Go data layer and the bundled SPA, which it embeds, so `make build`
+// yields one self-contained binary and `make serve` runs that same binary under
+// air.
 package main
 
 import (
@@ -18,6 +20,7 @@ import (
 	"time"
 
 	thing "github.com/muniere/thing"
+	"github.com/muniere/thing/internal/registry"
 	"github.com/muniere/thing/internal/server"
 	"github.com/muniere/thing/internal/store"
 )
@@ -32,9 +35,6 @@ func main() {
 func run(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("thingd", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	dir := fs.String("dir", "", "data directory")
-	global := fs.Bool("global", false, "use the global tree (~/.thing)")
-	fs.BoolVar(global, "g", false, "shorthand for --global")
 	port := fs.Int("port", server.DefaultPort, "listen port")
 	open := fs.Bool("open", false, "open the URL in a browser once serving")
 	showVersion := fs.Bool("version", false, "print version and exit")
@@ -46,14 +46,28 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 
-	root, err := resolveDataDir(*dir, *global)
+	// Projects come from projects.yaml under the resolved state directory. A
+	// missing file is not an error — the server starts empty and shows the picker.
+	regFile, err := registry.File()
+	if err != nil {
+		fmt.Fprintf(stderr, "thingd: %v\n", err)
+		return 1
+	}
+	projects, err := registry.Load(regFile)
 	if err != nil {
 		fmt.Fprintf(stderr, "thingd: %v\n", err)
 		return 1
 	}
 
+	mounts := make([]server.Mount, 0, len(projects))
+	infos := make([]server.ProjectInfo, 0, len(projects))
+	for _, p := range projects {
+		mounts = append(mounts, server.Mount{Name: p.Name, Store: store.Open(p.Dir)})
+		infos = append(infos, server.ProjectInfo{Name: p.Name, Dir: p.Dir})
+	}
+
 	// An explicit --port must be honored exactly; the default may hop to the
-	// next free port so multiple trees can serve at once.
+	// next free port so multiple servers can run at once.
 	explicit := false
 	fs.Visit(func(f *flag.Flag) {
 		if f.Name == "port" {
@@ -66,15 +80,14 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	st := store.Open(root)
-	srv := server.New(st, server.Options{
+	srv := server.New(mounts, server.Options{
 		Static: thing.WebAssets(),
 		Now:    func() string { return time.Now().Format("2006-01-02") },
 		Logger: log.New(stderr, "", log.LstdFlags),
 	})
 
-	// Watch the data dir so edits from the CLI or an editor live-reload open
-	// browsers over SSE. The watcher runs for the lifetime of the process.
+	// Watch every project's data dir so edits from the CLI or an editor live-reload
+	// open browsers over SSE. The watchers run for the lifetime of the process.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go srv.StartWatch(ctx, time.Second)
@@ -82,7 +95,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	// Show localhost (the bind host) with the actually-bound port, which may have
 	// hopped past a taken default.
 	url := fmt.Sprintf("http://localhost:%d", ln.Addr().(*net.TCPAddr).Port)
-	server.PrintStartup(stdout, version, url, root)
+	server.PrintStartup(stdout, version, url, infos)
 	if *open {
 		openBrowser(url)
 	}
@@ -92,28 +105,6 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	return 0
-}
-
-// resolveDataDir picks the tree's data directory, mirroring the CLI's order:
-//
-//	--dir  ->  THING_DATA_DIR  ->  -g global  ->  nearest .thing/ upward
-//
-// Like the CLI there is no implicit global fallback: it errors rather than
-// silently serve a global tree.
-func resolveDataDir(dir string, global bool) (string, error) {
-	if dir != "" {
-		return dir, nil
-	}
-	if v := os.Getenv("THING_DATA_DIR"); v != "" {
-		return v, nil
-	}
-	if global {
-		return store.GlobalDataDir()
-	}
-	if d, ok := store.FindProjectDir(); ok {
-		return d, nil
-	}
-	return "", fmt.Errorf("no data directory found: pass --dir, set THING_DATA_DIR, use -g for the global tree, or run inside a project (a directory with a .thing/)")
 }
 
 // openBrowser best-effort launches the platform's URL opener. Failures are

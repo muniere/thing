@@ -60,7 +60,7 @@ func (h *hub) broadcast() {
 
 // handleEvents streams reload signals over Server-Sent Events until the client
 // disconnects.
-func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleEvents(p *project, w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		s.fail(w, http.StatusInternalServerError, fmt.Errorf("streaming unsupported"))
@@ -70,8 +70,8 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
-	ch := s.hub.subscribe()
-	defer s.hub.unsubscribe(ch)
+	ch := p.hub.subscribe()
+	defer p.hub.unsubscribe(ch)
 
 	// send writes one frame and flushes; a write error means the client is gone,
 	// so the caller returns and the deferred unsubscribe cleans up.
@@ -111,11 +111,28 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// StartWatch polls the data directory and broadcasts a reload whenever its
-// fingerprint changes, so edits made outside the web (CLI, editor) also refresh
-// open browsers. It returns when ctx is cancelled.
+// StartWatch launches one filesystem poller per registered project and blocks
+// until ctx is cancelled. Each poller broadcasts a reload to its own project's
+// hub whenever that project's data directory changes, so edits made outside the
+// web (CLI, editor) refresh only that project's open browsers.
 func (s *Server) StartWatch(ctx context.Context, interval time.Duration) {
-	last := fingerprint(s.store.Root)
+	s.regmu.RLock()
+	projects := make([]*project, 0, len(s.projects))
+	for _, p := range s.projects {
+		projects = append(projects, p)
+	}
+	s.regmu.RUnlock()
+
+	for _, p := range projects {
+		go p.watch(ctx, interval)
+	}
+	<-ctx.Done()
+}
+
+// watch polls the project's data directory and broadcasts a reload to its hub
+// whenever the directory's fingerprint changes. It returns when ctx is cancelled.
+func (p *project) watch(ctx context.Context, interval time.Duration) {
+	last := fingerprint(p.store.Root)
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
@@ -123,9 +140,9 @@ func (s *Server) StartWatch(ctx context.Context, interval time.Duration) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if fp := fingerprint(s.store.Root); fp != last {
+			if fp := fingerprint(p.store.Root); fp != last {
 				last = fp
-				s.hub.broadcast()
+				p.hub.broadcast()
 			}
 		}
 	}
