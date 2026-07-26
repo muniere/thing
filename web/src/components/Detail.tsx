@@ -35,6 +35,7 @@ export function Detail({ node, allNodes, run, onSelect, hrefFor, onNav }: Props)
   const [linkURL, setLinkURL] = useState("");
   const [linkLabel, setLinkLabel] = useState("");
   const [moveTo, setMoveTo] = useState("");
+  const [moving, setMoving] = useState(false);
   const [editing, setEditing] = useState(false);
 
   const saveTitle = async () => {
@@ -218,26 +219,45 @@ export function Detail({ node, allNodes, run, onSelect, hrefFor, onNav }: Props)
       {!isEpic && (
         <>
           <div className={s.label}>move</div>
-          <div className={s.inlineForm}>
-            <select className={s.select} value={moveTo} onChange={(e) => setMoveTo(e.target.value)}>
-              <option value="">choose new parent…</option>
-              {moveTargets().map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
-            <button
-              type="button"
-              className={s.btn}
-              disabled={!moveTo}
-              onClick={async () => {
-                // A move re-slugs the node (its ref carries the parent path), so
-                // follow the returned new ref — otherwise the selection points at
-                // the old ref and the pane goes blank after the reload.
-                const res = await run(api.move(node.ref, moveTo));
-                if (res) onSelect(res.ref);
-              }}
-            >
-              Move
-            </button>
-          </div>
+          {moving ? (
+            <div className={s.inlineForm}>
+              <select
+                className={s.select}
+                autoFocus
+                value={moveTo}
+                onChange={(e) => setMoveTo(e.target.value)}
+              >
+                <option value="">choose new parent…</option>
+                {moveTargets().map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+              <button
+                type="button"
+                className={`${s.btn} ${s.btnAmber}`}
+                disabled={!moveTo}
+                onClick={async () => {
+                  // A move re-slugs the node (its ref carries the parent path), so
+                  // follow the returned new ref — otherwise the selection points at
+                  // the old ref and the pane goes blank after the reload.
+                  const res = await run(api.move(node.ref, moveTo));
+                  if (res) onSelect(res.ref);
+                }}
+              >
+                Move
+              </button>
+              <button
+                type="button"
+                className={s.btnLink}
+                onClick={() => {
+                  setMoving(false);
+                  setMoveTo("");
+                }}
+              >
+                cancel
+              </button>
+            </div>
+          ) : (
+            <button type="button" className={s.btn} onClick={() => setMoving(true)}>change parent</button>
+          )}
         </>
       )}
 
