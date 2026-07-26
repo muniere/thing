@@ -1,4 +1,4 @@
-import { type MouseEvent, useState } from "react";
+import { type MouseEvent, useEffect, useRef, useState } from "react";
 import type { Node } from "../domain/generated.ts";
 import { Priority, Status, Type } from "../domain/generated.ts";
 import { api } from "../api.ts";
@@ -37,6 +37,16 @@ export function Detail({ node, allNodes, run, onSelect, hrefFor, onNav }: Props)
   const [moveTo, setMoveTo] = useState("");
   const [moving, setMoving] = useState(false);
   const [editing, setEditing] = useState(false);
+
+  // The change-parent picker is a modal dialog; drive the native <dialog> from the
+  // moving flag so Escape and the backdrop close it (its onClose resets state).
+  const moveDialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const d = moveDialog.current;
+    if (!d) return;
+    if (moving && !d.open) d.showModal();
+    else if (!moving && d.open) d.close();
+  }, [moving]);
 
   const saveTitle = async () => {
     const t = title.trim();
@@ -225,7 +235,15 @@ export function Detail({ node, allNodes, run, onSelect, hrefFor, onNav }: Props)
                 Status is pinned to {node.status}. Reset it to roll up from this {node.type}'s children.
               </div>
             </div>
-            <button type="button" className={s.btn} onClick={() => run(api.status(node.ref, ""))}>
+            <button
+              type="button"
+              className={s.btn}
+              onClick={() => {
+                if (confirm(`Reset this ${node.type}'s status to auto (roll up from its children)?`)) {
+                  run(api.status(node.ref, ""));
+                }
+              }}
+            >
               Reset to auto
             </button>
           </div>
@@ -237,45 +255,7 @@ export function Detail({ node, allNodes, run, onSelect, hrefFor, onNav }: Props)
               <div className={s.actionTitle}>Change parent</div>
               <div className={s.actionDesc}>Move this {node.type} under a different parent.</div>
             </div>
-            {moving ? (
-              <div className={s.inlineForm}>
-                <select
-                  className={s.select}
-                  autoFocus
-                  value={moveTo}
-                  onChange={(e) => setMoveTo(e.target.value)}
-                >
-                  <option value="">choose new parent…</option>
-                  {moveTargets().map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                </select>
-                <button
-                  type="button"
-                  className={`${s.btn} ${s.btnAmber}`}
-                  disabled={!moveTo}
-                  onClick={async () => {
-                    // A move re-slugs the node (its ref carries the parent path), so
-                    // follow the returned new ref — otherwise the selection points at
-                    // the old ref and the pane goes blank after the reload.
-                    const res = await run(api.move(node.ref, moveTo));
-                    if (res) onSelect(res.ref);
-                  }}
-                >
-                  Move
-                </button>
-                <button
-                  type="button"
-                  className={s.btnLink}
-                  onClick={() => {
-                    setMoving(false);
-                    setMoveTo("");
-                  }}
-                >
-                  cancel
-                </button>
-              </div>
-            ) : (
-              <button type="button" className={s.btn} onClick={() => setMoving(true)}>Change parent</button>
-            )}
+            <button type="button" className={s.btn} onClick={() => setMoving(true)}>Change parent</button>
           </div>
         )}
 
@@ -299,6 +279,43 @@ export function Detail({ node, allNodes, run, onSelect, hrefFor, onNav }: Props)
           </button>
         </div>
       </div>
+
+      <dialog
+        ref={moveDialog}
+        className={s.dialog}
+        onClose={() => {
+          setMoving(false);
+          setMoveTo("");
+        }}
+      >
+        <div className={s.dialogBody}>
+          <div className={s.dialogTitle}>Change parent</div>
+          <div className={s.dialogDesc}>Move “{node.title}” under a different parent.</div>
+          <select className={s.select} value={moveTo} onChange={(e) => setMoveTo(e.target.value)}>
+            <option value="">choose new parent…</option>
+            {moveTargets().map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </select>
+          <div className={s.dialogActions}>
+            <button
+              type="button"
+              className={`${s.btn} ${s.btnAmber}`}
+              disabled={!moveTo}
+              onClick={async () => {
+                // A move re-slugs the node (its ref carries the parent path), so
+                // follow the returned new ref — otherwise the selection points at
+                // the old ref and the pane goes blank after the reload.
+                const res = await run(api.move(node.ref, moveTo));
+                if (res) onSelect(res.ref);
+              }}
+            >
+              Move
+            </button>
+            <button type="button" className={s.btnLink} onClick={() => moveDialog.current?.close()}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      </dialog>
     </div>
   );
 }

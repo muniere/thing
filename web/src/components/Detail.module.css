@@ -167,6 +167,7 @@
 /* Actions: GitHub-settings-style rows — a description on the left, the action's
    button on the right — grouped in one bordered box. */
 .actions {
+  background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   overflow: hidden;
@@ -193,6 +194,42 @@
   font-size: 0.8rem;
   color: var(--ink-3);
   margin-top: 0.15rem;
+}
+
+/* change-parent modal (native <dialog>) */
+.dialog {
+  margin: auto;
+  width: min(28rem, 92vw);
+  padding: 1.2rem;
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35);
+}
+.dialog::backdrop {
+  background: rgba(0, 0, 0, 0.4);
+}
+.dialogBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+.dialogTitle {
+  font-weight: 600;
+  font-size: 1rem;
+}
+.dialogDesc {
+  font-size: 0.85rem;
+  color: var(--ink-3);
+}
+.dialog .select {
+  max-width: none;
+}
+.dialogActions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
 }
 
 /* Child list (styled after tray's): an epic's issues / an issue's tasks, each a
