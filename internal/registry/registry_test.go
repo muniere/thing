@@ -98,3 +98,57 @@ func TestLoadRejectsInvalidName(t *testing.T) {
 		t.Error("expected an error for a non-slug project name")
 	}
 }
+
+func TestSaveRoundTrips(t *testing.T) {
+	// Save into a not-yet-existing state dir, then Load it back unchanged.
+	path := filepath.Join(t.TempDir(), "state", "projects.yaml")
+	want := []Project{
+		{Name: "work", Dir: "/Users/me/work/.thing"},
+		{Name: "home", Dir: "/Users/me/home/.thing"},
+	}
+	if err := Save(path, want); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	got, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %d projects, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("project[%d] = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+}
+
+func TestSaveOverwritesExisting(t *testing.T) {
+	// A second Save replaces the file rather than appending; the empty list
+	// yields an empty registry.
+	path := filepath.Join(t.TempDir(), "projects.yaml")
+	if err := Save(path, []Project{{Name: "work", Dir: "/a/.thing"}}); err != nil {
+		t.Fatalf("Save first: %v", err)
+	}
+	if err := Save(path, nil); err != nil {
+		t.Fatalf("Save empty: %v", err)
+	}
+	got, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("got %d projects, want 0", len(got))
+	}
+}
+
+func TestSaveRejectsInvalid(t *testing.T) {
+	// A bad list is rejected before it reaches disk, so no file is created.
+	path := filepath.Join(t.TempDir(), "projects.yaml")
+	if err := Save(path, []Project{{Name: "Not A Slug", Dir: "/a/.thing"}}); err == nil {
+		t.Error("expected an error for a non-slug project name")
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("expected no file written on invalid input, stat err = %v", err)
+	}
+}

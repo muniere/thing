@@ -12,7 +12,9 @@ import (
 	"sync"
 	"testing"
 	"testing/fstest"
+	"time"
 
+	"github.com/muniere/thing/internal/registry"
 	"github.com/muniere/thing/internal/store"
 )
 
@@ -470,4 +472,181 @@ func TestListenExplicitFailsWhenTaken(t *testing.T) {
 	if got := ln.Addr().(*net.TCPAddr).Port; got == port {
 		t.Fatalf("fallback reused the taken port %d", got)
 	}
+}
+
+// thingTreeDir returns a temp directory that looks like an initialized thing
+// tree (it holds a config.yaml), so Register accepts it.
+func thingTreeDir(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("title: Added\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func TestRegisterMountsAndLists(t *testing.T) {
+	s := newServer(t)
+	dir := thingTreeDir(t)
+
+	w := do(t, s, "PUT", "/api/projects/added", `{"dir":"`+dir+`"}`)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want 201; body=%s", w.Code, w.Body.String())
+	}
+	// The new project answers on its own routes...
+	if got := do(t, s, "GET", "/api/projects/added/tree", ""); got.Code != http.StatusOK {
+		t.Fatalf("tree status = %d, want 200", got.Code)
+	}
+	// ...and shows up in the picker list alongside the original.
+	list := do(t, s, "GET", "/api/projects", "")
+	var items []map[string]string
+	_ = json.Unmarshal(list.Body.Bytes(), &items)
+	names := map[string]bool{}
+	for _, it := range items {
+		names[it["name"]] = true
+	}
+	if !names["test"] || !names["added"] {
+		t.Fatalf("project list = %v, want both test and added", items)
+	}
+}
+
+func TestRegisterIsIdempotent(t *testing.T) {
+	s := newServer(t)
+	dir := thingTreeDir(t)
+	if w := do(t, s, "PUT", "/api/projects/added", `{"dir":"`+dir+`"}`); w.Code != http.StatusCreated {
+		t.Fatalf("first PUT = %d, want 201", w.Code)
+	}
+	// Same name, same dir: a no-op that reports 200 rather than 201 or a conflict.
+	if w := do(t, s, "PUT", "/api/projects/added", `{"dir":"`+dir+`"}`); w.Code != http.StatusOK {
+		t.Fatalf("repeat PUT = %d, want 200; body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestRegisterConflictOnDifferentDir(t *testing.T) {
+	s := newServer(t)
+	if w := do(t, s, "PUT", "/api/projects/added", `{"dir":"`+thingTreeDir(t)+`"}`); w.Code != http.StatusCreated {
+		t.Fatalf("first PUT = %d, want 201", w.Code)
+	}
+	// Same name, a different dir: a conflict, not a silent re-point.
+	if w := do(t, s, "PUT", "/api/projects/added", `{"dir":"`+thingTreeDir(t)+`"}`); w.Code != http.StatusConflict {
+		t.Fatalf("conflicting PUT = %d, want 409; body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestRegisterRejectsBadName(t *testing.T) {
+	s := newServer(t)
+	// A non-slug name in the path (uppercase) is rejected.
+	if w := do(t, s, "PUT", "/api/projects/NotASlug", `{"dir":"`+thingTreeDir(t)+`"}`); w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", w.Code)
+	}
+}
+
+func TestRegisterRejectsNonThingDir(t *testing.T) {
+	s := newServer(t)
+	// A directory without config.yaml is not an initialized thing tree.
+	if w := do(t, s, "PUT", "/api/projects/added", `{"dir":"`+t.TempDir()+`"}`); w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestUnregisterRemoves(t *testing.T) {
+	s := newServer(t)
+	dir := thingTreeDir(t)
+	do(t, s, "PUT", "/api/projects/added", `{"dir":"`+dir+`"}`)
+
+	if w := do(t, s, "DELETE", "/api/projects/added", ""); w.Code != http.StatusNoContent {
+		t.Fatalf("delete status = %d, want 204; body=%s", w.Code, w.Body.String())
+	}
+	// Gone from routing...
+	if w := do(t, s, "GET", "/api/projects/added/tree", ""); w.Code != http.StatusNotFound {
+		t.Fatalf("tree after delete = %d, want 404", w.Code)
+	}
+	// ...but the data directory is left on disk (unregister only).
+	if _, err := os.Stat(filepath.Join(dir, "config.yaml")); err != nil {
+		t.Fatalf("unregister must not delete data dir: %v", err)
+	}
+}
+
+func TestUnregisterUnknownIs404(t *testing.T) {
+	s := newServer(t)
+	if w := do(t, s, "DELETE", "/api/projects/nope", ""); w.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", w.Code)
+	}
+}
+
+func TestRegisterPersistsToRegistry(t *testing.T) {
+	regFile := filepath.Join(t.TempDir(), "projects.yaml")
+	s := New([]Mount{{Name: "test", Store: fixture(t)}}, Options{
+		Now:          func() string { return "2026-07-20" },
+		RegistryFile: regFile,
+	})
+	dir := thingTreeDir(t)
+
+	// persist writes the whole registry, so the boot-mounted "test" is kept and
+	// "added" is appended.
+	do(t, s, "PUT", "/api/projects/added", `{"dir":"`+dir+`"}`)
+	got, err := registry.Load(regFile)
+	if err != nil {
+		t.Fatalf("Load after register: %v", err)
+	}
+	if len(got) != 2 || got[1].Name != "added" || got[1].Dir != dir {
+		t.Fatalf("registry after register = %+v, want test then {added %s}", got, dir)
+	}
+
+	// Unregister drops only "added"; "test" remains persisted.
+	do(t, s, "DELETE", "/api/projects/added", "")
+	got, err = registry.Load(regFile)
+	if err != nil {
+		t.Fatalf("Load after unregister: %v", err)
+	}
+	if len(got) != 1 || got[0].Name != "test" {
+		t.Fatalf("registry after unregister = %+v, want just test", got)
+	}
+}
+
+func TestRegisterStartsWatcherUnregisterStops(t *testing.T) {
+	s := newServer(t)
+	go s.StartWatch(t.Context(), time.Hour) // long interval: we assert lifecycle, not polling
+	// Let StartWatch capture the context before we register.
+	waitFor(t, func() bool {
+		s.regmu.RLock()
+		defer s.regmu.RUnlock()
+		return s.watchCtx != nil
+	})
+
+	dir := thingTreeDir(t)
+	p, _, err := s.Register("added", dir)
+	if err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	s.regmu.RLock()
+	watching := p.cancelWatch != nil
+	s.regmu.RUnlock()
+	if !watching {
+		t.Fatal("Register should start the project's watcher")
+	}
+
+	if err := s.Unregister("added"); err != nil {
+		t.Fatalf("Unregister: %v", err)
+	}
+	s.regmu.RLock()
+	stopped := p.cancelWatch == nil
+	s.regmu.RUnlock()
+	if !stopped {
+		t.Fatal("Unregister should stop the project's watcher")
+	}
+}
+
+// waitFor polls cond until true or a short deadline, for asserting on state a
+// goroutine sets asynchronously.
+func waitFor(t *testing.T, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if cond() {
+			return
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	t.Fatal("condition not met within deadline")
 }
