@@ -46,6 +46,19 @@ export function listProjects(): Promise<ProjectInfo[]> {
   return req<ProjectInfo[]>("GET", "/api/projects");
 }
 
+// registerProject mounts a project at name over an existing thing tree at dir.
+// The name is the resource URI, so this is a PUT; it is idempotent for the same
+// name+dir and rejects a name already bound to a different dir.
+export function registerProject(name: string, dir: string): Promise<{ name: string; dir: string }> {
+  return req<{ name: string; dir: string }>("PUT", `/api/projects/${name}`, { dir });
+}
+
+// unregisterProject removes a project from the registry. It unregisters only —
+// the data directory is left on disk.
+export function unregisterProject(name: string): Promise<void> {
+  return req<void>("DELETE", `/api/projects/${name}`);
+}
+
 // forProject returns a client bound to one project: every route is prefixed with
 // /api/projects/<project>/. Slugs are URL-safe ([a-z0-9-]) so a ref needs no
 // escaping to be a URL path.

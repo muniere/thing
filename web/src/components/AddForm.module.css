@@ -45,26 +45,6 @@
   text-decoration: underline;
 }
 
-.form {
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  padding: 0.6rem;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--panel-2);
-}
-/* floating: the top-bar epic add drops its form down from the button */
-.floating {
-  position: absolute;
-  top: calc(100% + 0.6rem);
-  right: 0;
-  width: 22rem;
-  z-index: 30;
-  background: var(--panel);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
-}
 .row {
   display: flex;
   gap: 0.4rem;

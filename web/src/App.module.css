@@ -36,17 +36,6 @@
   box-shadow: 0 0 9px var(--amber);
 }
 
-/* "‹ Projects" crumb back to the root picker, sitting left of the project brand. */
-.projects {
-  font-family: var(--mono);
-  font-size: 0.82rem;
-  color: var(--ink-3);
-  text-decoration: none;
-}
-.projects:hover {
-  color: var(--ink-2);
-}
-
 /* +Epic lives in the top bar as the global "new" action; the wrapper anchors its
    drop-down form (AddForm's floating variant positions the form itself). */
 .topbarAdd {

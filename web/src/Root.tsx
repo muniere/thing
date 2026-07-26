@@ -27,13 +27,8 @@ export function Root() {
     setProject(name);
   }, []);
 
-  const exit = useCallback(() => {
-    window.history.pushState(null, "", "/");
-    setProject(null);
-  }, []);
-
   if (!project) {
     return <ProjectList onOpen={open} />;
   }
-  return <App key={project} project={project} onExit={exit} />;
+  return <App key={project} project={project} />;
 }
