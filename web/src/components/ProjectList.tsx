@@ -1,8 +1,14 @@
-import { type MouseEvent, useCallback, useEffect, useState } from "react";
-import { listProjects, type ProjectInfo, registerProject, unregisterProject } from "../api.ts";
+import { type DragEvent, type MouseEvent, useCallback, useEffect, useState } from "react";
+import { listProjects, moveProject, type ProjectInfo, registerProject, unregisterProject } from "../api.ts";
 import { isPlainClick } from "../util.ts";
 import { Dialog } from "./Dialog.tsx";
 import s from "./ProjectList.module.css";
+
+// DropHint marks where a dragged card would land: before or after another card.
+interface DropHint {
+  name: string;
+  pos: "before" | "after";
+}
 
 interface Props {
   // Open a project (push /<name> and switch the view to it).
@@ -64,6 +70,46 @@ export function ProjectList({ onOpen }: Props) {
     }
   };
 
+  // Drag-and-drop reorder. dragName is the card being dragged; hint marks where it
+  // would land (before/after another card), shown as an insertion line.
+  const [dragName, setDragName] = useState<string | null>(null);
+  const [hint, setHint] = useState<DropHint | null>(null);
+
+  // dragOver decides whether the pointer is over the top or bottom half of the
+  // hovered card and records that as the drop position.
+  const dragOver = (e: DragEvent, name: string) => {
+    if (dragName === null || name === dragName) return;
+    e.preventDefault(); // allow the drop
+    e.dataTransfer.dropEffect = "move";
+    const r = e.currentTarget.getBoundingClientRect();
+    const pos = e.clientY < r.top + r.height / 2 ? "before" : "after";
+    setHint((h) => (h?.name === name && h.pos === pos ? h : { name, pos }));
+  };
+
+  // drop moves the dragged project relative to the hovered card. It reorders the
+  // list optimistically, then persists; a failure reloads the true order.
+  const drop = async () => {
+    const from = dragName;
+    const target = hint;
+    setDragName(null);
+    setHint(null);
+    if (!from || !target || from === target.name || !projects) return;
+
+    const rest = projects.filter((p) => p.name !== from);
+    const anchor = rest.findIndex((p) => p.name === target.name);
+    const at = target.pos === "before" ? anchor : anchor + 1;
+    const moved = projects.find((p) => p.name === from);
+    if (anchor < 0 || !moved) return;
+    setProjects([...rest.slice(0, at), moved, ...rest.slice(at)]);
+
+    try {
+      await moveProject(from, target.pos === "before" ? { before: target.name } : { after: target.name });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      load(); // revert to the server's order
+    }
+  };
+
   return (
     <div className={s.page}>
       <header className={s.topbar}>
@@ -87,8 +133,29 @@ export function ProjectList({ onOpen }: Props) {
       {projects && projects.length > 0 && (
         <ul className={s.grid}>
           {projects.map((p) => (
-            <li key={p.name} className={s.item}>
-              <a className={s.card} href={`/${p.name}`} onClick={(e) => open(e, p.name)}>
+            <li
+              key={p.name}
+              className={[
+                s.item,
+                dragName === p.name ? s.dragging : "",
+                hint?.name === p.name ? (hint.pos === "before" ? s.dropBefore : s.dropAfter) : "",
+              ].filter(Boolean).join(" ")}
+              draggable
+              onDragStart={(e) => {
+                setDragName(p.name);
+                e.dataTransfer.effectAllowed = "move";
+              }}
+              onDragOver={(e) => dragOver(e, p.name)}
+              onDrop={drop}
+              onDragEnd={() => {
+                setDragName(null);
+                setHint(null);
+              }}
+            >
+              <span className={s.grip} aria-hidden="true">⠿</span>
+              {/* The card is not itself draggable, so its default link-drag doesn't
+                  fight the row's reorder drag. */}
+              <a className={s.card} href={`/${p.name}`} draggable={false} onClick={(e) => open(e, p.name)}>
                 <span className={s.cardTitle}>{p.title}</span>
                 {/* Always show the slug, prefixed with "/" so it reads as the URL
                     path (/<name>) rather than a repeat of the title. */}
