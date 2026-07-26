@@ -205,7 +205,16 @@ export function Detail({ api, node, allNodes, run, onSelect, hrefFor, onNav }: P
           {(node.links ?? []).map((l) => (
             <li key={l.url}>
               <a href={l.url} target="_blank" rel="noreferrer">{l.label || l.url}</a>
-              <button type="button" className={s.btnLink} onClick={() => run(api.removeLink(node.ref, l.url))}>remove</button>
+              <button
+                type="button"
+                className={s.btnLink}
+                onClick={() => {
+                  if (!confirm(`Remove link "${l.label || l.url}"?`)) return;
+                  run(api.removeLink(node.ref, l.url));
+                }}
+              >
+                remove
+              </button>
             </li>
           ))}
         </ul>
