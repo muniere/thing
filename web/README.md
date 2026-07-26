@@ -1,8 +1,10 @@
 # thing web frontend
 
 The React + TypeScript SPA served by `thingd`. There is no Go here; the frontend
-talks to thingd's ref-based JSON API and consumes the hand-written types in
-`src/domain/generated.ts`.
+talks to thingd's project-scoped, ref-based JSON API (`/api/projects/<p>/…`) and
+consumes the hand-written types in `src/domain/generated.ts`. The root `/` is a
+project picker; `/<project>` opens that project's tree, and `/<project>/<ref>` a
+node. See the root [README](../README.md#web-thingd) for the project registry.
 
 [esbuild](https://esbuild.github.io/) bundles the SPA into `dist/` (see
 `build.mjs`), which `thingd` embeds. There is no dev server: the dev loop runs
@@ -16,8 +18,10 @@ From the repo root:
 
 ```
 make serve                   # air rebuilds+restarts thingd on any change; open http://localhost:4319
-make serve DIR=<path>        # ... against a specific data dir
+make serve PORT=4400         # ... on a different port
 ```
+
+Projects come from `projects.yaml` (see the root README), not a flag.
 
 The page reloads whenever thingd restarts with a new build, and the tree also
 live-reloads over SSE when the data changes from any source (web, CLI, editor).
