@@ -111,16 +111,15 @@ export function Detail({ node, allNodes, run, onSelect, hrefFor, onNav }: Props)
 
       <div className={s.meta}>
         <span className={s.chipField} data-status={node.effectiveStatus}>
-          {/* The chip is colored by the effective (rolled-up) status; a parent with
-              no own status reads "auto", and picking "auto" clears the pin. */}
+          {/* Colored by the effective (rolled-up) status. Picking a value pins it;
+              a pinned parent is reset to the rollup from the actions section. */}
           <select
             className={`${s.chip} ${s.statusChip}`}
             data-status={node.effectiveStatus}
             aria-label="status"
-            value={node.status || (isParent ? "auto" : node.effectiveStatus)}
-            onChange={(e) => run(api.status(node.ref, e.target.value === "auto" ? "" : e.target.value))}
+            value={node.effectiveStatus}
+            onChange={(e) => run(api.status(node.ref, e.target.value))}
           >
-            {isParent && <option value="auto">auto</option>}
             {STATUSES.map((st) => <option key={st} value={st}>{st}</option>)}
           </select>
         </span>
@@ -216,63 +215,90 @@ export function Detail({ node, allNodes, run, onSelect, hrefFor, onNav }: Props)
         </button>
       </div>
 
-      {!isEpic && (
-        <>
-          <div className={s.label}>move</div>
-          {moving ? (
-            <div className={s.inlineForm}>
-              <select
-                className={s.select}
-                autoFocus
-                value={moveTo}
-                onChange={(e) => setMoveTo(e.target.value)}
-              >
-                <option value="">choose new parent…</option>
-                {moveTargets().map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
-              <button
-                type="button"
-                className={`${s.btn} ${s.btnAmber}`}
-                disabled={!moveTo}
-                onClick={async () => {
-                  // A move re-slugs the node (its ref carries the parent path), so
-                  // follow the returned new ref — otherwise the selection points at
-                  // the old ref and the pane goes blank after the reload.
-                  const res = await run(api.move(node.ref, moveTo));
-                  if (res) onSelect(res.ref);
-                }}
-              >
-                Move
-              </button>
-              <button
-                type="button"
-                className={s.btnLink}
-                onClick={() => {
-                  setMoving(false);
-                  setMoveTo("");
-                }}
-              >
-                cancel
-              </button>
+      <div className={s.label}>actions</div>
+      <div className={s.actions}>
+        {isParent && node.status && (
+          <div className={s.action}>
+            <div className={s.actionText}>
+              <div className={s.actionTitle}>Roll up status</div>
+              <div className={s.actionDesc}>
+                Status is pinned to {node.status}. Reset it to roll up from this {node.type}'s children.
+              </div>
             </div>
-          ) : (
-            <button type="button" className={s.btn} onClick={() => setMoving(true)}>change parent</button>
-          )}
-        </>
-      )}
+            <button type="button" className={s.btn} onClick={() => run(api.status(node.ref, ""))}>
+              Reset to auto
+            </button>
+          </div>
+        )}
 
-      <div className={s.label}>danger</div>
-      <button
-        type="button"
-        className={`${s.btn} ${s.btnDanger}`}
-        onClick={async () => {
-          if (!confirm(`Delete ${node.type} "${node.title}"${node.type !== "task" ? " and its subtree" : ""}?`)) return;
-          await run(api.remove(node.ref));
-          onSelect("");
-        }}
-      >
-        Delete {node.type}
-      </button>
+        {!isEpic && (
+          <div className={s.action}>
+            <div className={s.actionText}>
+              <div className={s.actionTitle}>Change parent</div>
+              <div className={s.actionDesc}>Move this {node.type} under a different parent.</div>
+            </div>
+            {moving ? (
+              <div className={s.inlineForm}>
+                <select
+                  className={s.select}
+                  autoFocus
+                  value={moveTo}
+                  onChange={(e) => setMoveTo(e.target.value)}
+                >
+                  <option value="">choose new parent…</option>
+                  {moveTargets().map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+                <button
+                  type="button"
+                  className={`${s.btn} ${s.btnAmber}`}
+                  disabled={!moveTo}
+                  onClick={async () => {
+                    // A move re-slugs the node (its ref carries the parent path), so
+                    // follow the returned new ref — otherwise the selection points at
+                    // the old ref and the pane goes blank after the reload.
+                    const res = await run(api.move(node.ref, moveTo));
+                    if (res) onSelect(res.ref);
+                  }}
+                >
+                  Move
+                </button>
+                <button
+                  type="button"
+                  className={s.btnLink}
+                  onClick={() => {
+                    setMoving(false);
+                    setMoveTo("");
+                  }}
+                >
+                  cancel
+                </button>
+              </div>
+            ) : (
+              <button type="button" className={s.btn} onClick={() => setMoving(true)}>Change parent</button>
+            )}
+          </div>
+        )}
+
+        <div className={s.action}>
+          <div className={s.actionText}>
+            <div className={s.actionTitle}>Delete {node.type}</div>
+            <div className={s.actionDesc}>
+              Permanently remove this {node.type}{node.type !== Type.Task ? " and its subtree" : ""}.
+            </div>
+          </div>
+          <button
+            type="button"
+            className={`${s.btn} ${s.btnDanger}`}
+            onClick={async () => {
+              if (!confirm(`Delete ${node.type} "${node.title}"${node.type !== Type.Task ? " and its subtree" : ""}?`)) return;
+              await run(api.remove(node.ref));
+              onSelect("");
+            }}
+          >
+            Delete
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

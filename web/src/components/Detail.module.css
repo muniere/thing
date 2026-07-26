@@ -164,6 +164,37 @@
   min-width: 8rem;
 }
 
+/* Actions: GitHub-settings-style rows — a description on the left, the action's
+   button on the right — grouped in one bordered box. */
+.actions {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.7rem 0.9rem;
+}
+.action + .action {
+  border-top: 1px solid var(--line);
+}
+.actionText {
+  min-width: 0;
+}
+.actionTitle {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.actionDesc {
+  font-size: 0.8rem;
+  color: var(--ink-3);
+  margin-top: 0.15rem;
+}
+
 /* Child list (styled after tray's): an epic's issues / an issue's tasks, each a
    clickable card with a status-colored left rail that activates the child. */
 .childList {
