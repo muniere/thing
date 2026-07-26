@@ -1,6 +1,6 @@
 import { type MouseEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { Node } from "./domain/generated.ts";
-import { api } from "./api.ts";
+import { forProject } from "./api.ts";
 import { useLiveReload } from "./live.ts";
 import { collectCategories, collectPriorityCounts, collectStatusCounts, collectTags, filterTree, filtersActive, filtersFromQuery, filtersToQuery, type Filters } from "./filter.ts";
 import { findNode, isPlainClick } from "./util.ts";
@@ -11,20 +11,34 @@ import { Detail } from "./components/Detail.tsx";
 import { AddForm } from "./components/AddForm.tsx";
 import s from "./App.module.css";
 
-// The active node's ref is carried in the URL path (e.g. /epic/issue/task);
-// "/" means nothing active. Refs are slug paths ([a-z0-9-] joined by "/"), so
-// they are URL-safe as-is. Filters and search live in the query string instead.
-function refFromPath(): string | null {
-  return window.location.pathname.replace(/^\/+/, "").replace(/\/+$/, "") || null;
+interface Props {
+  // The project this view is scoped to (the first URL path segment).
+  project: string;
+  // Navigate back to the project picker (the root "/").
+  onExit: () => void;
 }
 
-export function App() {
+// The URL path is /<project>/<ref> (e.g. /work/epic/issue/task); /<project> alone
+// means nothing is active. Refs are slug paths ([a-z0-9-] joined by "/"), so they
+// are URL-safe as-is. Filters and search live in the query string instead.
+function refFromPath(project: string): string | null {
+  const path = window.location.pathname.replace(/^\/+/, "").replace(/\/+$/, "");
+  const prefix = `${project}/`;
+  return path.startsWith(prefix) ? path.slice(prefix.length) || null : null;
+}
+
+export function App({ project, onExit }: Props) {
+  const api = useMemo(() => forProject(project), [project]);
   const [tree, setTree] = useState<Node[]>([]);
-  const [title, setTitle] = useState("thing");
+  const [title, setTitle] = useState(project);
   const [dir, setDir] = useState("");
-  const [activeRef, setActiveRef] = useState<string | null>(() => refFromPath());
+  const [activeRef, setActiveRef] = useState<string | null>(() => refFromPath(project));
   const [filters, setFilters] = useState<Filters>(() => filtersFromQuery(window.location.search));
   const [error, setError] = useState<string | null>(null);
+
+  // pathFor builds the URL path for a node ref within this project: /<project> at
+  // the root, /<project>/<ref> for a node.
+  const pathFor = useCallback((ref: string) => (ref ? `/${project}/${ref}` : `/${project}`), [project]);
 
   const reload = useCallback(async () => {
     try {
@@ -32,7 +46,7 @@ export function App() {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, []);
+  }, [api]);
 
   // Load the configured title and keep the browser tab in sync with it. It also
   // roots the tree and labels the top-left logo. Refetched on live-reload since
@@ -40,12 +54,12 @@ export function App() {
   const loadConfig = useCallback(async () => {
     try {
       const c = await api.config();
-      setTitle(c.title || "thing");
+      setTitle(c.title || project);
       setDir(c.dir);
     } catch {
       // a missing/unreachable config just leaves the defaults
     }
-  }, []);
+  }, [api, project]);
   useEffect(() => {
     void reload();
     void loadConfig();
@@ -55,7 +69,7 @@ export function App() {
     void reload();
     void loadConfig();
   }, [reload, loadConfig]);
-  useLiveReload(refresh);
+  useLiveReload(project, refresh);
   useEffect(() => {
     document.title = title;
   }, [title]);
@@ -85,7 +99,7 @@ export function App() {
   // <a> links so the URL is real (a ⌘/Ctrl/Shift/middle click opens the node in a
   // new tab, and the link is copyable), but a plain click is intercepted (see
   // onNav) and handled in-app rather than reloading the page.
-  const hrefFor = useCallback((ref: string) => `/${ref}${filtersToQuery(filters)}`, [filters]);
+  const hrefFor = useCallback((ref: string) => `${pathFor(ref)}${filtersToQuery(filters)}`, [pathFor, filters]);
 
   // navigate selects a node and pushes a history entry, so a plain click behaves
   // like a page navigation (Back/Forward step through visited nodes) without the
@@ -93,10 +107,10 @@ export function App() {
   // onto the connection pool.
   const navigate = useCallback(
     (ref: string) => {
-      window.history.pushState(null, "", `/${ref}${filtersToQuery(filters)}`);
+      window.history.pushState(null, "", `${pathFor(ref)}${filtersToQuery(filters)}`);
       setActiveRef(ref || null);
     },
-    [filters],
+    [pathFor, filters],
   );
 
   // onNav handles an anchor click: a plain click navigates in-app; a modified or
@@ -114,19 +128,19 @@ export function App() {
   // pushing history, so mirror them into the current URL in place — no new entry,
   // no reload — keeping it shareable and correct if the page is then reloaded.
   useEffect(() => {
-    window.history.replaceState(null, "", `/${activeRef ?? ""}${filtersToQuery(filters)}`);
-  }, [activeRef, filters]);
+    window.history.replaceState(null, "", `${pathFor(activeRef ?? "")}${filtersToQuery(filters)}`);
+  }, [pathFor, activeRef, filters]);
 
   // Restore the view from the URL on Back/Forward (a popstate, which pushState
   // navigation produces).
   useEffect(() => {
     const onPop = () => {
-      setActiveRef(refFromPath());
+      setActiveRef(refFromPath(project));
       setFilters(filtersFromQuery(window.location.search));
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
-  }, []);
+  }, [project]);
 
   const filtered = useMemo(() => filterTree(tree, filters), [tree, filters]);
   const categories = useMemo(() => collectCategories(tree), [tree]);
@@ -148,11 +162,22 @@ export function App() {
   return (
     <div className={s.app}>
       <header className={s.topbar}>
+        <a
+          className={s.projects}
+          href="/"
+          onClick={(e) => {
+            if (!isPlainClick(e)) return;
+            e.preventDefault();
+            onExit();
+          }}
+        >
+          ‹ Projects
+        </a>
         <a className={s.brand} href={hrefFor("")} onClick={(e) => onNav(e, "")}>
           <span className={s.dot} />{title}
         </a>
         <div className={s.topbarAdd}>
-          <AddForm parent="" noun="Epic" amber floating run={run} onCreated={activate} />
+          <AddForm api={api} parent="" noun="Epic" amber floating run={run} onCreated={activate} />
         </div>
       </header>
 
@@ -175,7 +200,7 @@ export function App() {
 
         <section className={s.detailPane}>
           {activeNode ? (
-            <Detail key={activeNode.ref} node={activeNode} allNodes={tree} run={run} onSelect={activate} hrefFor={hrefFor} onNav={onNav} />
+            <Detail key={activeNode.ref} api={api} node={activeNode} allNodes={tree} run={run} onSelect={activate} hrefFor={hrefFor} onNav={onNav} />
           ) : (
             <p className={s.empty}>Select a node to view and edit it.</p>
           )}

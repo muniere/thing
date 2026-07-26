@@ -1,7 +1,7 @@
 import { type MouseEvent, useEffect, useRef, useState } from "react";
 import type { Node } from "../domain/generated.ts";
 import { Priority, Status, Type } from "../domain/generated.ts";
-import { api } from "../api.ts";
+import type { Api } from "../api.ts";
 import { renderMarkdown } from "../markdown.ts";
 import { flatten } from "../util.ts";
 import { AddForm } from "./AddForm.tsx";
@@ -9,6 +9,7 @@ import { PriorityBadge } from "./PriorityBadge.tsx";
 import s from "./Detail.module.css";
 
 interface Props {
+  api: Api;
   node: Node;
   allNodes: Node[];
   run: <T>(p: Promise<T>) => Promise<T | undefined>;
@@ -22,7 +23,7 @@ const PRIORITIES = [Priority.High, Priority.Medium, Priority.Low];
 
 // Detail is the full-edit pane for one node. It is remounted per selection (via
 // a key on the element), so its draft state resets cleanly when the node changes.
-export function Detail({ node, allNodes, run, onSelect, hrefFor, onNav }: Props) {
+export function Detail({ api, node, allNodes, run, onSelect, hrefFor, onNav }: Props) {
   const isEpic = node.type === Type.Epic;
   // A parent (epic/issue) can roll its status up from its children, offered as an
   // "auto" choice in the status pulldown; a task's status is always its own.
@@ -186,6 +187,7 @@ export function Detail({ node, allNodes, run, onSelect, hrefFor, onNav }: Props)
           )}
           <div className={s.childAdd}>
             <AddForm
+              api={api}
               parent={node.ref}
               noun={isEpic ? "issue" : "task"}
               label={`+ Add a new ${isEpic ? "issue" : "task"}`}
