@@ -68,15 +68,56 @@ func Load(path string) ([]Project, error) {
 	if err := yaml.Unmarshal(data, &pf); err != nil {
 		return nil, err
 	}
-	seen := make(map[string]bool, len(pf.Projects))
-	for _, p := range pf.Projects {
+	if err := validate(pf.Projects); err != nil {
+		return nil, err
+	}
+	return pf.Projects, nil
+}
+
+// Save writes projects to projects.yaml at path, creating the enclosing state
+// directory if needed. It validates the same way Load does, so a bad in-memory
+// list is rejected before it touches disk rather than being written back and
+// then failing to load. The write is atomic: it lands a temp file and renames.
+func Save(path string, projects []Project) error {
+	if err := validate(projects); err != nil {
+		return err
+	}
+	data, err := yaml.Marshal(projectsFile{Projects: projects})
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), FileName+".*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		os.Remove(tmpName)
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
+	return os.Rename(tmpName, path)
+}
+
+// validate enforces the registry invariants shared by Load and Save: every name
+// is a URL-safe slug and names are unique.
+func validate(projects []Project) error {
+	seen := make(map[string]bool, len(projects))
+	for _, p := range projects {
 		if p.Name == "" || slug.Slugify(p.Name) != p.Name {
-			return nil, fmt.Errorf("invalid project name %q: must be a URL-safe slug", p.Name)
+			return fmt.Errorf("invalid project name %q: must be a URL-safe slug", p.Name)
 		}
 		if seen[p.Name] {
-			return nil, fmt.Errorf("duplicate project name %q", p.Name)
+			return fmt.Errorf("duplicate project name %q", p.Name)
 		}
 		seen[p.Name] = true
 	}
-	return pf.Projects, nil
+	return nil
 }

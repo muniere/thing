@@ -55,6 +55,13 @@ projects:
 A name must be a URL-safe slug (`[a-z0-9-]`) and unique. A missing file is not an
 error — the server starts with an empty picker.
 
+Projects can also be registered and unregistered at runtime — from the picker
+page or via `PUT`/`DELETE /api/projects/<name>` (see the API below) — and the
+change is written back to `projects.yaml` so it survives a restart. Registration
+only mounts an **existing** thing tree (a directory that already holds a
+`config.yaml`); create new ones with `thing init` first. Unregistering removes
+the mount only and never deletes the data directory.
+
 ### Development
 
 ```
@@ -97,6 +104,8 @@ a single `PATCH` body rather than as a path suffix.
 
 ```
 GET    /api/projects                       registered projects (name, title, dir)
+PUT    /api/projects/<p>                    register project <p> over {dir} (an existing thing tree); idempotent
+DELETE /api/projects/<p>                    unregister <p> (leaves its data dir on disk)
 GET    /api/projects/<p>/tree              whole tree as JSON (each node carries its ref)
 POST   /api/projects/<p>/nodes/<parent>    create a child; the parent decides the type
 PATCH  /api/projects/<p>/nodes/<ref>       {status|priority|title|category|body|move|addLink|removeLink}

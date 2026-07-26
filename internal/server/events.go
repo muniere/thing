@@ -114,18 +114,17 @@ func (s *Server) handleEvents(p *project, w http.ResponseWriter, r *http.Request
 // StartWatch launches one filesystem poller per registered project and blocks
 // until ctx is cancelled. Each poller broadcasts a reload to its own project's
 // hub whenever that project's data directory changes, so edits made outside the
-// web (CLI, editor) refresh only that project's open browsers.
+// web (CLI, editor) refresh only that project's open browsers. It also records
+// ctx and interval so a project registered later (via Register) spins up its own
+// watcher under the same lifetime.
 func (s *Server) StartWatch(ctx context.Context, interval time.Duration) {
-	s.regmu.RLock()
-	projects := make([]*project, 0, len(s.projects))
+	s.regmu.Lock()
+	s.watchCtx = ctx
+	s.watchInterval = interval
 	for _, p := range s.projects {
-		projects = append(projects, p)
+		s.startWatchLocked(p)
 	}
-	s.regmu.RUnlock()
-
-	for _, p := range projects {
-		go p.watch(ctx, interval)
-	}
+	s.regmu.Unlock()
 	<-ctx.Done()
 }
 

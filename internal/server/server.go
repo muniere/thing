@@ -14,6 +14,7 @@
 package server
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -23,6 +24,7 @@ import (
 	"log"
 	"mime"
 	"net/http"
+	"os"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -33,6 +35,8 @@ import (
 	"github.com/muniere/thing/internal/config"
 	"github.com/muniere/thing/internal/exporter"
 	"github.com/muniere/thing/internal/model"
+	"github.com/muniere/thing/internal/registry"
+	"github.com/muniere/thing/internal/slug"
 	"github.com/muniere/thing/internal/store"
 )
 
@@ -41,6 +45,10 @@ type Options struct {
 	Static fs.FS         // built SPA assets; nil disables static serving
 	Now    func() string // today's date stamp for write timestamps; defaults to time.Now
 	Logger *log.Logger   // access log; nil disables it
+	// RegistryFile is projects.yaml's path. Dynamic register/unregister write the
+	// updated registry back here so it survives a restart. Empty disables
+	// persistence (the in-memory registry still mutates) — used in tests.
+	RegistryFile string
 }
 
 // Mount names a project and the store backing it. New takes an ordered list so
@@ -65,6 +73,11 @@ type project struct {
 	// whole locate → mutate → save so it is atomic); the tree read takes RLock.
 	// It does not coordinate with a separate CLI process touching the same dir.
 	mu sync.RWMutex
+	// cancelWatch stops this project's filesystem watcher. It is set when the
+	// watcher starts (at boot for initial projects, at Register time for dynamic
+	// ones) and called by Unregister so a removed project stops polling. nil means
+	// no watcher is running yet. Guarded by the Server's regmu.
+	cancelWatch context.CancelFunc
 }
 
 // Server serves the JSON API and the SPA. It is an http.Handler.
@@ -78,6 +91,12 @@ type Server struct {
 	regmu    sync.RWMutex
 	projects map[string]*project
 	order    []string // registration order, for the root picker
+	regFile  string   // projects.yaml path for persistence; "" disables it
+	// watchCtx/watchInterval are captured by StartWatch so a project registered
+	// after boot can spin up its own watcher under the same lifetime. watchCtx is
+	// nil until StartWatch runs (so Register before watching just skips it).
+	watchCtx      context.Context
+	watchInterval time.Duration
 	// bootID is a random nonce minted when the Server is constructed (once per
 	// process in the real binary) and sent in the SSE hello frame. A client that
 	// reconnects and sees a different bootID knows the server was replaced (a new
@@ -96,6 +115,7 @@ func New(mounts []Mount, opts Options) *Server {
 		static:   opts.Static,
 		now:      opts.Now,
 		logger:   opts.Logger,
+		regFile:  opts.RegistryFile,
 		projects: make(map[string]*project, len(mounts)),
 		bootID:   newBootID(),
 	}
@@ -105,6 +125,8 @@ func New(mounts []Mount, opts Options) *Server {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/projects", s.handleProjects)
+	mux.HandleFunc("PUT /api/projects/{project}", s.handleRegister)
+	mux.HandleFunc("DELETE /api/projects/{project}", s.handleUnregister)
 	mux.HandleFunc("GET /api/projects/{project}/tree", s.withProject(s.handleTree))
 	mux.HandleFunc("GET /api/projects/{project}/config", s.withProject(s.handleConfig))
 	mux.HandleFunc("GET /api/projects/{project}/events", s.withProject(s.handleEvents))
@@ -121,6 +143,116 @@ func (s *Server) project(name string) *project {
 	s.regmu.RLock()
 	defer s.regmu.RUnlock()
 	return s.projects[name]
+}
+
+// httpError carries an HTTP status alongside a message so Register/Unregister can
+// tell the handler which code to return (400 bad name/dir, 409 duplicate, 404
+// unknown) without the handler re-deriving it.
+type httpError struct {
+	code int
+	err  error
+}
+
+func (e *httpError) Error() string { return e.err.Error() }
+
+// Register mounts a project at name over dir: it validates both, adds the mount,
+// starts its watcher, and persists the updated registry. dir must already be an
+// initialized thing tree — the server never creates it; use `thing init` first.
+//
+// It is an idempotent upsert, matching PUT semantics: registering a name that
+// already points at the same dir is a no-op that reports created=false, so a
+// repeated request is safe. A name already bound to a different dir is a conflict
+// rather than a silent re-point — detach it with Unregister first. A bad name or
+// a non-thing directory fails, leaving the server untouched.
+func (s *Server) Register(name, dir string) (p *project, created bool, err error) {
+	if name == "" || slug.Slugify(name) != name {
+		return nil, false, &httpError{http.StatusBadRequest, fmt.Errorf("invalid project name %q: must be a URL-safe slug", name)}
+	}
+	// A thing tree is marked by its config.yaml (written by `thing init`). Requiring
+	// it keeps registration to already-initialized directories rather than pointing
+	// the server at an arbitrary or empty path.
+	if fi, statErr := os.Stat(filepath.Join(dir, config.FileName)); statErr != nil || fi.IsDir() {
+		return nil, false, &httpError{http.StatusBadRequest, fmt.Errorf("%q is not a thing project (no %s)", dir, config.FileName)}
+	}
+
+	s.regmu.Lock()
+	defer s.regmu.Unlock()
+	if existing, ok := s.projects[name]; ok {
+		if filepath.Clean(existing.store.Root) == filepath.Clean(dir) {
+			return existing, false, nil // idempotent: same name, same dir
+		}
+		return nil, false, &httpError{http.StatusConflict, fmt.Errorf("project %q is already registered to a different directory", name)}
+	}
+
+	p = &project{name: name, store: store.Open(dir), hub: newHub()}
+	s.projects[name] = p
+	s.order = append(s.order, name)
+	s.startWatchLocked(p)
+
+	if err := s.persistLocked(); err != nil {
+		// Undo the in-memory mount so disk and memory stay in step.
+		if p.cancelWatch != nil {
+			p.cancelWatch()
+		}
+		delete(s.projects, name)
+		s.order = s.order[:len(s.order)-1]
+		return nil, false, &httpError{http.StatusInternalServerError, fmt.Errorf("persist registry: %w", err)}
+	}
+	return p, true, nil
+}
+
+// Unregister removes a project from the registry: it stops the watcher, drops the
+// mount, and persists. It does not touch the data directory — the tree stays on
+// disk and can be re-registered later. It fails on an unknown name.
+func (s *Server) Unregister(name string) error {
+	s.regmu.Lock()
+	defer s.regmu.Unlock()
+	p, ok := s.projects[name]
+	if !ok {
+		return &httpError{http.StatusNotFound, fmt.Errorf("no such project %q", name)}
+	}
+	if p.cancelWatch != nil {
+		p.cancelWatch()
+		p.cancelWatch = nil
+	}
+	delete(s.projects, name)
+	for i, n := range s.order {
+		if n == name {
+			s.order = append(s.order[:i], s.order[i+1:]...)
+			break
+		}
+	}
+	if err := s.persistLocked(); err != nil {
+		return &httpError{http.StatusInternalServerError, fmt.Errorf("persist registry: %w", err)}
+	}
+	return nil
+}
+
+// persistLocked writes the current registry back to projects.yaml. The caller
+// holds regmu. It is a no-op when no registry file is configured (tests), so the
+// in-memory registry still mutates without needing a temp file on disk.
+func (s *Server) persistLocked() error {
+	if s.regFile == "" {
+		return nil
+	}
+	list := make([]registry.Project, 0, len(s.order))
+	for _, name := range s.order {
+		list = append(list, registry.Project{Name: name, Dir: s.projects[name].store.Root})
+	}
+	return registry.Save(s.regFile, list)
+}
+
+// startWatchLocked launches p's filesystem watcher under a child of the server's
+// watch context and records its cancel. The caller holds regmu. It is a no-op
+// before StartWatch has run (watchCtx nil) or if p is already watching, so
+// Register is safe whether it runs before or after watching begins.
+func (s *Server) startWatchLocked(p *project) {
+	if s.watchCtx == nil || p.cancelWatch != nil {
+		return
+	}
+	ctx, cancel := context.WithCancel(s.watchCtx)
+	p.cancelWatch = cancel
+	go p.watch(ctx, s.watchInterval)
 }
 
 // withProject resolves the {project} path segment, 404s when it is unknown, and
@@ -179,6 +311,58 @@ func (s *Server) handleProjects(w http.ResponseWriter, _ *http.Request) {
 		out = append(out, item{Name: p.name, Title: title, Dir: dir})
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// registerReq is the PUT /api/projects/{project} body. The name is the {project}
+// path segment (the resource URI); the body carries only the data directory to
+// mount, which must already be an initialized thing tree.
+type registerReq struct {
+	Dir string `json:"dir"`
+}
+
+// handleRegister mounts the project named in the path over the body's dir. It is
+// a PUT upsert: a fresh mount returns 201, a repeat of an existing identical
+// mount returns 200, and it surfaces the error's status otherwise (400 bad
+// name/dir, 409 name bound to a different dir).
+func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
+	var req registerReq
+	if !decode(w, r, &req) {
+		return
+	}
+	p, created, err := s.Register(r.PathValue("project"), strings.TrimSpace(req.Dir))
+	if err != nil {
+		s.failErr(w, err)
+		return
+	}
+	dir := p.store.Root
+	if abs, err := filepath.Abs(dir); err == nil {
+		dir = abs
+	}
+	code := http.StatusOK
+	if created {
+		code = http.StatusCreated
+	}
+	writeJSON(w, code, map[string]string{"name": p.name, "dir": dir})
+}
+
+// handleUnregister removes the project named in the path (404 when unknown). It
+// unregisters only; the data directory is left on disk.
+func (s *Server) handleUnregister(w http.ResponseWriter, r *http.Request) {
+	if err := s.Unregister(r.PathValue("project")); err != nil {
+		s.failErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// failErr writes err with its carried HTTP status when it is an *httpError, else
+// 500. It keeps Register/Unregister handlers from re-deriving status codes.
+func (s *Server) failErr(w http.ResponseWriter, err error) {
+	if he, ok := errors.AsType[*httpError](err); ok {
+		s.fail(w, he.code, he)
+		return
+	}
+	s.fail(w, http.StatusInternalServerError, err)
 }
 
 // newBootID mints the per-Server nonce sent in the SSE hello frame. crypto/rand

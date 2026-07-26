@@ -81,9 +81,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 
 	srv := server.New(mounts, server.Options{
-		Static: thing.WebAssets(),
-		Now:    func() string { return time.Now().Format("2006-01-02") },
-		Logger: log.New(stderr, "", log.LstdFlags),
+		Static:       thing.WebAssets(),
+		Now:          func() string { return time.Now().Format("2006-01-02") },
+		Logger:       log.New(stderr, "", log.LstdFlags),
+		RegistryFile: regFile,
 	})
 
 	// Watch every project's data dir so edits from the CLI or an editor live-reload
