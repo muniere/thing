@@ -25,7 +25,7 @@
 .titleRow {
   display: flex;
   gap: 0.5rem;
-  align-items: center;
+  align-items: flex-start;
 }
 .title {
   flex: 1;
@@ -34,6 +34,7 @@
   font-size: 1.15rem;
   font-weight: 600;
   line-height: 1.3;
+  overflow-wrap: anywhere;
 }
 /* Edit mode (toggled from the title's "edit" link): the title, plus category for
    an epic, become inputs above a Save/cancel row. */
