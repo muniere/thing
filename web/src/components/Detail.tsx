@@ -1,4 +1,4 @@
-import { type MouseEvent, useState } from "react";
+import { type MouseEvent, useEffect, useRef, useState } from "react";
 import type { Node } from "../domain/generated.ts";
 import { Priority, Status, Type } from "../domain/generated.ts";
 import { api } from "../api.ts";
@@ -35,7 +35,18 @@ export function Detail({ node, allNodes, run, onSelect, hrefFor, onNav }: Props)
   const [linkURL, setLinkURL] = useState("");
   const [linkLabel, setLinkLabel] = useState("");
   const [moveTo, setMoveTo] = useState("");
+  const [moving, setMoving] = useState(false);
   const [editing, setEditing] = useState(false);
+
+  // The change-parent picker is a modal dialog; drive the native <dialog> from the
+  // moving flag so Escape and the backdrop close it (its onClose resets state).
+  const moveDialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const d = moveDialog.current;
+    if (!d) return;
+    if (moving && !d.open) d.showModal();
+    else if (!moving && d.open) d.close();
+  }, [moving]);
 
   const saveTitle = async () => {
     const t = title.trim();
@@ -110,16 +121,15 @@ export function Detail({ node, allNodes, run, onSelect, hrefFor, onNav }: Props)
 
       <div className={s.meta}>
         <span className={s.chipField} data-status={node.effectiveStatus}>
-          {/* The chip is colored by the effective (rolled-up) status; a parent with
-              no own status reads "auto", and picking "auto" clears the pin. */}
+          {/* Colored by the effective (rolled-up) status. Picking a value pins it;
+              a pinned parent is reset to the rollup from the actions section. */}
           <select
             className={`${s.chip} ${s.statusChip}`}
             data-status={node.effectiveStatus}
             aria-label="status"
-            value={node.status || (isParent ? "auto" : node.effectiveStatus)}
-            onChange={(e) => run(api.status(node.ref, e.target.value === "auto" ? "" : e.target.value))}
+            value={node.effectiveStatus}
+            onChange={(e) => run(api.status(node.ref, e.target.value))}
           >
-            {isParent && <option value="auto">auto</option>}
             {STATUSES.map((st) => <option key={st} value={st}>{st}</option>)}
           </select>
         </span>
@@ -215,17 +225,80 @@ export function Detail({ node, allNodes, run, onSelect, hrefFor, onNav }: Props)
         </button>
       </div>
 
-      {!isEpic && (
-        <>
-          <div className={s.label}>move</div>
-          <div className={s.inlineForm}>
-            <select className={s.select} value={moveTo} onChange={(e) => setMoveTo(e.target.value)}>
-              <option value="">choose new parent…</option>
-              {moveTargets().map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
+      <div className={s.label}>actions</div>
+      <div className={s.actions}>
+        {isParent && node.status && (
+          <div className={s.action}>
+            <div className={s.actionText}>
+              <div className={s.actionTitle}>Roll up status</div>
+              <div className={s.actionDesc}>
+                Status is pinned to {node.status}. Reset it to roll up from this {node.type}'s children.
+              </div>
+            </div>
             <button
               type="button"
               className={s.btn}
+              onClick={() => {
+                if (confirm(`Reset this ${node.type}'s status to auto (roll up from its children)?`)) {
+                  run(api.status(node.ref, ""));
+                }
+              }}
+            >
+              Reset to auto
+            </button>
+          </div>
+        )}
+
+        {!isEpic && (
+          <div className={s.action}>
+            <div className={s.actionText}>
+              <div className={s.actionTitle}>Change parent</div>
+              <div className={s.actionDesc}>Move this {node.type} under a different parent.</div>
+            </div>
+            <button type="button" className={s.btn} onClick={() => setMoving(true)}>Change parent</button>
+          </div>
+        )}
+
+        <div className={s.action}>
+          <div className={s.actionText}>
+            <div className={s.actionTitle}>Delete {node.type}</div>
+            <div className={s.actionDesc}>
+              Permanently remove this {node.type}{node.type !== Type.Task ? " and its subtree" : ""}.
+            </div>
+          </div>
+          <button
+            type="button"
+            className={`${s.btn} ${s.btnDanger}`}
+            onClick={async () => {
+              if (!confirm(`Delete ${node.type} "${node.title}"${node.type !== Type.Task ? " and its subtree" : ""}?`)) return;
+              await run(api.remove(node.ref));
+              onSelect("");
+            }}
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+
+      <dialog
+        ref={moveDialog}
+        className={s.dialog}
+        onClose={() => {
+          setMoving(false);
+          setMoveTo("");
+        }}
+      >
+        <div className={s.dialogBody}>
+          <div className={s.dialogTitle}>Change parent</div>
+          <div className={s.dialogDesc}>Move “{node.title}” under a different parent.</div>
+          <select className={s.select} value={moveTo} onChange={(e) => setMoveTo(e.target.value)}>
+            <option value="">choose new parent…</option>
+            {moveTargets().map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </select>
+          <div className={s.dialogActions}>
+            <button
+              type="button"
+              className={`${s.btn} ${s.btnAmber}`}
               disabled={!moveTo}
               onClick={async () => {
                 // A move re-slugs the node (its ref carries the parent path), so
@@ -237,22 +310,12 @@ export function Detail({ node, allNodes, run, onSelect, hrefFor, onNav }: Props)
             >
               Move
             </button>
+            <button type="button" className={s.btnLink} onClick={() => moveDialog.current?.close()}>
+              Cancel
+            </button>
           </div>
-        </>
-      )}
-
-      <div className={s.label}>danger</div>
-      <button
-        type="button"
-        className={`${s.btn} ${s.btnDanger}`}
-        onClick={async () => {
-          if (!confirm(`Delete ${node.type} "${node.title}"${node.type !== "task" ? " and its subtree" : ""}?`)) return;
-          await run(api.remove(node.ref));
-          onSelect("");
-        }}
-      >
-        Delete {node.type}
-      </button>
+        </div>
+      </dialog>
     </div>
   );
 }
