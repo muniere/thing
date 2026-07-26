@@ -105,6 +105,7 @@ a single `PATCH` body rather than as a path suffix.
 ```
 GET    /api/projects                       registered projects (name, title, dir)
 PUT    /api/projects/<p>                    register project <p> over {dir} (an existing thing tree); idempotent
+PATCH  /api/projects/<p>                    reorder <p>: {before|after:"<name>"} (relative to an anchor project)
 DELETE /api/projects/<p>                    unregister <p> (leaves its data dir on disk)
 GET    /api/projects/<p>/tree              whole tree as JSON (each node carries its ref)
 POST   /api/projects/<p>/nodes/<parent>    create a child; the parent decides the type

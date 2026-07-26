@@ -27,6 +27,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -126,6 +127,7 @@ func New(mounts []Mount, opts Options) *Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/projects", s.handleProjects)
 	mux.HandleFunc("PUT /api/projects/{project}", s.handleRegister)
+	mux.HandleFunc("PATCH /api/projects/{project}", s.handleMove)
 	mux.HandleFunc("DELETE /api/projects/{project}", s.handleUnregister)
 	mux.HandleFunc("GET /api/projects/{project}/tree", s.withProject(s.handleTree))
 	mux.HandleFunc("GET /api/projects/{project}/config", s.withProject(s.handleConfig))
@@ -223,6 +225,59 @@ func (s *Server) Unregister(name string) error {
 		}
 	}
 	if err := s.persistLocked(); err != nil {
+		return &httpError{http.StatusInternalServerError, fmt.Errorf("persist registry: %w", err)}
+	}
+	return nil
+}
+
+// Move changes one project's place in the picker order relative to another,
+// stable identifier rather than a positional index: it places name immediately
+// before or after the anchor project. Exactly one of before/after must be given —
+// the other is empty. The front is "before the current first project", the end is
+// "after the current last", so both ends are reachable without depending on
+// numeric positions. It only reorders — mounts, stores, and watchers are
+// untouched — and persists the new order so it survives a restart. It fails on an
+// unknown project (404 for name in the path) or a bad anchor (400: not exactly one
+// given, unknown, or equal to name).
+func (s *Server) Move(name, before, after string) error {
+	s.regmu.Lock()
+	defer s.regmu.Unlock()
+
+	if _, ok := s.projects[name]; !ok {
+		return &httpError{http.StatusNotFound, fmt.Errorf("no such project %q", name)}
+	}
+	if (before == "") == (after == "") {
+		return &httpError{http.StatusBadRequest, fmt.Errorf("specify exactly one of before/after")}
+	}
+	anchor := before
+	if after != "" {
+		anchor = after
+	}
+	if anchor == name {
+		return &httpError{http.StatusBadRequest, fmt.Errorf("cannot move project %q relative to itself", name)}
+	}
+	if _, ok := s.projects[anchor]; !ok {
+		return &httpError{http.StatusBadRequest, fmt.Errorf("no such anchor project %q", anchor)}
+	}
+
+	// Pull name out, find the anchor in what remains, and reinsert name just
+	// before or just after it.
+	rest := make([]string, 0, len(s.order)-1)
+	for _, n := range s.order {
+		if n != name {
+			rest = append(rest, n)
+		}
+	}
+	at := slices.Index(rest, anchor)
+	if after != "" {
+		at++
+	}
+	next := slices.Insert(rest, at, name)
+
+	prev := s.order
+	s.order = next
+	if err := s.persistLocked(); err != nil {
+		s.order = prev // keep disk and memory in step
 		return &httpError{http.StatusInternalServerError, fmt.Errorf("persist registry: %w", err)}
 	}
 	return nil
@@ -343,6 +398,28 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		code = http.StatusCreated
 	}
 	writeJSON(w, code, map[string]string{"name": p.name, "dir": dir})
+}
+
+// moveReq is the PATCH /api/projects/{project} body: place this project relative
+// to an anchor. Exactly one of before/after is set (the anchor's name); the front
+// is before the current first project, the end is after the current last.
+type moveReq struct {
+	Before string `json:"before"`
+	After  string `json:"after"`
+}
+
+// handleMove reorders one project relative to another (404 when the path project
+// is unknown, 400 for a bad anchor).
+func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) {
+	var req moveReq
+	if !decode(w, r, &req) {
+		return
+	}
+	if err := s.Move(r.PathValue("project"), strings.TrimSpace(req.Before), strings.TrimSpace(req.After)); err != nil {
+		s.failErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // handleUnregister removes the project named in the path (404 when unknown). It

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -601,6 +602,102 @@ func TestRegisterPersistsToRegistry(t *testing.T) {
 	}
 	if len(got) != 1 || got[0].Name != "test" {
 		t.Fatalf("registry after unregister = %+v, want just test", got)
+	}
+}
+
+// pickerOrder returns the project names in the order GET /api/projects lists them.
+func pickerOrder(t *testing.T, s *Server) []string {
+	t.Helper()
+	var items []map[string]string
+	_ = json.Unmarshal(do(t, s, "GET", "/api/projects", "").Body.Bytes(), &items)
+	names := make([]string, len(items))
+	for i, it := range items {
+		names[i] = it["name"]
+	}
+	return names
+}
+
+// registerThree mounts b and c alongside the fixture "test", giving order
+// [test, b, c].
+func registerThree(t *testing.T, s *Server) {
+	t.Helper()
+	do(t, s, "PUT", "/api/projects/b", `{"dir":"`+thingTreeDir(t)+`"}`)
+	do(t, s, "PUT", "/api/projects/c", `{"dir":"`+thingTreeDir(t)+`"}`)
+}
+
+func TestMoveToFront(t *testing.T) {
+	s := newServer(t)
+	registerThree(t, s) // [test, b, c]
+	// Front is "before the current first project" (test).
+	if w := do(t, s, "PATCH", "/api/projects/c", `{"before":"test"}`); w.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204; body=%s", w.Code, w.Body.String())
+	}
+	if got := pickerOrder(t, s); !slices.Equal(got, []string{"c", "test", "b"}) {
+		t.Fatalf("order = %v, want [c test b]", got)
+	}
+}
+
+func TestMoveAfter(t *testing.T) {
+	s := newServer(t)
+	registerThree(t, s) // [test, b, c]
+	// Place test after b: [b, test, c].
+	if w := do(t, s, "PATCH", "/api/projects/test", `{"after":"b"}`); w.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204; body=%s", w.Code, w.Body.String())
+	}
+	if got := pickerOrder(t, s); !slices.Equal(got, []string{"b", "test", "c"}) {
+		t.Fatalf("order = %v, want [b test c]", got)
+	}
+}
+
+func TestMoveToEnd(t *testing.T) {
+	s := newServer(t)
+	registerThree(t, s) // [test, b, c]
+	// End is "after the current last project" (c).
+	if w := do(t, s, "PATCH", "/api/projects/test", `{"after":"c"}`); w.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204; body=%s", w.Code, w.Body.String())
+	}
+	if got := pickerOrder(t, s); !slices.Equal(got, []string{"b", "c", "test"}) {
+		t.Fatalf("order = %v, want [b c test]", got)
+	}
+}
+
+func TestMoveUnknownProjectIs404(t *testing.T) {
+	s := newServer(t)
+	if w := do(t, s, "PATCH", "/api/projects/ghost", `{"after":"test"}`); w.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", w.Code)
+	}
+}
+
+func TestMoveBadAnchorIs400(t *testing.T) {
+	s := newServer(t)
+	registerThree(t, s)
+	cases := map[string]string{
+		"unknown anchor": `{"after":"ghost"}`,
+		"anchor is self": `{"after":"test"}`,
+		"neither given":  `{}`,
+		"both given":     `{"before":"b","after":"c"}`,
+	}
+	for name, body := range cases {
+		if w := do(t, s, "PATCH", "/api/projects/test", body); w.Code != http.StatusBadRequest {
+			t.Errorf("%s: status = %d, want 400; body=%s", name, w.Code, w.Body.String())
+		}
+	}
+}
+
+func TestMovePersists(t *testing.T) {
+	regFile := filepath.Join(t.TempDir(), "projects.yaml")
+	s := New([]Mount{{Name: "test", Store: fixture(t)}}, Options{
+		Now:          func() string { return "2026-07-20" },
+		RegistryFile: regFile,
+	})
+	do(t, s, "PUT", "/api/projects/added", `{"dir":"`+thingTreeDir(t)+`"}`)
+	do(t, s, "PATCH", "/api/projects/added", `{"before":"test"}`) // move added to front
+	got, err := registry.Load(regFile)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(got) != 2 || got[0].Name != "added" || got[1].Name != "test" {
+		t.Fatalf("persisted order = %+v, want added then test", got)
 	}
 }
 
