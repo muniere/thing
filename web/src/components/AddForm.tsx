@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Priority } from "../domain/generated.ts";
-import { api } from "../api.ts";
-import type { CreateInput } from "../api.ts";
+import type { Api, CreateInput } from "../api.ts";
 import s from "./AddForm.module.css";
 
 interface Props {
+  // The per-project API client the create goes through.
+  api: Api;
   // The parent ref the new node is created under; "" creates a top-level epic.
   parent: string;
   // The word used in the title placeholder ("<noun> title") and, by default, the
@@ -30,7 +31,7 @@ const PRIORITIES = [Priority.High, Priority.Medium, Priority.Low];
 // top-level epic (parent === ""), matching the server, which rejects a category
 // on anything else. Every field but the title is optional; on success the form
 // collapses and the new node is activated.
-export function AddForm({ parent, noun, label, amber, block, floating, run, onCreated }: Props) {
+export function AddForm({ api, parent, noun, label, amber, block, floating, run, onCreated }: Props) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState("");

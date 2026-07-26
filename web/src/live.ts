@@ -9,13 +9,13 @@ import { useEffect, useRef } from "react";
 // the server was replaced (in dev, air rebuilt the binary; in prod, a restart),
 // so the page reloads to pick up the new JS/CSS. A reconnect to the same process
 // keeps the id and only refetches — the same catch-up a plain reconnect needs.
-export function useLiveReload(onReload: () => void): void {
+export function useLiveReload(project: string, onReload: () => void): void {
   const cb = useRef(onReload);
   cb.current = onReload;
 
   useEffect(() => {
     let boot: string | null = null;
-    const es = new EventSource("/events");
+    const es = new EventSource(`/api/projects/${project}/events`);
     es.addEventListener("reload", () => cb.current());
     es.addEventListener("hello", (e) => {
       const id = (e as MessageEvent).data;
@@ -34,5 +34,5 @@ export function useLiveReload(onReload: () => void): void {
       }
     };
     return () => es.close();
-  }, []);
+  }, [project]);
 }

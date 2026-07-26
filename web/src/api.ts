@@ -1,8 +1,10 @@
 import type { Node } from "./domain/generated.ts";
 
-// Thin client over thingd's JSON API. Nodes are addressed by their ref (a
-// slug-path like "epic/issue/task"), used verbatim as the URL path. Per-field
-// edits go through a single PATCH so the multi-segment ref stays the whole path.
+// Thin client over thingd's JSON API. One server hosts multiple projects, so
+// every node route is scoped under /api/projects/<project>/. Nodes are addressed
+// by their ref (a slug-path like "epic/issue/task"), used verbatim as the tail of
+// the path. Per-field edits go through a single PATCH so the multi-segment ref
+// stays the whole tail.
 
 async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
@@ -31,29 +33,50 @@ export interface CreateInput {
   tags?: string[];
 }
 
-// Slugs are URL-safe ([a-z0-9-]) so a ref needs no escaping to be a URL path.
-export const api = {
-  tree: () => req<Node[]>("GET", "/api/tree"),
-  // config carries the display settings the UI reads: the title from config.yaml
-  // and the served data directory path.
-  config: () => req<{ title: string; dir: string }>("GET", "/api/config"),
-  // create adds a child under the parent ref; the parent decides the type. An
-  // empty parent ("") creates a top-level epic.
-  create: (parent: string, input: CreateInput) =>
-    req<{ ref: string }>("POST", `/api/nodes/${parent}`, input),
-  status: (ref: string, status: string) =>
-    req<{ ref: string }>("PATCH", `/api/nodes/${ref}`, { status }),
-  priority: (ref: string, priority: string) =>
-    req<{ ref: string }>("PATCH", `/api/nodes/${ref}`, { priority }),
-  rename: (ref: string, title: string, category?: string) =>
-    req<{ ref: string }>("PATCH", `/api/nodes/${ref}`, category === undefined ? { title } : { title, category }),
-  move: (ref: string, parent: string) =>
-    req<{ ref: string }>("PATCH", `/api/nodes/${ref}`, { move: parent }),
-  body: (ref: string, body: string) =>
-    req<{ ref: string }>("PATCH", `/api/nodes/${ref}`, { body }),
-  addLink: (ref: string, url: string, label: string) =>
-    req<{ ref: string }>("PATCH", `/api/nodes/${ref}`, { addLink: { url, label } }),
-  removeLink: (ref: string, which: string) =>
-    req<{ ref: string }>("PATCH", `/api/nodes/${ref}`, { removeLink: which }),
-  remove: (ref: string) => req<void>("DELETE", `/api/nodes/${ref}`),
-};
+// ProjectInfo is one registered project as shown on the root picker.
+export interface ProjectInfo {
+  name: string;
+  title: string;
+  dir: string;
+}
+
+// projects lists the registered projects for the root picker. It is the only
+// route not scoped to a single project.
+export function listProjects(): Promise<ProjectInfo[]> {
+  return req<ProjectInfo[]>("GET", "/api/projects");
+}
+
+// forProject returns a client bound to one project: every route is prefixed with
+// /api/projects/<project>/. Slugs are URL-safe ([a-z0-9-]) so a ref needs no
+// escaping to be a URL path.
+export function forProject(project: string) {
+  const base = `/api/projects/${project}`;
+  return {
+    tree: () => req<Node[]>("GET", `${base}/tree`),
+    // config carries the display settings the UI reads: the title from
+    // config.yaml and the served data directory path.
+    config: () => req<{ title: string; dir: string }>("GET", `${base}/config`),
+    // create adds a child under the parent ref; the parent decides the type. An
+    // empty parent ("") creates a top-level epic.
+    create: (parent: string, input: CreateInput) =>
+      req<{ ref: string }>("POST", `${base}/nodes/${parent}`, input),
+    status: (ref: string, status: string) =>
+      req<{ ref: string }>("PATCH", `${base}/nodes/${ref}`, { status }),
+    priority: (ref: string, priority: string) =>
+      req<{ ref: string }>("PATCH", `${base}/nodes/${ref}`, { priority }),
+    rename: (ref: string, title: string, category?: string) =>
+      req<{ ref: string }>("PATCH", `${base}/nodes/${ref}`, category === undefined ? { title } : { title, category }),
+    move: (ref: string, parent: string) =>
+      req<{ ref: string }>("PATCH", `${base}/nodes/${ref}`, { move: parent }),
+    body: (ref: string, body: string) =>
+      req<{ ref: string }>("PATCH", `${base}/nodes/${ref}`, { body }),
+    addLink: (ref: string, url: string, label: string) =>
+      req<{ ref: string }>("PATCH", `${base}/nodes/${ref}`, { addLink: { url, label } }),
+    removeLink: (ref: string, which: string) =>
+      req<{ ref: string }>("PATCH", `${base}/nodes/${ref}`, { removeLink: which }),
+    remove: (ref: string) => req<void>("DELETE", `${base}/nodes/${ref}`),
+  };
+}
+
+// Api is the per-project client shape, threaded through the app.
+export type Api = ReturnType<typeof forProject>;

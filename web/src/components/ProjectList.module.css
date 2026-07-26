@@ -1,0 +1,90 @@
+/* The root project picker at "/": a centered column with a card grid, one card
+   per registered project. Styled from the shared theme tokens so it matches the
+   in-project view. */
+.page {
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 2rem;
+}
+.dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: var(--amber);
+  box-shadow: 0 0 10px var(--amber);
+}
+.title {
+  margin: 0;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 1.15rem;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+}
+
+.error {
+  padding: 0.6rem 0.9rem;
+  margin-bottom: 1.5rem;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--high) 22%, var(--panel));
+  border: 1px solid var(--high);
+  color: var(--ink);
+}
+
+.empty {
+  color: var(--ink-2);
+}
+.empty code {
+  font-family: var(--mono);
+  color: var(--ink);
+}
+
+.grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* Each project is one full-width row stacking its title, name, and data dir, so
+   the picker reads as a vertical list. */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.9rem 1.1rem;
+  border-radius: var(--radius);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  text-decoration: none;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.card:hover {
+  background: var(--panel-2);
+  border-color: color-mix(in srgb, var(--amber) 50%, var(--line));
+}
+.cardTitle {
+  font-weight: 600;
+  font-size: 0.98rem;
+  color: var(--ink);
+}
+.cardName {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  color: var(--amber);
+}
+.cardDir {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--ink-3);
+  word-break: break-all;
+}
