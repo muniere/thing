@@ -14,8 +14,6 @@ import s from "./App.module.css";
 interface Props {
   // The project this view is scoped to (the first URL path segment).
   project: string;
-  // Navigate back to the project picker (the root "/").
-  onExit: () => void;
 }
 
 // The URL path is /<project>/<ref> (e.g. /work/epic/issue/task); /<project> alone
@@ -27,7 +25,7 @@ function refFromPath(project: string): string | null {
   return path.startsWith(prefix) ? path.slice(prefix.length) || null : null;
 }
 
-export function App({ project, onExit }: Props) {
+export function App({ project }: Props) {
   const api = useMemo(() => forProject(project), [project]);
   const [tree, setTree] = useState<Node[]>([]);
   const [title, setTitle] = useState(project);
@@ -162,22 +160,11 @@ export function App({ project, onExit }: Props) {
   return (
     <div className={s.app}>
       <header className={s.topbar}>
-        <a
-          className={s.projects}
-          href="/"
-          onClick={(e) => {
-            if (!isPlainClick(e)) return;
-            e.preventDefault();
-            onExit();
-          }}
-        >
-          ‹ Projects
-        </a>
         <a className={s.brand} href={hrefFor("")} onClick={(e) => onNav(e, "")}>
           <span className={s.dot} />{title}
         </a>
         <div className={s.topbarAdd}>
-          <AddForm api={api} parent="" noun="Epic" amber floating run={run} onCreated={activate} />
+          <AddForm api={api} parent="" noun="Epic" amber run={run} onCreated={activate} />
         </div>
       </header>
 
