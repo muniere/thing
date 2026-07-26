@@ -35,7 +35,18 @@ func fixture(t *testing.T) *store.Store {
 
 func newServer(t *testing.T) *Server {
 	t.Helper()
-	return New(fixture(t), Options{Now: func() string { return "2026-07-20" }})
+	return New([]Mount{{Name: "test", Store: fixture(t)}}, Options{Now: func() string { return "2026-07-20" }})
+}
+
+// proj returns the single project mounted by newServer, for tests that reach
+// into the store or hub directly.
+func proj(t *testing.T, s *Server) *project {
+	t.Helper()
+	p := s.project("test")
+	if p == nil {
+		t.Fatal(`no "test" project mounted`)
+	}
+	return p
 }
 
 func do(t *testing.T, s *Server, method, target, body string) *httptest.ResponseRecorder {
@@ -52,7 +63,7 @@ func do(t *testing.T, s *Server, method, target, body string) *httptest.Response
 
 func TestGetTree(t *testing.T) {
 	s := newServer(t)
-	w := do(t, s, "GET", "/api/tree", "")
+	w := do(t, s, "GET", "/api/projects/test/tree", "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", w.Code, w.Body.String())
 	}
@@ -71,7 +82,7 @@ func TestGetTree(t *testing.T) {
 func TestCreateTask(t *testing.T) {
 	s := newServer(t)
 	// The parent issue's ref is in the path; the parent decides the type.
-	w := do(t, s, "POST", "/api/nodes/alpha/one", `{"title":"New task"}`)
+	w := do(t, s, "POST", "/api/projects/test/nodes/alpha/one", `{"title":"New task"}`)
 	if w.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want 201; body=%s", w.Code, w.Body.String())
 	}
@@ -80,14 +91,14 @@ func TestCreateTask(t *testing.T) {
 	if res["ref"] != "alpha/one/new-task" {
 		t.Fatalf("ref = %q, want alpha/one/new-task", res["ref"])
 	}
-	if e, _ := s.store.Locate("alpha/one/new-task"); e == nil {
+	if e, _ := proj(t, s).store.Locate("alpha/one/new-task"); e == nil {
 		t.Fatal("created task not found in store")
 	}
 }
 
 func TestCreateBadParent(t *testing.T) {
 	s := newServer(t)
-	w := do(t, s, "POST", "/api/nodes/nope", `{"title":"Orphan"}`)
+	w := do(t, s, "POST", "/api/projects/test/nodes/nope", `{"title":"Orphan"}`)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", w.Code)
 	}
@@ -96,7 +107,7 @@ func TestCreateBadParent(t *testing.T) {
 func TestCreateEpic(t *testing.T) {
 	s := newServer(t)
 	// An empty parent path creates a top-level epic.
-	w := do(t, s, "POST", "/api/nodes/", `{"title":"Beta","category":"Project"}`)
+	w := do(t, s, "POST", "/api/projects/test/nodes/", `{"title":"Beta","category":"Project"}`)
 	if w.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want 201; body=%s", w.Code, w.Body.String())
 	}
@@ -109,17 +120,17 @@ func TestCreateEpic(t *testing.T) {
 
 func TestStatusAndPriority(t *testing.T) {
 	s := newServer(t)
-	if w := do(t, s, "PATCH", "/api/nodes/alpha/one/do-it", `{"status":"done"}`); w.Code != http.StatusOK {
+	if w := do(t, s, "PATCH", "/api/projects/test/nodes/alpha/one/do-it", `{"status":"done"}`); w.Code != http.StatusOK {
 		t.Fatalf("status set = %d, want 200; body=%s", w.Code, w.Body.String())
 	}
-	e, _ := s.store.Locate("alpha/one/do-it")
+	e, _ := proj(t, s).store.Locate("alpha/one/do-it")
 	if e.Node.Status != "done" {
 		t.Errorf("status = %q, want done", e.Node.Status)
 	}
-	if w := do(t, s, "PATCH", "/api/nodes/alpha/one/do-it", `{"priority":"bogus"}`); w.Code != http.StatusBadRequest {
+	if w := do(t, s, "PATCH", "/api/projects/test/nodes/alpha/one/do-it", `{"priority":"bogus"}`); w.Code != http.StatusBadRequest {
 		t.Errorf("bad priority = %d, want 400", w.Code)
 	}
-	if w := do(t, s, "PATCH", "/api/nodes/alpha/one/do-it", `{"status":"bogus"}`); w.Code != http.StatusBadRequest {
+	if w := do(t, s, "PATCH", "/api/projects/test/nodes/alpha/one/do-it", `{"status":"bogus"}`); w.Code != http.StatusBadRequest {
 		t.Errorf("bad status = %d, want 400", w.Code)
 	}
 }
@@ -128,16 +139,16 @@ func TestClearStatusRevertsToRollup(t *testing.T) {
 	s := newServer(t)
 	// Pin the issue's status, then clear it with an empty status: the explicit
 	// value is dropped so it rolls up from its children again.
-	if w := do(t, s, "PATCH", "/api/nodes/alpha/one", `{"status":"paused"}`); w.Code != http.StatusOK {
+	if w := do(t, s, "PATCH", "/api/projects/test/nodes/alpha/one", `{"status":"paused"}`); w.Code != http.StatusOK {
 		t.Fatalf("set = %d, want 200; body=%s", w.Code, w.Body.String())
 	}
-	if e, _ := s.store.Locate("alpha/one"); e.Node.Status != "paused" {
+	if e, _ := proj(t, s).store.Locate("alpha/one"); e.Node.Status != "paused" {
 		t.Fatalf("status = %q, want paused", e.Node.Status)
 	}
-	if w := do(t, s, "PATCH", "/api/nodes/alpha/one", `{"status":""}`); w.Code != http.StatusOK {
+	if w := do(t, s, "PATCH", "/api/projects/test/nodes/alpha/one", `{"status":""}`); w.Code != http.StatusOK {
 		t.Fatalf("clear = %d, want 200; body=%s", w.Code, w.Body.String())
 	}
-	e, _ := s.store.Locate("alpha/one")
+	e, _ := proj(t, s).store.Locate("alpha/one")
 	if e.Node.Status != "" {
 		t.Errorf("status = %q, want empty (rolled up)", e.Node.Status)
 	}
@@ -149,7 +160,7 @@ func TestClearStatusRevertsToRollup(t *testing.T) {
 
 func TestPatchSingleOperation(t *testing.T) {
 	s := newServer(t)
-	ref := "/api/nodes/alpha/one/do-it"
+	ref := "/api/projects/test/nodes/alpha/one/do-it"
 	// A body with no recognized field is a 400, not a silent 200 no-op.
 	if w := do(t, s, "PATCH", ref, `{}`); w.Code != http.StatusBadRequest {
 		t.Errorf("empty patch = %d, want 400", w.Code)
@@ -167,11 +178,11 @@ func TestPatchSingleOperation(t *testing.T) {
 func TestCategoryRejectedOnNonEpic(t *testing.T) {
 	s := newServer(t)
 	// On create: a category with a non-empty parent (i.e. not an epic) is 400.
-	if w := do(t, s, "POST", "/api/nodes/alpha/one", `{"title":"T","category":"X"}`); w.Code != http.StatusBadRequest {
+	if w := do(t, s, "POST", "/api/projects/test/nodes/alpha/one", `{"title":"T","category":"X"}`); w.Code != http.StatusBadRequest {
 		t.Errorf("create category on non-epic = %d, want 400", w.Code)
 	}
 	// On patch: setting a category on a non-epic node is 400.
-	if w := do(t, s, "PATCH", "/api/nodes/alpha/one/do-it", `{"category":"X"}`); w.Code != http.StatusBadRequest {
+	if w := do(t, s, "PATCH", "/api/projects/test/nodes/alpha/one/do-it", `{"category":"X"}`); w.Code != http.StatusBadRequest {
 		t.Errorf("patch category on non-epic = %d, want 400", w.Code)
 	}
 }
@@ -180,7 +191,7 @@ func TestRenameKeepsRef(t *testing.T) {
 	s := newServer(t)
 	// A title change updates the frontmatter but keeps the slug (and thus ref)
 	// stable, so links do not break.
-	w := do(t, s, "PATCH", "/api/nodes/alpha/one/do-it", `{"title":"Renamed task"}`)
+	w := do(t, s, "PATCH", "/api/projects/test/nodes/alpha/one/do-it", `{"title":"Renamed task"}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", w.Code, w.Body.String())
 	}
@@ -189,7 +200,7 @@ func TestRenameKeepsRef(t *testing.T) {
 	if res["ref"] != "alpha/one/do-it" {
 		t.Fatalf("ref = %q, want unchanged alpha/one/do-it", res["ref"])
 	}
-	if e, _ := s.store.Locate("alpha/one/do-it"); e == nil || e.Node.Title != "Renamed task" {
+	if e, _ := proj(t, s).store.Locate("alpha/one/do-it"); e == nil || e.Node.Title != "Renamed task" {
 		t.Fatalf("title not updated: %+v", e)
 	}
 }
@@ -197,7 +208,7 @@ func TestRenameKeepsRef(t *testing.T) {
 func TestMove(t *testing.T) {
 	s := newServer(t)
 	// Move the issue out of its epic into _orphan; its ref changes.
-	w := do(t, s, "PATCH", "/api/nodes/alpha/one", `{"move":"_orphan"}`)
+	w := do(t, s, "PATCH", "/api/projects/test/nodes/alpha/one", `{"move":"_orphan"}`)
 	if w.Code != http.StatusOK {
 		t.Fatalf("move = %d, want 200; body=%s", w.Code, w.Body.String())
 	}
@@ -206,28 +217,28 @@ func TestMove(t *testing.T) {
 	if res["ref"] != "_orphan/one" {
 		t.Fatalf("ref = %q, want _orphan/one", res["ref"])
 	}
-	if e, _ := s.store.Locate("_orphan/one"); e == nil {
+	if e, _ := proj(t, s).store.Locate("_orphan/one"); e == nil {
 		t.Fatal("moved issue not found at new ref")
 	}
 	// The whole subtree follows: the child task moved with its issue.
-	if e, _ := s.store.Locate("_orphan/one/do-it"); e == nil {
+	if e, _ := proj(t, s).store.Locate("_orphan/one/do-it"); e == nil {
 		t.Fatal("child task did not follow the move")
 	}
-	if e, _ := s.store.Locate("alpha/one"); e != nil {
+	if e, _ := proj(t, s).store.Locate("alpha/one"); e != nil {
 		t.Error("issue still present at the old ref")
 	}
 }
 
 func TestBodyAndLinks(t *testing.T) {
 	s := newServer(t)
-	ref := "/api/nodes/alpha/one/do-it"
+	ref := "/api/projects/test/nodes/alpha/one/do-it"
 	if w := do(t, s, "PATCH", ref, `{"body":"Fresh body."}`); w.Code != http.StatusOK {
 		t.Fatalf("body = %d, want 200; body=%s", w.Code, w.Body.String())
 	}
 	if w := do(t, s, "PATCH", ref, `{"addLink":{"url":"https://x.test","label":"X"}}`); w.Code != http.StatusOK {
 		t.Fatalf("add link = %d, want 200; body=%s", w.Code, w.Body.String())
 	}
-	e, _ := s.store.Locate("alpha/one/do-it")
+	e, _ := proj(t, s).store.Locate("alpha/one/do-it")
 	if e.Node.Body != "Fresh body.\n" {
 		t.Errorf("body = %q", e.Node.Body)
 	}
@@ -237,7 +248,7 @@ func TestBodyAndLinks(t *testing.T) {
 	if w := do(t, s, "PATCH", ref, `{"removeLink":"https://x.test"}`); w.Code != http.StatusOK {
 		t.Fatalf("rm link by url = %d, want 200", w.Code)
 	}
-	if e, _ := s.store.Locate("alpha/one/do-it"); len(e.Node.Links) != 0 {
+	if e, _ := proj(t, s).store.Locate("alpha/one/do-it"); len(e.Node.Links) != 0 {
 		t.Errorf("link not removed: %v", e.Node.Links)
 	}
 	// Removing by 1-based index also works; a bad index is a 400.
@@ -246,7 +257,7 @@ func TestBodyAndLinks(t *testing.T) {
 	if w := do(t, s, "PATCH", ref, `{"removeLink":"1"}`); w.Code != http.StatusOK {
 		t.Fatalf("rm link by index = %d, want 200", w.Code)
 	}
-	if e, _ := s.store.Locate("alpha/one/do-it"); len(e.Node.Links) != 1 || e.Node.Links[0].URL != "https://b.test" {
+	if e, _ := proj(t, s).store.Locate("alpha/one/do-it"); len(e.Node.Links) != 1 || e.Node.Links[0].URL != "https://b.test" {
 		t.Errorf("index removal took the wrong link: %v", e.Node.Links)
 	}
 	if w := do(t, s, "PATCH", ref, `{"removeLink":"9"}`); w.Code != http.StatusBadRequest {
@@ -257,11 +268,11 @@ func TestBodyAndLinks(t *testing.T) {
 func TestRemoveSubtree(t *testing.T) {
 	s := newServer(t)
 	// Removing an epic takes its whole subtree.
-	if w := do(t, s, "DELETE", "/api/nodes/alpha", ""); w.Code != http.StatusNoContent {
+	if w := do(t, s, "DELETE", "/api/projects/test/nodes/alpha", ""); w.Code != http.StatusNoContent {
 		t.Fatalf("remove epic = %d, want 204; body=%s", w.Code, w.Body.String())
 	}
 	for _, ref := range []string{"alpha", "alpha/one", "alpha/one/do-it"} {
-		if e, _ := s.store.Locate(ref); e != nil {
+		if e, _ := proj(t, s).store.Locate(ref); e != nil {
 			t.Errorf("%q survived the subtree removal", ref)
 		}
 	}
@@ -269,17 +280,17 @@ func TestRemoveSubtree(t *testing.T) {
 
 func TestRemove(t *testing.T) {
 	s := newServer(t)
-	if w := do(t, s, "DELETE", "/api/nodes/alpha/one/do-it", ""); w.Code != http.StatusNoContent {
+	if w := do(t, s, "DELETE", "/api/projects/test/nodes/alpha/one/do-it", ""); w.Code != http.StatusNoContent {
 		t.Fatalf("remove = %d, want 204; body=%s", w.Code, w.Body.String())
 	}
-	if e, _ := s.store.Locate("alpha/one/do-it"); e != nil {
+	if e, _ := proj(t, s).store.Locate("alpha/one/do-it"); e != nil {
 		t.Error("removed task still present")
 	}
 }
 
 func TestNotFound(t *testing.T) {
 	s := newServer(t)
-	if w := do(t, s, "PATCH", "/api/nodes/nope", `{"status":"done"}`); w.Code != http.StatusNotFound {
+	if w := do(t, s, "PATCH", "/api/projects/test/nodes/nope", `{"status":"done"}`); w.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404", w.Code)
 	}
 }
@@ -298,7 +309,7 @@ func TestConcurrentCreatesNoLostUpdate(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			req := httptest.NewRequest("POST", "/api/nodes/alpha/one", strings.NewReader(`{"title":"dup"}`))
+			req := httptest.NewRequest("POST", "/api/projects/test/nodes/alpha/one", strings.NewReader(`{"title":"dup"}`))
 			w := httptest.NewRecorder()
 			s.ServeHTTP(w, req)
 			codes[i] = w.Code
@@ -318,7 +329,7 @@ func TestConcurrentCreatesNoLostUpdate(t *testing.T) {
 		Children []tnode `json:"children"`
 	}
 	var tree []tnode
-	if err := json.Unmarshal(do(t, s, "GET", "/api/tree", "").Body.Bytes(), &tree); err != nil {
+	if err := json.Unmarshal(do(t, s, "GET", "/api/projects/test/tree", "").Body.Bytes(), &tree); err != nil {
 		t.Fatalf("tree not JSON: %v", err)
 	}
 	var count func(ns []tnode) int
@@ -343,7 +354,7 @@ func TestStaticServingAndSPAFallback(t *testing.T) {
 		"index.html":    {Data: []byte("<!doctype html><title>thing</title>")},
 		"assets/app.js": {Data: []byte("console.log(1)")},
 	}
-	s := New(fixture(t), Options{Static: static, Now: func() string { return "x" }})
+	s := New([]Mount{{Name: "test", Store: fixture(t)}}, Options{Static: static, Now: func() string { return "x" }})
 
 	if w := do(t, s, "GET", "/assets/app.js", ""); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "console.log") {
 		t.Fatalf("asset serve = %d body=%q", w.Code, w.Body.String())
@@ -358,7 +369,7 @@ func TestStaticServingAndSPAFallback(t *testing.T) {
 func TestConfigEndpoint(t *testing.T) {
 	// No config.yaml -> the default title.
 	s := newServer(t)
-	w := do(t, s, "GET", "/api/config", "")
+	w := do(t, s, "GET", "/api/projects/test/config", "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("config = %d, want 200; body=%s", w.Code, w.Body.String())
 	}
@@ -373,8 +384,8 @@ func TestConfigEndpoint(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "config.yaml"), []byte("title: My Board\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	s2 := New(store.Open(root), Options{Now: func() string { return "x" }})
-	w2 := do(t, s2, "GET", "/api/config", "")
+	s2 := New([]Mount{{Name: "test", Store: store.Open(root)}}, Options{Now: func() string { return "x" }})
+	w2 := do(t, s2, "GET", "/api/projects/test/config", "")
 	_ = json.Unmarshal(w2.Body.Bytes(), &got)
 	if got["title"] != "My Board" {
 		t.Errorf("title = %q, want My Board", got["title"])
@@ -388,6 +399,51 @@ func TestNoStaticReturns404(t *testing.T) {
 	s := newServer(t)
 	if w := do(t, s, "GET", "/", ""); w.Code != http.StatusNotFound {
 		t.Fatalf("no static root = %d, want 404", w.Code)
+	}
+}
+
+func TestListProjects(t *testing.T) {
+	// Two mounts: one with a config.yaml title, one falling back to its name.
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "config.yaml"), []byte("title: Work Board\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s := New([]Mount{
+		{Name: "work", Store: store.Open(root)},
+		{Name: "home", Store: fixture(t)},
+	}, Options{Now: func() string { return "x" }})
+
+	w := do(t, s, "GET", "/api/projects", "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("projects = %d, want 200; body=%s", w.Code, w.Body.String())
+	}
+	var got []map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("body not JSON array: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d projects, want 2: %v", len(got), got)
+	}
+	// Registration order is preserved.
+	if got[0]["name"] != "work" || got[0]["title"] != "Work Board" {
+		t.Errorf("project[0] = %v, want work/Work Board", got[0])
+	}
+	if got[0]["dir"] != root {
+		t.Errorf("project[0] dir = %q, want %q", got[0]["dir"], root)
+	}
+	// A project without a config title falls back to its name.
+	if got[1]["name"] != "home" || got[1]["title"] != "home" {
+		t.Errorf("project[1] = %v, want home/home", got[1])
+	}
+}
+
+func TestUnknownProject404(t *testing.T) {
+	s := newServer(t)
+	if w := do(t, s, "GET", "/api/projects/nope/tree", ""); w.Code != http.StatusNotFound {
+		t.Fatalf("unknown project tree = %d, want 404; body=%s", w.Code, w.Body.String())
+	}
+	if w := do(t, s, "POST", "/api/projects/nope/nodes/", `{"title":"X"}`); w.Code != http.StatusNotFound {
+		t.Fatalf("unknown project create = %d, want 404", w.Code)
 	}
 }
 

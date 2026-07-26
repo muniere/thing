@@ -33,7 +33,7 @@ func TestEventsStreamsReloadOnMutation(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, "GET", ts.URL+"/events", nil)
+	req, _ := http.NewRequestWithContext(ctx, "GET", ts.URL+"/api/projects/test/events", nil)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -53,7 +53,7 @@ func TestEventsStreamsReloadOnMutation(t *testing.T) {
 	// A mutation over the API must push a reload frame.
 	go func() {
 		time.Sleep(50 * time.Millisecond)
-		req, _ := http.NewRequest("PATCH", ts.URL+"/api/nodes/alpha/one/do-it", strings.NewReader(`{"status":"done"}`))
+		req, _ := http.NewRequest("PATCH", ts.URL+"/api/projects/test/nodes/alpha/one/do-it", strings.NewReader(`{"status":"done"}`))
 		req.Header.Set("Content-Type", "application/json")
 		http.DefaultClient.Do(req)
 	}()
@@ -73,7 +73,7 @@ func TestHelloFrameCarriesBootID(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, "GET", ts.URL+"/events", nil)
+	req, _ := http.NewRequestWithContext(ctx, "GET", ts.URL+"/api/projects/test/events", nil)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -148,17 +148,17 @@ func TestHubUnsubscribeCleanup(t *testing.T) {
 
 func TestBroadcastGating(t *testing.T) {
 	s := newServer(t)
-	ch := s.hub.subscribe()
+	ch := proj(t, s).hub.subscribe()
 	// A read and a failed mutation must not broadcast a reload.
-	do(t, s, "GET", "/api/tree", "")
-	do(t, s, "PATCH", "/api/nodes/nope", `{"status":"done"}`)
+	do(t, s, "GET", "/api/projects/test/tree", "")
+	do(t, s, "PATCH", "/api/projects/test/nodes/nope", `{"status":"done"}`)
 	select {
 	case <-ch:
 		t.Fatal("a GET or a failed mutation broadcast a reload")
 	default:
 	}
 	// A successful mutation does.
-	do(t, s, "PATCH", "/api/nodes/alpha/one/do-it", `{"status":"done"}`)
+	do(t, s, "PATCH", "/api/projects/test/nodes/alpha/one/do-it", `{"status":"done"}`)
 	select {
 	case <-ch:
 	default:
@@ -176,7 +176,7 @@ func TestStartWatchDetectsDiskEdit(t *testing.T) {
 
 	reqCtx, reqCancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer reqCancel()
-	req, _ := http.NewRequestWithContext(reqCtx, "GET", ts.URL+"/events", nil)
+	req, _ := http.NewRequestWithContext(reqCtx, "GET", ts.URL+"/api/projects/test/events", nil)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -189,7 +189,7 @@ func TestStartWatchDetectsDiskEdit(t *testing.T) {
 
 	// An out-of-band edit (write a file directly, bypassing the API) reloads via
 	// the fingerprint poller — the path StartWatch exists for.
-	if err := os.WriteFile(filepath.Join(s.store.Root, "zzz.md"), []byte("x"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(proj(t, s).store.Root, "zzz.md"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if line := readEvent(t, br); !strings.Contains(line, "reload") {
