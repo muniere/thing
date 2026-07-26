@@ -59,6 +59,13 @@ export function unregisterProject(name: string): Promise<void> {
   return req<void>("DELETE", `/api/projects/${name}`);
 }
 
+// moveProject reorders a project in the picker relative to an anchor project:
+// pass exactly one of before/after (the anchor's name). It is a position-free
+// move, so it does not depend on the current numeric order.
+export function moveProject(name: string, anchor: { before: string } | { after: string }): Promise<void> {
+  return req<void>("PATCH", `/api/projects/${name}`, anchor);
+}
+
 // forProject returns a client bound to one project: every route is prefixed with
 // /api/projects/<project>/. Slugs are URL-safe ([a-z0-9-]) so a ref needs no
 // escaping to be a URL path.

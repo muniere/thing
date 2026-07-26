@@ -63,16 +63,56 @@
   gap: 0.5rem;
 }
 
-/* Each row is one card; the kebab overlays its top-right corner (a button can't
-   nest inside the card's <a>, so it is an absolutely-positioned sibling). */
+/* Each row is a drag grip plus the card; the kebab overlays the card's top-right
+   corner (a button can't nest inside the card's <a>, so it is an
+   absolutely-positioned sibling). */
 .item {
   position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 0.3rem;
+}
+.dragging {
+  opacity: 0.45;
+}
+/* Insertion line shown in the gap above/below the card the drag would land at. */
+.dropBefore::after,
+.dropAfter::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--amber);
+}
+.dropBefore::after {
+  top: -0.3rem;
+}
+.dropAfter::after {
+  bottom: -0.3rem;
+}
+
+/* The drag handle: a quiet grip that signals the row can be reordered. */
+.grip {
+  display: flex;
+  align-items: center;
+  padding: 0 0.15rem;
+  color: var(--ink-3);
+  font-size: 1rem;
+  cursor: grab;
+  user-select: none;
+}
+.dragging .grip {
+  cursor: grabbing;
 }
 
 /* Each project is one full-width row stacking its title, name, and data dir, so
    the picker reads as a vertical list. Extra right padding reserves room for the
    kebab so long text never runs under it. */
 .card {
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
