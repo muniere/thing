@@ -4,8 +4,8 @@
 # per-process bootID in its hello frame and the client reloads when it changes
 # (see web/src/live.ts) — so no live-reload proxy is needed.
 #
-# `make serve` runs `air -- --port <p> [--dir <d>]`; args after `--` are appended
-# to the built binary.
+# `make serve` runs `air -- --port <p>`; args after `--` are appended to the built
+# binary. Projects come from projects.yaml (see the README), not a flag.
 root = "."
 tmp_dir = "tmp"
 

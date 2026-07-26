@@ -30,15 +30,35 @@ Shell completions live under [`completions/`](completions/): source
 
 `thingd` serves the tree as a local web app: a React SPA (tree pane, full-edit
 detail pane, status/category/tag filters) over a JSON API on the same Go data
-layer as the CLI, so the two never disagree. The frontend lives in
-[`web/`](web/) (React + TypeScript, bundled with esbuild; types hand-written in
-`web/src/domain/generated.ts`).
+layer as the CLI, so the two never disagree. One process hosts **multiple
+projects** — each a named mount over its own data directory — registered in
+`projects.yaml` and addressed under `/<project>`; the root `/` is a picker
+listing them. The frontend lives in [`web/`](web/) (React + TypeScript, bundled
+with esbuild; types hand-written in `web/src/domain/generated.ts`).
+
+### Projects
+
+Projects are listed in `projects.yaml`, resolved (first match wins) from:
+
+1. `$THING_DATA_DIR/projects.yaml`
+2. `$XDG_STATE_HOME/thingd/projects.yaml`
+3. `~/.local/state/thingd/projects.yaml`
+
+```yaml
+projects:
+  - name: work            # URL-safe slug; addressed at /work
+    dir: /path/to/work/.thing
+  - name: home
+    dir: /path/to/home/.thing
+```
+
+A name must be a URL-safe slug (`[a-z0-9-]`) and unique. A missing file is not an
+error — the server starts with an empty picker.
 
 ### Development
 
 ```
 make serve                     # air rebuilds+restarts thingd on any change
-make serve DIR=<path>          # ... against a specific data dir
 make serve PORT=4400           # ... on a different port
 ```
 
@@ -58,30 +78,35 @@ whole app with no external files:
 
 ```
 make build
-./bin/thingd --dir <path>      # serves the app on http://localhost:4319
+./bin/thingd                   # serves the app on http://localhost:4319
 ```
 
 `--open` opens the browser; `--port N` pins the port; without it thingd falls
-back to the next free port so several trees can serve at once. thingd embeds
-`web/dist` unconditionally, so a committed `web/dist/.gitkeep` keeps `go
-build`/`test`/`vet` compiling before the first `make build`.
+back to the next free port so several servers can run at once. Projects come from
+`projects.yaml` (above). thingd embeds `web/dist` unconditionally, so a committed
+`web/dist/.gitkeep` keeps `go build`/`test`/`vet` compiling before the first
+`make build`.
 
 ### API
 
-Every node is addressed by its **ref** (a slug-path like `epic/issue/task`) used
-verbatim as the URL path. Because a ref spans multiple path segments, per-field
-edits are carried in a single `PATCH` body rather than as a path suffix.
+Project routes nest under `/api/projects/<project>/`, while `GET /api/projects`
+lists the mounts for the picker. Within a project, every node is addressed by its
+**ref** (a slug-path like `epic/issue/task`) used verbatim as the tail of the
+path. Because a ref spans multiple path segments, per-field edits are carried in
+a single `PATCH` body rather than as a path suffix.
 
 ```
-GET    /api/tree                whole tree as JSON (each node carries its ref)
-POST   /api/nodes/<parent>      create a child; the parent decides the type
-PATCH  /api/nodes/<ref>         {status|priority|title|category|body|move|addLink|removeLink}
-DELETE /api/nodes/<ref>         remove (an epic/issue takes its subtree)
-GET    /events                  Server-Sent Events reload stream
+GET    /api/projects                       registered projects (name, title, dir)
+GET    /api/projects/<p>/tree              whole tree as JSON (each node carries its ref)
+POST   /api/projects/<p>/nodes/<parent>    create a child; the parent decides the type
+PATCH  /api/projects/<p>/nodes/<ref>       {status|priority|title|category|body|move|addLink|removeLink}
+DELETE /api/projects/<p>/nodes/<ref>       remove (an epic/issue takes its subtree)
+GET    /api/projects/<p>/events            Server-Sent Events reload stream (per project)
 ```
 
-Open browsers live-reload over SSE whenever the tree changes — whether the edit
-came from the web, the CLI, or an editor.
+Open browsers live-reload over SSE whenever that project's tree changes — whether
+the edit came from the web, the CLI, or an editor — and a change in one project
+never reloads another's browsers.
 
 ## Directories
 

@@ -27,13 +27,13 @@ bundle: web/dist/index.html
 # embedded binary and restarts thingd on any Go or frontend change, so dev is the
 # same one-binary, one-port app as prod. The browser reloads itself over SSE when
 # the server restarts (see web/src/live.ts), so there is no dev server or proxy.
-# Open http://localhost:$(PORT); Ctrl-C stops it. PORT and DIR=<path> override the
-# port and data dir, e.g. `make serve PORT=4400 DIR=./demo`.
+# Open http://localhost:$(PORT); Ctrl-C stops it. Projects come from projects.yaml
+# (see the README); PORT=<n> overrides the port, e.g. `make serve PORT=4400`.
 PORT ?= 4319
 serve:
 	@command -v air >/dev/null || { echo "air not found; install: go install github.com/air-verse/air@latest"; exit 1; }
 	@[ -d web/node_modules ] || (cd web && npm install)
-	air -- --port $(PORT) $(if $(DIR),--dir $(DIR))
+	air -- --port $(PORT)
 
 # install builds and installs both binaries into the Go bin directory
 # (`go env GOBIN`, else `$GOPATH/bin`). thingd embeds web/dist, so the SPA is
