@@ -12,7 +12,8 @@ import (
 )
 
 func newLsCmd() *cobra.Command {
-	return &cobra.Command{
+	var archived, all bool
+	cmd := &cobra.Command{
 		Use:   "ls [<ref>]",
 		Short: "List a node's children, or the top level when omitted",
 		Args:  cobra.MaximumNArgs(1),
@@ -20,6 +21,22 @@ func newLsCmd() *cobra.Command {
 			st, err := openStore(cmd)
 			if err != nil {
 				return err
+			}
+
+			// The archive is a hidden top-level region, so its flags do not descend
+			// into a ref.
+			if (archived || all) && len(args) > 0 {
+				return fmt.Errorf("--archived/--all list the top level; they take no <ref>")
+			}
+
+			// --archived shows only the archive; --all appends it after the tree.
+			if archived {
+				out, err := archiveListing(st)
+				if err != nil {
+					return err
+				}
+				fmt.Fprint(cmd.OutOrStdout(), out)
+				return nil
 			}
 
 			// The top level (epics and orphan issues) is grouped under the
@@ -38,6 +55,15 @@ func newLsCmd() *cobra.Command {
 					return err
 				}
 				fmt.Fprint(cmd.OutOrStdout(), render.TopList(top, cfg.Categories))
+				if all {
+					out, err := archiveListing(st)
+					if err != nil {
+						return err
+					}
+					if out != "" {
+						fmt.Fprintf(cmd.OutOrStdout(), "\n%s", out)
+					}
+				}
 				return nil
 			}
 
@@ -63,4 +89,27 @@ func newLsCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&archived, "archived", false, "list only archived entries")
+	cmd.Flags().BoolVar(&all, "all", false, "list the top level plus archived entries")
+	cmd.MarkFlagsMutuallyExclusive("archived", "all")
+	return cmd
+}
+
+// archiveListing renders the hidden archive region: each entry's archive ref, the
+// ref it was archived from, its title, and the archive time.
+func archiveListing(st *store.Store) (string, error) {
+	entries, err := st.ArchiveList()
+	if err != nil {
+		return "", err
+	}
+	items := make([]render.ArchiveItem, len(entries))
+	for i, e := range entries {
+		items[i] = render.ArchiveItem{
+			Ref:        e.Ref,
+			From:       e.Node.ArchivedRef,
+			Title:      e.Node.Title,
+			ArchivedAt: e.Node.ArchivedAt,
+		}
+	}
+	return render.ArchiveList(items), nil
 }

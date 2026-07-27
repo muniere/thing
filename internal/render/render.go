@@ -162,6 +162,35 @@ func listLine(n *model.Node) string {
 	return s
 }
 
+// ArchiveItem is one archived entry as shown by `ls _archive`: its archive ref,
+// the origin it was archived from, its title, and the date it was archived.
+type ArchiveItem struct {
+	Ref        string
+	From       string
+	Title      string
+	ArchivedAt string
+}
+
+// ArchiveList renders archived entries as one line each:
+// "<archive-ref>  <- <origin-ref>  <title>  (<archived-at>)".
+func ArchiveList(items []ArchiveItem) string {
+	var b strings.Builder
+	for _, it := range items {
+		b.WriteString(it.Ref)
+		if it.From != "" {
+			b.WriteString("  <- " + it.From)
+		}
+		if it.Title != "" {
+			b.WriteString("  " + it.Title)
+		}
+		if it.ArchivedAt != "" {
+			b.WriteString("  (" + it.ArchivedAt + ")")
+		}
+		b.WriteByte('\n')
+	}
+	return b.String()
+}
+
 // Links renders a node's related links as a numbered list.
 func Links(links []model.Link) string {
 	var b strings.Builder

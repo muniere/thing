@@ -180,11 +180,15 @@ the ref already says what and where a node is.
 thing init                                   create the data + config dirs and config.yaml
 thing add [<parent>/]<title> [--priority <p>] [--tags a,b] [--category <c>]
 thing ls [<ref>]                             # list a node's children, or the top level
+thing ls --archived                          # list only archived entries
+thing ls --all                               # list the top level plus archived entries
 thing show <ref>                             # show a node + body
 thing status   <ref> <todo|doing|done|paused>
 thing priority <ref> <high|medium|low>
 thing mv <src> <dst>                         # move and/or rename a node (src/dst are refs)
 thing rm <ref>                               # remove a node (an epic/issue takes its subtree)
+thing archive <ref>                          # archive a node into _archive/ (takes its subtree)
+thing unarchive <archive-ref> [--to <ref>]   # restore an archived node to the live tree
 thing link add  <ref> <url> [--label <l>]    # add or update a related link
 thing link rm   <ref> <url|index>            # remove a link by URL, or 1-based index
 thing link list <ref>                        # list a node's related links
@@ -217,7 +221,8 @@ thing add _orphan/"Loose end"                       # under _orphan  -> orphan i
 ### `ls` — list children
 
 `thing ls` lists the top level (epics and orphan issues); `thing ls <ref>`
-lists that node's children; `thing ls _orphan` lists the orphan issues.
+lists that node's children; `thing ls _orphan` lists the orphan issues;
+`thing ls --archived` lists the archived entries (see `archive` below).
 
 ### `mv` — move and/or rename
 
@@ -231,6 +236,35 @@ thing mv alpha/one beta/one                # move issue "one" from epic alpha to
 thing mv alpha/one alpha/planning          # rename the slug one -> planning in place
 thing mv alpha/one/task beta/two/task      # move a task to another issue
 thing mv alpha/one _orphan/one             # detach an issue into _orphan
+```
+
+### `archive` / `unarchive` — shelve and restore
+
+`archive` moves a node out of the live tree into a hidden `_archive/` region (a
+sibling of `_orphan/`), taking its whole subtree; a task takes only its file. The
+ref it was archived from and the time are recorded in its frontmatter
+(`archived_ref` / `archived_at`, an RFC3339 instant), and the archived entry is
+addressed as `_archive/<name>` — printed by `archive` and listed by
+`thing ls --archived`. Archived nodes drop out of `tree`, `ls`, `find`, and
+`export`; reach one with `thing show _archive/<name>`.
+
+`unarchive` restores an entry to its recorded `archived_ref`, or to `--to <ref>`
+when given. Restoring onto an occupied ref, or one whose parent no longer exists, is
+an error rather than an overwrite — retry with `--to`. When the restore lands
+somewhere other than where it came from, `[[<ref>]]` backlinks (and their
+descendants') are rewritten to the new ref, like `mv`.
+
+While a node is archived its backlinks dangle (`[[<ref>]]` resolves to nothing),
+the same as after `rm`. Avoid reusing an archived node's ref: if a new node takes
+that ref, its `[[<ref>]]` references become its own, and restoring the archived node
+elsewhere with `--to` leaves those references with the new occupant rather than
+following the restored node.
+
+```
+thing archive alpha/one                    # shelve issue "one" and its tasks -> _archive/one
+thing ls --archived                        # _archive/one  <- alpha/one  One  (2026-07-27T09:00:00+09:00)
+thing unarchive _archive/one               # restore to alpha/one
+thing unarchive _archive/one --to beta/one # restore under a different parent
 ```
 
 The `--data-dir`, `--config`, and `-g` / `--global` flags apply to every
