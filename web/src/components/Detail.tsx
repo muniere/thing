@@ -272,6 +272,26 @@ export function Detail({ api, node, allNodes, run, onSelect, hrefFor, onNav }: P
 
         <div className={s.action}>
           <div className={s.actionText}>
+            <div className={s.actionTitle}>Archive {node.type}</div>
+            <div className={s.actionDesc}>
+              Shelve this {node.type}{node.type !== Type.Task ? " and its subtree" : ""} out of the tree. Restore it later from the Archived list.
+            </div>
+          </div>
+          <button
+            type="button"
+            className={s.btn}
+            onClick={async () => {
+              if (!confirm(`Archive ${node.type} "${node.title}"${node.type !== Type.Task ? " and its subtree" : ""}?`)) return;
+              await run(api.archive(node.ref));
+              onSelect("");
+            }}
+          >
+            Archive
+          </button>
+        </div>
+
+        <div className={s.action}>
+          <div className={s.actionText}>
             <div className={s.actionTitle}>Delete {node.type}</div>
             <div className={s.actionDesc}>
               Permanently remove this {node.type}{node.type !== Type.Task ? " and its subtree" : ""}.

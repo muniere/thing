@@ -40,6 +40,18 @@ export interface ProjectInfo {
   dir: string;
 }
 
+// ArchiveEntry is one shelved subtree, as listed by GET /archives. `ref` is its
+// archive address ("_archives/<name>"); `from` is the ref it was archived from.
+export interface ArchiveEntry {
+  ref: string;
+  from: string;
+  title: string;
+  type: string;
+  priority?: string;
+  status?: string;
+  archivedAt?: string;
+}
+
 // projects lists the registered projects for the root picker. It is the only
 // route not scoped to a single project.
 export function listProjects(): Promise<ProjectInfo[]> {
@@ -120,6 +132,15 @@ export function forProject(project: string) {
     removeLink: (ref: string, which: string) =>
       req<{ ref: string }>("PATCH", `${base}/nodes/${ref}`, { removeLink: which }),
     remove: (ref: string) => req<void>("DELETE", `${base}/nodes/${ref}`),
+    // archive shelves a node (an epic/issue takes its subtree) into _archives/,
+    // returning its new archive ref.
+    archive: (ref: string) => req<{ ref: string }>("PATCH", `${base}/nodes/${ref}`, { archive: true }),
+    // listArchive returns the shelved entries.
+    listArchive: () => req<ArchiveEntry[]>("GET", `${base}/archives`),
+    // unarchive restores _archives/<name> to where it came from, or to `to` when
+    // given, returning the restored ref.
+    unarchive: (name: string, to?: string) =>
+      req<{ ref: string }>("PATCH", `${base}/archives/${name}`, to ? { to } : {}),
   };
 }
 
