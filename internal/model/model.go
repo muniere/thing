@@ -107,6 +107,9 @@ type Node struct {
 	Links    []Link
 	Body     string
 	Children []*Node
+
+	ArchivedRef string // the live-tree ref this node was archived from; empty on live nodes
+	ArchivedAt  string // RFC3339 instant it was archived; empty on live nodes
 }
 
 // EffectiveStatus is the status to display for a node. An explicit Status wins.
