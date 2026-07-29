@@ -46,6 +46,23 @@ export function listProjects(): Promise<ProjectInfo[]> {
   return req<ProjectInfo[]>("GET", "/api/projects");
 }
 
+// ReloadResult summarizes a registry reload (see reloadProjects): which mounts
+// changed and any entries that could not be mounted.
+export interface ReloadResult {
+  added: string[];
+  removed: string[];
+  repointed: string[];
+  skipped: { name: string; reason: string }[];
+}
+
+// reloadProjects re-reads the server's projects.yaml and reconciles the mounts to
+// it — mounting new entries, unmounting dropped ones, re-pointing changed dirs,
+// and matching the order. It is the picker's manual resync; the in-memory registry
+// otherwise only changes through the API, so a hand-edit to the file needs this.
+export function reloadProjects(): Promise<ReloadResult> {
+  return req<ReloadResult>("POST", "/api/projects/reload");
+}
+
 // registerProject mounts a project at name over an existing thing tree at dir.
 // The name is the resource URI, so this is a PUT; it is idempotent for the same
 // name+dir and rejects a name already bound to a different dir.

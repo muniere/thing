@@ -1,5 +1,5 @@
 import { type DragEvent, type MouseEvent, useCallback, useEffect, useState } from "react";
-import { listProjects, moveProject, type ProjectInfo, registerProject, unregisterProject } from "../api.ts";
+import { listProjects, moveProject, type ProjectInfo, registerProject, reloadProjects, unregisterProject } from "../api.ts";
 import { isPlainClick } from "../util.ts";
 import { Dialog } from "./Dialog.tsx";
 import s from "./ProjectList.module.css";
@@ -57,6 +57,24 @@ export function ProjectList({ onOpen }: Props) {
     if (!isPlainClick(e)) return;
     e.preventDefault();
     onOpen(name);
+  };
+
+  // refresh re-syncs the list from the server's projects.yaml (picking up
+  // hand-edits) and reports any entries that could not be mounted. It fetches the
+  // list itself rather than calling load() so the skipped-entry message it sets
+  // isn't cleared by load()'s own success handler.
+  const [reloading, setReloading] = useState(false);
+  const refresh = async () => {
+    setReloading(true);
+    try {
+      const res = await reloadProjects();
+      setProjects(await listProjects());
+      setError(res.skipped.length ? res.skipped.map((x) => `${x.name}: ${x.reason}`).join("; ") : null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setReloading(false);
+    }
   };
 
   const remove = async (name: string) => {
@@ -125,6 +143,28 @@ export function ProjectList({ onOpen }: Props) {
 
       <div className={s.content}>
         {error && <div className={s.error}>{error}</div>}
+
+        {projects && (
+          <div className={s.listHead}>
+            <span className={s.count}>{projects.length} project{projects.length === 1 ? "" : "s"}</span>
+            <button
+              type="button"
+              className={s.refresh}
+              title="Re-read projects.yaml on the server"
+              disabled={reloading}
+              onClick={refresh}
+            >
+              {/* Refresh (circular arrow) as an SVG, not a glyph, so it aligns with
+                  the label and can spin while the reload is in flight. The label
+                  names the action — an icon alone reads as ambiguous. */}
+              <svg className={reloading ? `${s.refreshIcon} ${s.spinning}` : s.refreshIcon} viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M21 12a9 9 0 1 1-2.64-6.36" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                <path d="M21 3v6h-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              {reloading ? "Reloading…" : "Reload"}
+            </button>
+          </div>
+        )}
 
         {projects && projects.length === 0 && (
           <p className={s.empty}>No projects registered yet — add one below.</p>

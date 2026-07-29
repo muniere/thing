@@ -701,6 +701,149 @@ func TestMovePersists(t *testing.T) {
 	}
 }
 
+func TestReloadReconcilesFromFile(t *testing.T) {
+	regFile := filepath.Join(t.TempDir(), "projects.yaml")
+	s := New([]Mount{{Name: "test", Store: fixture(t)}}, Options{
+		Now:          func() string { return "2026-07-20" },
+		RegistryFile: regFile,
+	})
+	testDir := proj(t, s).store.Root
+	bDir := thingTreeDir(t)
+
+	// The file gains "b" alongside the boot-mounted "test": reload mounts it.
+	if err := registry.Save(regFile, []registry.Project{{Name: "test", Dir: testDir}, {Name: "b", Dir: bDir}}); err != nil {
+		t.Fatal(err)
+	}
+	res, err := s.Reload()
+	if err != nil {
+		t.Fatalf("Reload add: %v", err)
+	}
+	if !slices.Equal(res.Added, []string{"b"}) || len(res.Removed) != 0 || len(res.Skipped) != 0 {
+		t.Fatalf("add result = %+v, want only Added [b]", res)
+	}
+	if got := pickerOrder(t, s); !slices.Equal(got, []string{"test", "b"}) {
+		t.Fatalf("order after add = %v, want [test b]", got)
+	}
+	if w := do(t, s, "GET", "/api/projects/b/tree", ""); w.Code != http.StatusOK {
+		t.Fatalf("b tree after add = %d, want 200", w.Code)
+	}
+
+	// The file reorders to [b, test]: reload matches the picker order to it.
+	if err := registry.Save(regFile, []registry.Project{{Name: "b", Dir: bDir}, {Name: "test", Dir: testDir}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Reload(); err != nil {
+		t.Fatalf("Reload reorder: %v", err)
+	}
+	if got := pickerOrder(t, s); !slices.Equal(got, []string{"b", "test"}) {
+		t.Fatalf("order after reorder = %v, want [b test]", got)
+	}
+
+	// The file drops "b": reload unmounts it, leaving only "test".
+	if err := registry.Save(regFile, []registry.Project{{Name: "test", Dir: testDir}}); err != nil {
+		t.Fatal(err)
+	}
+	res, err = s.Reload()
+	if err != nil {
+		t.Fatalf("Reload remove: %v", err)
+	}
+	if !slices.Equal(res.Removed, []string{"b"}) {
+		t.Fatalf("remove result = %+v, want Removed [b]", res)
+	}
+	if w := do(t, s, "GET", "/api/projects/b/tree", ""); w.Code != http.StatusNotFound {
+		t.Fatalf("b tree after remove = %d, want 404", w.Code)
+	}
+}
+
+func TestReloadRepointsChangedDir(t *testing.T) {
+	regFile := filepath.Join(t.TempDir(), "projects.yaml")
+	s := New([]Mount{{Name: "test", Store: fixture(t)}}, Options{
+		Now:          func() string { return "2026-07-20" },
+		RegistryFile: regFile,
+	})
+	// A fresh thing tree with a distinct title proves the mount re-pointed.
+	newDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(newDir, "config.yaml"), []byte("title: Repointed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.Save(regFile, []registry.Project{{Name: "test", Dir: newDir}}); err != nil {
+		t.Fatal(err)
+	}
+	res, err := s.Reload()
+	if err != nil {
+		t.Fatalf("Reload: %v", err)
+	}
+	if !slices.Equal(res.Repointed, []string{"test"}) {
+		t.Fatalf("result = %+v, want Repointed [test]", res)
+	}
+	var cfg map[string]string
+	_ = json.Unmarshal(do(t, s, "GET", "/api/projects/test/config", "").Body.Bytes(), &cfg)
+	if cfg["title"] != "Repointed" {
+		t.Fatalf("title = %q, want Repointed (mount did not re-point)", cfg["title"])
+	}
+}
+
+func TestReloadSkipsBadDir(t *testing.T) {
+	regFile := filepath.Join(t.TempDir(), "projects.yaml")
+	s := New([]Mount{{Name: "test", Store: fixture(t)}}, Options{
+		Now:          func() string { return "2026-07-20" },
+		RegistryFile: regFile,
+	})
+	testDir := proj(t, s).store.Root
+	badDir := t.TempDir() // no config.yaml → not a thing tree
+	if err := registry.Save(regFile, []registry.Project{{Name: "test", Dir: testDir}, {Name: "bad", Dir: badDir}}); err != nil {
+		t.Fatal(err)
+	}
+	res, err := s.Reload()
+	if err != nil {
+		t.Fatalf("Reload: %v", err)
+	}
+	if len(res.Skipped) != 1 || res.Skipped[0].Name != "bad" {
+		t.Fatalf("result = %+v, want one Skipped bad", res)
+	}
+	if len(res.Added) != 0 {
+		t.Fatalf("a bad dir must not be mounted: %+v", res)
+	}
+	if w := do(t, s, "GET", "/api/projects/bad/tree", ""); w.Code != http.StatusNotFound {
+		t.Fatalf("bad tree = %d, want 404 (not mounted)", w.Code)
+	}
+	if got := pickerOrder(t, s); !slices.Equal(got, []string{"test"}) {
+		t.Fatalf("order = %v, want [test]", got)
+	}
+}
+
+func TestReloadEndpoint(t *testing.T) {
+	regFile := filepath.Join(t.TempDir(), "projects.yaml")
+	s := New([]Mount{{Name: "test", Store: fixture(t)}}, Options{
+		Now:          func() string { return "2026-07-20" },
+		RegistryFile: regFile,
+	})
+	testDir := proj(t, s).store.Root
+	if err := registry.Save(regFile, []registry.Project{{Name: "test", Dir: testDir}, {Name: "b", Dir: thingTreeDir(t)}}); err != nil {
+		t.Fatal(err)
+	}
+	w := do(t, s, "POST", "/api/projects/reload", "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("reload = %d, want 200; body=%s", w.Code, w.Body.String())
+	}
+	var res struct{ Added []string }
+	_ = json.Unmarshal(w.Body.Bytes(), &res)
+	if !slices.Equal(res.Added, []string{"b"}) {
+		t.Fatalf("added = %v, want [b]", res.Added)
+	}
+}
+
+func TestReloadNoRegistryFileIsNoop(t *testing.T) {
+	s := newServer(t) // no RegistryFile configured
+	w := do(t, s, "POST", "/api/projects/reload", "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("reload without registry = %d, want 200 (no-op)", w.Code)
+	}
+	if got := pickerOrder(t, s); !slices.Equal(got, []string{"test"}) {
+		t.Fatalf("order = %v, want [test] unchanged", got)
+	}
+}
+
 func TestRegisterStartsWatcherUnregisterStops(t *testing.T) {
 	s := newServer(t)
 	go s.StartWatch(t.Context(), time.Hour) // long interval: we assert lifecycle, not polling
