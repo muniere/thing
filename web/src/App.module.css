@@ -16,6 +16,18 @@
   background: color-mix(in srgb, var(--bg) 86%, transparent);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--line);
+  /* backdrop-filter makes the topbar its own stacking context at root z-index
+     auto, so the switcher dropdown (a descendant) would paint *below* the
+     positioned panes in .split that come later in the DOM. Lift the whole topbar
+     above that content so the dropdown's lower rows stay clickable. */
+  position: relative;
+  z-index: 10;
+}
+/* The logo and its switcher caret travel together at the far left. */
+.brandGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 .brand {
   display: flex;

@@ -9,11 +9,15 @@ import { Tree } from "./components/Tree.tsx";
 import { FilterBar } from "./components/FilterBar.tsx";
 import { Detail } from "./components/Detail.tsx";
 import { AddForm } from "./components/AddForm.tsx";
+import { ProjectSwitcher } from "./components/ProjectSwitcher.tsx";
 import s from "./App.module.css";
 
 interface Props {
   // The project this view is scoped to (the first URL path segment).
   project: string;
+  // Switch to another project by name, or to the picker (null). Wired to the
+  // logo's switcher caret; Root remounts this component on the new project.
+  onSwitch: (name: string | null) => void;
 }
 
 // The URL path is /<project>/<ref> (e.g. /work/epic/issue/task); /<project> alone
@@ -25,7 +29,7 @@ function refFromPath(project: string): string | null {
   return path.startsWith(prefix) ? path.slice(prefix.length) || null : null;
 }
 
-export function App({ project }: Props) {
+export function App({ project, onSwitch }: Props) {
   const api = useMemo(() => forProject(project), [project]);
   const [tree, setTree] = useState<Node[]>([]);
   const [title, setTitle] = useState(project);
@@ -160,9 +164,12 @@ export function App({ project }: Props) {
   return (
     <div className={s.app}>
       <header className={s.topbar}>
-        <a className={s.brand} href={hrefFor("")} onClick={(e) => onNav(e, "")}>
-          <span className={s.dot} />{title}
-        </a>
+        <div className={s.brandGroup}>
+          <a className={s.brand} href={hrefFor("")} onClick={(e) => onNav(e, "")}>
+            <span className={s.dot} />{title}
+          </a>
+          <ProjectSwitcher current={project} onSwitch={onSwitch} />
+        </div>
         <div className={s.topbarAdd}>
           <AddForm api={api} parent="" noun="Epic" amber run={run} onCreated={activate} />
         </div>

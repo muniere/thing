@@ -22,13 +22,17 @@ export function Root() {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  const open = useCallback((name: string) => {
-    window.history.pushState(null, "", `/${name}`);
+  // switchTo routes to a project (push /<name>) or to the picker (null → "/"),
+  // remounting App via its project key. The picker cards and the in-project
+  // switcher share it — the picker only ever passes a name, the switcher may pass
+  // null for "All projects".
+  const switchTo = useCallback((name: string | null) => {
+    window.history.pushState(null, "", name ? `/${name}` : "/");
     setProject(name);
   }, []);
 
   if (!project) {
-    return <ProjectList onOpen={open} />;
+    return <ProjectList onOpen={switchTo} />;
   }
-  return <App key={project} project={project} />;
+  return <App key={project} project={project} onSwitch={switchTo} />;
 }
