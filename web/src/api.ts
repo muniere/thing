@@ -70,6 +70,14 @@ export function registerProject(name: string, dir: string): Promise<{ name: stri
   return req<{ name: string; dir: string }>("PUT", `/api/projects/${name}`, { dir });
 }
 
+// editProject renames a project and/or re-points its data directory. Omitted
+// fields are left unchanged; the server rejects an empty name or dir, a name
+// already in use (409), or a directory that is not a thing tree. A rename changes
+// the project's URL (/<name>).
+export function editProject(name: string, changes: { name?: string; dir?: string }): Promise<void> {
+  return req<void>("PATCH", `/api/projects/${name}`, changes);
+}
+
 // unregisterProject removes a project from the registry. It unregisters only —
 // the data directory is left on disk.
 export function unregisterProject(name: string): Promise<void> {

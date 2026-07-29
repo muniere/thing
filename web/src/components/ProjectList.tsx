@@ -1,5 +1,5 @@
 import { type DragEvent, type MouseEvent, useCallback, useEffect, useState } from "react";
-import { listProjects, moveProject, type ProjectInfo, registerProject, reloadProjects, unregisterProject } from "../api.ts";
+import { editProject, listProjects, moveProject, type ProjectInfo, registerProject, reloadProjects, unregisterProject } from "../api.ts";
 import { isPlainClick } from "../util.ts";
 import { Dialog } from "./Dialog.tsx";
 import s from "./ProjectList.module.css";
@@ -25,6 +25,8 @@ export function ProjectList({ onOpen }: Props) {
   const [error, setError] = useState<string | null>(null);
   // Which row's kebab menu is open, by project name; null when none is.
   const [menuFor, setMenuFor] = useState<string | null>(null);
+  // The project whose edit dialog is open, or null when none is.
+  const [editing, setEditing] = useState<ProjectInfo | null>(null);
 
   const load = useCallback(() => {
     listProjects()
@@ -223,6 +225,17 @@ export function ProjectList({ onOpen }: Props) {
                     <button
                       type="button"
                       role="menuitem"
+                      className={s.menuItem}
+                      onClick={() => {
+                        setMenuFor(null);
+                        setEditing(p);
+                      }}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
                       className={s.menuDanger}
                       onClick={() => remove(p.name)}
                     >
@@ -237,6 +250,21 @@ export function ProjectList({ onOpen }: Props) {
       )}
 
       </div>
+
+      {editing && (
+        <EditProject
+          project={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            load();
+          }}
+          onError={(m) => {
+            setEditing(null);
+            setError(m);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -311,5 +339,76 @@ function AddProject({ onAdded, onError }: AddProps) {
         </div>
       </Dialog>
     </>
+  );
+}
+
+interface EditProps {
+  // The project being edited; its name and dir seed the form.
+  project: ProjectInfo;
+  // Reload the list after a successful edit.
+  onSaved: () => void;
+  // Surface an edit error in the page-level banner.
+  onError: (message: string) => void;
+  // Dismiss the dialog without saving.
+  onClose: () => void;
+}
+
+// EditProject is the kebab "Edit" dialog: it edits a registered project's name
+// and data directory, mirroring AddProject's form but seeded with the current
+// values. It sends only the fields that changed, so a rename that leaves the
+// directory alone does not also re-point it (and vice versa).
+function EditProject({ project, onSaved, onError, onClose }: EditProps) {
+  const [name, setName] = useState(project.name);
+  const [dir, setDir] = useState(project.dir);
+
+  const submit = async () => {
+    const n = name.trim();
+    const d = dir.trim();
+    if (!n || !d) return;
+    const changes: { name?: string; dir?: string } = {};
+    if (n !== project.name) changes.name = n;
+    if (d !== project.dir) changes.dir = d;
+    if (!changes.name && !changes.dir) {
+      onClose(); // nothing changed
+      return;
+    }
+    try {
+      await editProject(project.name, changes);
+      onSaved();
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  return (
+    <Dialog open onClose={onClose} title="Edit project">
+      <input
+        className={s.input}
+        autoFocus
+        placeholder="name (url-safe: a-z 0-9 -)"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+      />
+      <input
+        className={s.input}
+        placeholder="data directory (an existing thing tree)"
+        value={dir}
+        onChange={(e) => setDir(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") submit();
+        }}
+      />
+      <p className={s.hint}>
+        Renaming changes the project's URL (<code>/{(name.trim() || project.name)}</code>).
+      </p>
+      <div className={s.actions}>
+        <button type="button" className={`${s.btn} ${s.btnAmber}`} onClick={submit} disabled={!name.trim() || !dir.trim()}>
+          Save
+        </button>
+        <button type="button" className={s.btnLink} onClick={onClose}>
+          Cancel
+        </button>
+      </div>
+    </Dialog>
   );
 }
