@@ -1,0 +1,109 @@
+/* The in-project project switcher: a quiet caret beside the logo that anchors a
+   dropdown of registered projects. It stays recessive until hovered/opened so the
+   header still reads as just the logo. Mirrors the picker's kebab menu styling. */
+.wrap {
+  position: relative;
+  display: flex;
+}
+.caret {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--ink-3);
+  transition: color 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+}
+.chev {
+  width: 0.7rem;
+  height: 0.7rem;
+  display: block;
+}
+.caret:hover,
+.caret[aria-expanded="true"] {
+  color: var(--ink);
+  background: var(--panel);
+  border-color: var(--line);
+}
+
+/* The popover drops from the caret, left-aligned under the logo, above the tree. */
+.menu {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  left: 0;
+  z-index: 30;
+  /* Grow to fit the longest project title on one line (see the nowrap rows
+     below), floored so short lists still read as a menu and capped so a very
+     long title truncates rather than sprawling across the header. */
+  min-width: 13rem;
+  max-width: 24rem;
+  padding: 0.3rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+}
+.item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.45rem 0.5rem;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.item:hover {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+}
+.check {
+  flex: none;
+  width: 0.9rem;
+  color: var(--amber);
+  font-size: 0.8rem;
+}
+.current .title {
+  font-weight: 600;
+}
+.label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  min-width: 0;
+}
+/* Keep each row on a single line; the menu widens to fit and, past its
+   max-width, the text truncates with an ellipsis instead of wrapping. */
+.title,
+.name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.title {
+  color: var(--ink);
+}
+.name {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--ink-3);
+}
+.sep {
+  height: 1px;
+  margin: 0.3rem 0.2rem;
+  background: var(--line);
+}
+.error {
+  padding: 0.4rem 0.5rem;
+  color: var(--high);
+  font-size: 0.8rem;
+}
