@@ -251,6 +251,12 @@
   font-size: 0.85rem;
   cursor: pointer;
 }
+.menuItem {
+  color: var(--ink);
+}
+.menuItem:hover {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+}
 .menuDanger {
   color: var(--high);
 }

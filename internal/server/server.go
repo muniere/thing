@@ -128,7 +128,7 @@ func New(mounts []Mount, opts Options) *Server {
 	mux.HandleFunc("GET /api/projects", s.handleProjects)
 	mux.HandleFunc("POST /api/projects/reload", s.handleReload)
 	mux.HandleFunc("PUT /api/projects/{project}", s.handleRegister)
-	mux.HandleFunc("PATCH /api/projects/{project}", s.handleMove)
+	mux.HandleFunc("PATCH /api/projects/{project}", s.handlePatchProject)
 	mux.HandleFunc("DELETE /api/projects/{project}", s.handleUnregister)
 	mux.HandleFunc("GET /api/projects/{project}/tree", s.withProject(s.handleTree))
 	mux.HandleFunc("GET /api/projects/{project}/config", s.withProject(s.handleConfig))
@@ -351,6 +351,76 @@ func (s *Server) Move(name, before, after string) error {
 	return nil
 }
 
+// Edit renames a project and/or re-points it at a new directory, persisting the
+// change. An empty newName keeps the current name; an empty newDir keeps the
+// current directory. A rename requires newName to be an unused URL-safe slug; a
+// re-point requires newDir to be an initialized thing tree.
+//
+// It replaces the mount rather than mutating the live one in place, so p.name and
+// p.store stay immutable for the lock-free readers in handleProjects. A re-point
+// keeps the URL, so it wakes the project's browsers to refetch the new tree; a
+// rename changes the URL, so those browsers navigate away on their own.
+func (s *Server) Edit(name, newName, newDir string) error {
+	if newName == "" {
+		newName = name
+	}
+	if newName != name && slug.Slugify(newName) != newName {
+		return &httpError{http.StatusBadRequest, fmt.Errorf("invalid project name %q: must be a URL-safe slug", newName)}
+	}
+	if newDir != "" && !isThingTree(newDir) {
+		return &httpError{http.StatusBadRequest, fmt.Errorf("%q is not a thing project (no %s)", newDir, config.FileName)}
+	}
+
+	s.regmu.Lock()
+	defer s.regmu.Unlock()
+
+	p, ok := s.projects[name]
+	if !ok {
+		return &httpError{http.StatusNotFound, fmt.Errorf("no such project %q", name)}
+	}
+	if newName != name {
+		if _, taken := s.projects[newName]; taken {
+			return &httpError{http.StatusConflict, fmt.Errorf("project %q already exists", newName)}
+		}
+	}
+	dir := p.store.Root
+	if newDir != "" {
+		dir = newDir
+	}
+	repoint := filepath.Clean(dir) != filepath.Clean(p.store.Root)
+	if newName == name && !repoint {
+		return nil // nothing to change
+	}
+
+	prev := append([]string(nil), s.order...)
+	if repoint {
+		p.hub.broadcast() // wake browsers on the same URL to refetch the new tree
+	}
+	if p.cancelWatch != nil {
+		p.cancelWatch()
+		p.cancelWatch = nil
+	}
+	delete(s.projects, name)
+	np := &project{name: newName, store: store.Open(dir), hub: newHub()}
+	s.projects[newName] = np
+	s.startWatchLocked(np)
+	for i, n := range s.order {
+		if n == name {
+			s.order[i] = newName
+			break
+		}
+	}
+
+	if err := s.persistLocked(); err != nil {
+		// A disk error leaves the new mount live but the file un-updated; restore the
+		// order so the picker stays self-consistent, and let the next mutation (or a
+		// restart, which reloads the file) reconcile.
+		s.order = prev
+		return &httpError{http.StatusInternalServerError, fmt.Errorf("persist registry: %w", err)}
+	}
+	return nil
+}
+
 // persistLocked writes the current registry back to projects.yaml. The caller
 // holds regmu. It is a no-op when no registry file is configured (tests), so the
 // in-memory registry still mutates without needing a temp file on disk.
@@ -508,26 +578,63 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, code, map[string]string{"name": p.name, "dir": dir})
 }
 
-// moveReq is the PATCH /api/projects/{project} body: place this project relative
-// to an anchor. Exactly one of before/after is set (the anchor's name); the front
-// is before the current first project, the end is after the current last.
-type moveReq struct {
-	Before string `json:"before"`
-	After  string `json:"after"`
+// projectPatchReq is the PATCH /api/projects/{project} body. It carries one of
+// two operations: a reorder (before/after — place this project relative to an
+// anchor; the front is before the current first, the end after the current last)
+// or an edit (name/dir — rename and/or re-point). name and dir are pointers so an
+// omitted field ("keep it") is distinct from an explicit empty one (rejected).
+type projectPatchReq struct {
+	Before string  `json:"before"`
+	After  string  `json:"after"`
+	Name   *string `json:"name"`
+	Dir    *string `json:"dir"`
 }
 
-// handleMove reorders one project relative to another (404 when the path project
-// is unknown, 400 for a bad anchor).
-func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) {
-	var req moveReq
+// handlePatchProject dispatches the two PATCH operations on a project: a reorder
+// (before/after) or an edit (name/dir). Exactly one kind must be present — both
+// together, or neither, is a 400. It 404s an unknown project and surfaces the
+// operation's own status otherwise (400 bad anchor/name/dir, 409 name taken).
+func (s *Server) handlePatchProject(w http.ResponseWriter, r *http.Request) {
+	var req projectPatchReq
 	if !decode(w, r, &req) {
 		return
 	}
-	if err := s.Move(r.PathValue("project"), strings.TrimSpace(req.Before), strings.TrimSpace(req.After)); err != nil {
-		s.failErr(w, err)
-		return
+	name := r.PathValue("project")
+	isMove := req.Before != "" || req.After != ""
+	isEdit := req.Name != nil || req.Dir != nil
+
+	switch {
+	case isMove && isEdit:
+		s.fail(w, http.StatusBadRequest, fmt.Errorf("specify a move (before/after) or an edit (name/dir), not both"))
+	case isMove:
+		if err := s.Move(name, strings.TrimSpace(req.Before), strings.TrimSpace(req.After)); err != nil {
+			s.failErr(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	case isEdit:
+		newName := name
+		if req.Name != nil {
+			if newName = strings.TrimSpace(*req.Name); newName == "" {
+				s.fail(w, http.StatusBadRequest, fmt.Errorf("name cannot be empty"))
+				return
+			}
+		}
+		newDir := ""
+		if req.Dir != nil {
+			if newDir = strings.TrimSpace(*req.Dir); newDir == "" {
+				s.fail(w, http.StatusBadRequest, fmt.Errorf("dir cannot be empty"))
+				return
+			}
+		}
+		if err := s.Edit(name, newName, newDir); err != nil {
+			s.failErr(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	default:
+		s.fail(w, http.StatusBadRequest, fmt.Errorf("empty patch: specify before/after or name/dir"))
 	}
-	w.WriteHeader(http.StatusNoContent)
 }
 
 // handleReload re-reads projects.yaml and reconciles the registry to it (see

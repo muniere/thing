@@ -844,6 +844,134 @@ func TestReloadNoRegistryFileIsNoop(t *testing.T) {
 	}
 }
 
+func TestEditRenamesKeepingPosition(t *testing.T) {
+	regFile := filepath.Join(t.TempDir(), "projects.yaml")
+	s := New([]Mount{{Name: "test", Store: fixture(t)}}, Options{
+		Now:          func() string { return "2026-07-20" },
+		RegistryFile: regFile,
+	})
+	registerThree(t, s) // [test, b, c]
+
+	if w := do(t, s, "PATCH", "/api/projects/b", `{"name":"mid"}`); w.Code != http.StatusNoContent {
+		t.Fatalf("rename = %d, want 204; body=%s", w.Code, w.Body.String())
+	}
+	if w := do(t, s, "GET", "/api/projects/mid/tree", ""); w.Code != http.StatusOK {
+		t.Fatalf("mid tree = %d, want 200", w.Code)
+	}
+	if w := do(t, s, "GET", "/api/projects/b/tree", ""); w.Code != http.StatusNotFound {
+		t.Fatalf("b tree after rename = %d, want 404", w.Code)
+	}
+	if got := pickerOrder(t, s); !slices.Equal(got, []string{"test", "mid", "c"}) {
+		t.Fatalf("order = %v, want [test mid c]", got)
+	}
+	got, _ := registry.Load(regFile)
+	names := make([]string, len(got))
+	for i, p := range got {
+		names[i] = p.Name
+	}
+	if !slices.Equal(names, []string{"test", "mid", "c"}) {
+		t.Fatalf("persisted = %v, want [test mid c]", names)
+	}
+}
+
+func TestEditRepointsDir(t *testing.T) {
+	regFile := filepath.Join(t.TempDir(), "projects.yaml")
+	s := New([]Mount{{Name: "test", Store: fixture(t)}}, Options{
+		Now:          func() string { return "2026-07-20" },
+		RegistryFile: regFile,
+	})
+	do(t, s, "PUT", "/api/projects/added", `{"dir":"`+thingTreeDir(t)+`"}`)
+	// A fresh tree with a distinct title proves the mount re-pointed.
+	dir2 := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir2, "config.yaml"), []byte("title: Repointed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if w := do(t, s, "PATCH", "/api/projects/added", `{"dir":"`+dir2+`"}`); w.Code != http.StatusNoContent {
+		t.Fatalf("repoint = %d, want 204; body=%s", w.Code, w.Body.String())
+	}
+	var cfg map[string]string
+	_ = json.Unmarshal(do(t, s, "GET", "/api/projects/added/config", "").Body.Bytes(), &cfg)
+	if cfg["title"] != "Repointed" || cfg["dir"] != dir2 {
+		t.Fatalf("config = %v, want title Repointed / dir %q", cfg, dir2)
+	}
+	got, _ := registry.Load(regFile)
+	if len(got) != 2 || got[1].Name != "added" || got[1].Dir != dir2 {
+		t.Fatalf("persisted = %+v, want added -> %q", got, dir2)
+	}
+}
+
+func TestEditRenameAndRepoint(t *testing.T) {
+	s := newServer(t)
+	do(t, s, "PUT", "/api/projects/added", `{"dir":"`+thingTreeDir(t)+`"}`)
+	dir2 := thingTreeDir(t)
+	if w := do(t, s, "PATCH", "/api/projects/added", `{"name":"renamed","dir":"`+dir2+`"}`); w.Code != http.StatusNoContent {
+		t.Fatalf("edit = %d, want 204; body=%s", w.Code, w.Body.String())
+	}
+	if w := do(t, s, "GET", "/api/projects/renamed/tree", ""); w.Code != http.StatusOK {
+		t.Fatalf("renamed tree = %d, want 200", w.Code)
+	}
+	if w := do(t, s, "GET", "/api/projects/added/tree", ""); w.Code != http.StatusNotFound {
+		t.Fatalf("old name after edit = %d, want 404", w.Code)
+	}
+	var cfg map[string]string
+	_ = json.Unmarshal(do(t, s, "GET", "/api/projects/renamed/config", "").Body.Bytes(), &cfg)
+	if cfg["dir"] != dir2 {
+		t.Fatalf("dir = %q, want %q", cfg["dir"], dir2)
+	}
+}
+
+func TestEditErrors(t *testing.T) {
+	s := newServer(t) // "test" is already mounted
+	do(t, s, "PUT", "/api/projects/added", `{"dir":"`+thingTreeDir(t)+`"}`)
+	cases := []struct {
+		name, target, body string
+		code               int
+	}{
+		{"rename to taken name", "/api/projects/added", `{"name":"test"}`, http.StatusConflict},
+		{"rename to bad slug", "/api/projects/added", `{"name":"Not A Slug"}`, http.StatusBadRequest},
+		{"repoint to non-thing dir", "/api/projects/added", `{"dir":"` + t.TempDir() + `"}`, http.StatusBadRequest},
+		{"empty name", "/api/projects/added", `{"name":""}`, http.StatusBadRequest},
+		{"empty dir", "/api/projects/added", `{"dir":""}`, http.StatusBadRequest},
+		{"unknown project", "/api/projects/ghost", `{"name":"x"}`, http.StatusNotFound},
+		{"move and edit together", "/api/projects/added", `{"before":"test","name":"x"}`, http.StatusBadRequest},
+		{"empty patch", "/api/projects/added", `{}`, http.StatusBadRequest},
+	}
+	for _, c := range cases {
+		if w := do(t, s, "PATCH", c.target, c.body); w.Code != c.code {
+			t.Errorf("%s: status = %d, want %d; body=%s", c.name, w.Code, c.code, w.Body.String())
+		}
+	}
+}
+
+func TestEditRepointRestartsWatcher(t *testing.T) {
+	s := newServer(t)
+	go s.StartWatch(t.Context(), time.Hour) // long interval: assert lifecycle, not polling
+	waitFor(t, func() bool {
+		s.regmu.RLock()
+		defer s.regmu.RUnlock()
+		return s.watchCtx != nil
+	})
+
+	old, _, err := s.Register("added", thingTreeDir(t))
+	if err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	if err := s.Edit("added", "", thingTreeDir(t)); err != nil {
+		t.Fatalf("Edit: %v", err)
+	}
+	s.regmu.RLock()
+	oldStopped := old.cancelWatch == nil
+	np := s.projects["added"]
+	newWatching := np != nil && np != old && np.cancelWatch != nil
+	s.regmu.RUnlock()
+	if !oldStopped {
+		t.Error("re-point should stop the old mount's watcher")
+	}
+	if !newWatching {
+		t.Error("re-point should install a fresh project with a running watcher")
+	}
+}
+
 func TestRegisterStartsWatcherUnregisterStops(t *testing.T) {
 	s := newServer(t)
 	go s.StartWatch(t.Context(), time.Hour) // long interval: we assert lifecycle, not polling
