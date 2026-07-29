@@ -126,6 +126,7 @@ func New(mounts []Mount, opts Options) *Server {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/projects", s.handleProjects)
+	mux.HandleFunc("POST /api/projects/reload", s.handleReload)
 	mux.HandleFunc("PUT /api/projects/{project}", s.handleRegister)
 	mux.HandleFunc("PATCH /api/projects/{project}", s.handleMove)
 	mux.HandleFunc("DELETE /api/projects/{project}", s.handleUnregister)
@@ -170,10 +171,7 @@ func (s *Server) Register(name, dir string) (p *project, created bool, err error
 	if name == "" || slug.Slugify(name) != name {
 		return nil, false, &httpError{http.StatusBadRequest, fmt.Errorf("invalid project name %q: must be a URL-safe slug", name)}
 	}
-	// A thing tree is marked by its config.yaml (written by `thing init`). Requiring
-	// it keeps registration to already-initialized directories rather than pointing
-	// the server at an arbitrary or empty path.
-	if fi, statErr := os.Stat(filepath.Join(dir, config.FileName)); statErr != nil || fi.IsDir() {
+	if !isThingTree(dir) {
 		return nil, false, &httpError{http.StatusBadRequest, fmt.Errorf("%q is not a thing project (no %s)", dir, config.FileName)}
 	}
 
@@ -186,18 +184,9 @@ func (s *Server) Register(name, dir string) (p *project, created bool, err error
 		return nil, false, &httpError{http.StatusConflict, fmt.Errorf("project %q is already registered to a different directory", name)}
 	}
 
-	p = &project{name: name, store: store.Open(dir), hub: newHub()}
-	s.projects[name] = p
-	s.order = append(s.order, name)
-	s.startWatchLocked(p)
-
+	p = s.mountLocked(name, dir)
 	if err := s.persistLocked(); err != nil {
-		// Undo the in-memory mount so disk and memory stay in step.
-		if p.cancelWatch != nil {
-			p.cancelWatch()
-		}
-		delete(s.projects, name)
-		s.order = s.order[:len(s.order)-1]
+		s.unmountLocked(name) // undo the mount so disk and memory stay in step
 		return nil, false, &httpError{http.StatusInternalServerError, fmt.Errorf("persist registry: %w", err)}
 	}
 	return p, true, nil
@@ -209,25 +198,104 @@ func (s *Server) Register(name, dir string) (p *project, created bool, err error
 func (s *Server) Unregister(name string) error {
 	s.regmu.Lock()
 	defer s.regmu.Unlock()
-	p, ok := s.projects[name]
-	if !ok {
+	if _, ok := s.projects[name]; !ok {
 		return &httpError{http.StatusNotFound, fmt.Errorf("no such project %q", name)}
 	}
-	if p.cancelWatch != nil {
-		p.cancelWatch()
-		p.cancelWatch = nil
-	}
-	delete(s.projects, name)
-	for i, n := range s.order {
-		if n == name {
-			s.order = append(s.order[:i], s.order[i+1:]...)
-			break
-		}
-	}
+	s.unmountLocked(name)
 	if err := s.persistLocked(); err != nil {
 		return &httpError{http.StatusInternalServerError, fmt.Errorf("persist registry: %w", err)}
 	}
 	return nil
+}
+
+// SkippedProject is one registry entry Reload could not mount, with the reason.
+type SkippedProject struct {
+	Name   string `json:"name"`
+	Reason string `json:"reason"`
+}
+
+// ReloadResult summarizes what a Reload changed, for the caller to surface.
+type ReloadResult struct {
+	Added     []string         `json:"added"`
+	Removed   []string         `json:"removed"`
+	Repointed []string         `json:"repointed"`
+	Skipped   []SkippedProject `json:"skipped"`
+}
+
+// Reload re-reads projects.yaml and reconciles the in-memory registry to it, so a
+// hand-edit to the file (or a change by another process) takes effect without a
+// restart: entries new to the file are mounted, entries dropped from it are
+// unmounted, a changed directory is re-pointed, and the picker order is matched to
+// the file.
+//
+// The file stays the source of truth — Reload never writes it back. An entry whose
+// directory is not a thing tree is therefore skipped and reported (left in the
+// file rather than deleted), and an existing mount is kept when the file now points
+// it at a bad directory. It fails only when the file itself cannot be read.
+func (s *Server) Reload() (*ReloadResult, error) {
+	if s.regFile == "" {
+		// No registry file (as in tests): nothing to resync from, so reload is a
+		// no-op — mirroring persistLocked's treatment of an unset registry.
+		return &ReloadResult{Added: []string{}, Removed: []string{}, Repointed: []string{}, Skipped: []SkippedProject{}}, nil
+	}
+	desired, err := registry.Load(s.regFile)
+	if err != nil {
+		return nil, &httpError{http.StatusInternalServerError, fmt.Errorf("read registry: %w", err)}
+	}
+
+	s.regmu.Lock()
+	defer s.regmu.Unlock()
+
+	res := &ReloadResult{Added: []string{}, Removed: []string{}, Repointed: []string{}, Skipped: []SkippedProject{}}
+	want := make(map[string]bool, len(desired))
+	for _, p := range desired {
+		want[p.Name] = true
+	}
+
+	// Drop projects the file no longer lists. Snapshot the order first, since
+	// unmountLocked mutates it as it goes.
+	for _, name := range append([]string(nil), s.order...) {
+		if !want[name] {
+			s.unmountLocked(name)
+			res.Removed = append(res.Removed, name)
+		}
+	}
+
+	// Mount new entries and re-point changed ones. A bad directory is skipped and
+	// reported; an existing mount survives a file that now points it somewhere bad.
+	for _, p := range desired {
+		existing, mounted := s.projects[p.Name]
+		if mounted && filepath.Clean(existing.store.Root) == filepath.Clean(p.Dir) {
+			continue // unchanged
+		}
+		if !isThingTree(p.Dir) {
+			res.Skipped = append(res.Skipped, SkippedProject{p.Name, fmt.Sprintf("%q is not a thing project (no %s)", p.Dir, config.FileName)})
+			continue
+		}
+		if mounted {
+			// Re-point: wake the current browsers once so they refetch, then replace
+			// the mount so the refetch resolves the new directory under the same name.
+			existing.hub.broadcast()
+			s.unmountLocked(p.Name)
+			s.mountLocked(p.Name, p.Dir)
+			res.Repointed = append(res.Repointed, p.Name)
+		} else {
+			s.mountLocked(p.Name, p.Dir)
+			res.Added = append(res.Added, p.Name)
+		}
+	}
+
+	// Match the picker order to the file, keeping only names that ended up mounted
+	// (a skipped entry has no mount).
+	order := make([]string, 0, len(s.projects))
+	for _, p := range desired {
+		if _, ok := s.projects[p.Name]; ok {
+			order = append(order, p.Name)
+		}
+	}
+	s.order = order
+
+	return res, nil
 }
 
 // Move changes one project's place in the picker order relative to another,
@@ -295,6 +363,46 @@ func (s *Server) persistLocked() error {
 		list = append(list, registry.Project{Name: name, Dir: s.projects[name].store.Root})
 	}
 	return registry.Save(s.regFile, list)
+}
+
+// isThingTree reports whether dir is an initialized thing tree — marked by a
+// config.yaml (written by `thing init`). Requiring it keeps mounts to
+// already-initialized directories rather than an arbitrary or empty path.
+func isThingTree(dir string) bool {
+	fi, err := os.Stat(filepath.Join(dir, config.FileName))
+	return err == nil && !fi.IsDir()
+}
+
+// mountLocked adds a mount for name over dir and starts its watcher, returning
+// the new project. The caller holds regmu and has already validated name and dir;
+// it does not persist.
+func (s *Server) mountLocked(name, dir string) *project {
+	p := &project{name: name, store: store.Open(dir), hub: newHub()}
+	s.projects[name] = p
+	s.order = append(s.order, name)
+	s.startWatchLocked(p)
+	return p
+}
+
+// unmountLocked stops name's watcher and drops its mount from the registry
+// (projects and order). The caller holds regmu. It leaves the data directory on
+// disk and does not persist; an unknown name is a no-op.
+func (s *Server) unmountLocked(name string) {
+	p, ok := s.projects[name]
+	if !ok {
+		return
+	}
+	if p.cancelWatch != nil {
+		p.cancelWatch()
+		p.cancelWatch = nil
+	}
+	delete(s.projects, name)
+	for i, n := range s.order {
+		if n == name {
+			s.order = append(s.order[:i], s.order[i+1:]...)
+			break
+		}
+	}
 }
 
 // startWatchLocked launches p's filesystem watcher under a child of the server's
@@ -420,6 +528,18 @@ func (s *Server) handleMove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleReload re-reads projects.yaml and reconciles the registry to it (see
+// Reload), returning a summary of what changed. It is the picker's refresh action
+// — the one route that resyncs the whole registry from disk.
+func (s *Server) handleReload(w http.ResponseWriter, _ *http.Request) {
+	res, err := s.Reload()
+	if err != nil {
+		s.failErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
 }
 
 // handleUnregister removes the project named in the path (404 when unknown). It
