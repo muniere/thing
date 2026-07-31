@@ -2,6 +2,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -12,7 +13,14 @@ import (
 var version = "1.2.0"
 
 func main() {
-	if err := cli.NewRootCmd(version).Execute(); err != nil {
+	err := cli.NewRootCmd(version).Execute()
+	// A command may request a specific exit code with no message (it already
+	// wrote its own output) — e.g. `server status` printing "stopped" then
+	// exiting non-zero.
+	if exit, ok := errors.AsType[*cli.ExitError](err); ok {
+		os.Exit(exit.Code)
+	}
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "thing:", err)
 		os.Exit(1)
 	}

@@ -40,6 +40,7 @@ func NewRootCmd(version string) *cobra.Command {
 		newTreeCmd(),
 		newExportCmd(),
 		newImportCmd(),
+		newServerCmd(),
 	)
 	return cmd
 }

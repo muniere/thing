@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -20,10 +21,17 @@ func runCLI(t *testing.T, args ...string) (int, string, string) {
 	root.SetOut(&out)
 	root.SetErr(&errb)
 	root.SetArgs(args)
+	// Mirror cmd/thing/main.go: an ExitError carries its own code with no
+	// "thing:" message (its output is already written); any other error is
+	// reported on stderr as exit 1.
 	code := 0
 	if err := root.Execute(); err != nil {
-		fmt.Fprintln(&errb, "thing:", err)
-		code = 1
+		if exit, ok := errors.AsType[*ExitError](err); ok {
+			code = exit.Code
+		} else {
+			fmt.Fprintln(&errb, "thing:", err)
+			code = 1
+		}
 	}
 	return code, out.String(), errb.String()
 }
