@@ -20,8 +20,10 @@ _thing() {
         'tree:print the whole tree as an outline'
         'export:print the whole tree as JSON'
         'import:bulk-create nodes from a JSON batch'
+        'server:control the thingd web server daemon'
     )
     link_verbs=(add rm list)
+    server_verbs=(start stop restart status logs)
     statuses=(todo doing done paused)
     priorities=(high medium low)
     global_flags=(
@@ -74,6 +76,27 @@ _thing() {
                     _arguments $global_flags \
                         '--dry-run[validate and assign refs without writing]' \
                         '*:batch file:_files -g "*.json"'
+                    ;;
+                server)
+                    if (( CURRENT == 2 )); then
+                        _describe -t verbs 'server verb' server_verbs
+                    else
+                        case "$words[2]" in
+                            start)
+                                _arguments \
+                                    '--port[listen port]:port:' \
+                                    '--open[open the URL in a browser once started]'
+                                ;;
+                            restart)
+                                _arguments '--port[listen port]:port:'
+                                ;;
+                            logs)
+                                _arguments \
+                                    '(-f --follow)'{-f,--follow}'[stream new log lines until interrupted]' \
+                                    '(-n --lines)'{-n,--lines}'[show only the last N lines]:lines:'
+                                ;;
+                        esac
+                    fi
                     ;;
                 *)
                     # ls, show, mv, rm, init, tree, export: global flags only.

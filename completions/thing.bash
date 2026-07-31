@@ -24,8 +24,9 @@ _thing() {
         cword=$COMP_CWORD
     }
 
-    local commands="init add ls show status priority mv rm link find tree export import help --version"
+    local commands="init add ls show status priority mv rm link find tree export import server help --version"
     local link_verbs="add rm list"
+    local server_verbs="start stop restart status logs"
     local statuses="todo doing done paused"
     local priorities="high medium low"
     local global_flags="--data-dir --config -g --global"
@@ -73,6 +74,19 @@ _thing() {
             else
                 _filedir json
             fi
+            ;;
+        server)
+            if [[ $cword -eq 2 ]]; then
+                COMPREPLY=($(compgen -W "$server_verbs" -- "$cur"))
+                return
+            fi
+            # Per-subcommand flags.
+            local sub="${words[2]}"
+            case "$sub" in
+                start)   [[ "$cur" == -* ]] && COMPREPLY=($(compgen -W "--port --open" -- "$cur")) ;;
+                restart) [[ "$cur" == -* ]] && COMPREPLY=($(compgen -W "--port" -- "$cur")) ;;
+                logs)    [[ "$cur" == -* ]] && COMPREPLY=($(compgen -W "-f --follow -n --lines" -- "$cur")) ;;
+            esac
             ;;
         *)
             # ls, show, mv, rm, init, tree, export: global flags only.

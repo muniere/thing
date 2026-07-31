@@ -94,6 +94,30 @@ back to the next free port so several servers can run at once. Projects come fro
 `web/dist/.gitkeep` keeps `go build`/`test`/`vet` compiling before the first
 `make build`.
 
+### Daemon (`thing server`)
+
+Running `./bin/thingd` holds a terminal in the foreground. To run it as a
+background daemon instead, drive it from the `thing` CLI (the client/daemon split
+mirrors `docker`/`dockerd`):
+
+```
+thing server start             # launch thingd in the background on port 4319
+thing server start --port 4400 # ... on a different port
+thing server start --open      # ... and open the browser
+thing server status            # running (pid/port/url) + project count; exit 1 if stopped
+thing server logs -f           # tail the daemon log; -n N shows the last N lines
+thing server restart           # stop (if up) then start again
+thing server stop              # graceful shutdown (SIGTERM), then remove state
+```
+
+There is a single global daemon on a fixed port (4319 by default; `start` errors
+if one is already running). Its runtime state and log live next to
+`projects.yaml` under the state directory (`~/.local/state/thingd/` by default):
+`server.json` records the pid, port, and URL, and `thingd.log` collects the
+daemon's output (appended across restarts). `thing server` locates the `thingd`
+binary next to the running `thing`, then on `PATH`, overridable with `THINGD_BIN`
+— so `make install` (which installs both) or a local `make build` both work.
+
 ### API
 
 Project routes nest under `/api/projects/<project>/`, while `GET /api/projects`
