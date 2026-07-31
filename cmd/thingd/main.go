@@ -16,7 +16,9 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"runtime"
+	"syscall"
 	"time"
 
 	thing "github.com/muniere/thing"
@@ -101,7 +103,21 @@ func run(args []string, stdout, stderr io.Writer) int {
 		openBrowser(url)
 	}
 
-	if err := http.Serve(ln, srv); err != nil {
+	// Serve until a termination signal, then drain in-flight requests. `thing
+	// server stop` sends SIGTERM; Ctrl-C sends SIGINT. A clean Shutdown makes
+	// http.Serve return ErrServerClosed, which is the expected exit, not a failure.
+	httpSrv := &http.Server{Handler: srv}
+	sigc := make(chan os.Signal, 1)
+	signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigc
+		cancel() // stop the project watchers
+		shutCtx, shutCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer shutCancel()
+		_ = httpSrv.Shutdown(shutCtx)
+	}()
+
+	if err := httpSrv.Serve(ln); err != nil && err != http.ErrServerClosed {
 		fmt.Fprintf(stderr, "thingd: %v\n", err)
 		return 1
 	}
