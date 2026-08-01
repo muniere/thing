@@ -139,6 +139,7 @@ func New(mounts []Mount, opts Options) *Server {
 	mux.HandleFunc("GET /api/projects/{project}/tree", s.withProject(s.handleTree))
 	mux.HandleFunc("GET /api/projects/{project}/config", s.withProject(s.handleConfig))
 	mux.HandleFunc("GET /api/projects/{project}/archives", s.withProject(s.handleArchiveList))
+	mux.HandleFunc("GET /api/projects/{project}/archives/{name}", s.withProject(s.handleArchive))
 	mux.HandleFunc("GET /api/projects/{project}/events", s.withProject(s.handleEvents))
 	mux.HandleFunc("POST /api/projects/{project}/nodes/{parent...}", s.withProject(s.handleCreate))
 	mux.HandleFunc("PATCH /api/projects/{project}/nodes/{ref...}", s.withProject(s.handleUpdate))
@@ -1007,6 +1008,51 @@ func (s *Server) handleArchiveList(p *project, w http.ResponseWriter, _ *http.Re
 		})
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// handleArchive serves one archived entry's detail — where it came from, its own
+// status, and its body — the web equivalent of `show _archives/<name>`. Children
+// are not included (they travel with the subtree and are not loaded); a missing
+// entry is a 404.
+func (s *Server) handleArchive(p *project, w http.ResponseWriter, r *http.Request) {
+	ref := store.ArchiveDir + "/" + r.PathValue("name")
+	p.mu.RLock()
+	ae, err := p.store.ArchiveLocate(ref)
+	p.mu.RUnlock()
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	if ae == nil {
+		s.fail(w, http.StatusNotFound, fmt.Errorf("no such archived node %q", ref))
+		return
+	}
+	n := ae.Node
+	writeJSON(w, http.StatusOK, struct {
+		Ref        string         `json:"ref"`
+		From       string         `json:"from"`
+		Type       model.NodeType `json:"type"`
+		Title      string         `json:"title"`
+		Status     model.Status   `json:"status,omitempty"`
+		Priority   model.Priority `json:"priority,omitempty"`
+		Category   string         `json:"category,omitempty"`
+		Tags       []string       `json:"tags,omitempty"`
+		Links      []model.Link   `json:"links,omitempty"`
+		Body       string         `json:"body,omitempty"`
+		ArchivedAt string         `json:"archivedAt,omitempty"`
+	}{
+		Ref:        ae.Ref,
+		From:       n.ArchivedRef,
+		Type:       n.Type,
+		Title:      n.Title,
+		Status:     n.Status,
+		Priority:   n.Priority,
+		Category:   n.Category,
+		Tags:       n.Tags,
+		Links:      n.Links,
+		Body:       n.Body,
+		ArchivedAt: n.ArchivedAt,
+	})
 }
 
 // unarchiveReq is the PATCH /archives/{name} body: an optional destination that

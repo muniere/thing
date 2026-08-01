@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Api, ArchiveEntry } from "../api.ts";
+import type { Api, ArchiveDetail, ArchiveEntry } from "../api.ts";
 import s from "./ArchivedPanel.module.css";
 
 interface Props {
@@ -8,21 +8,33 @@ interface Props {
   run: <T>(p: Promise<T>) => Promise<T | undefined>;
 }
 
-// ArchivedPanel is a collapsible list of shelved subtrees below the tree. Each
-// row shows where it came from and offers a one-click restore to that ref. A
-// restore that collides or whose parent is gone fails (its error is shown by the
-// app); the row then reveals a destination field so it can be retried elsewhere,
-// the web equivalent of `unarchive --to`.
+const nameOf = (ref: string) => ref.replace(/^_archives\//, "");
+
+// ArchivedPanel is a collapsible list of shelved subtrees below the tree. A row
+// shows where it came from; clicking it expands a read-only detail (the web
+// equivalent of `show _archives/<name>`). Restore sends it back to where it came
+// from; if that fails (occupied ref or missing parent) the row reveals a
+// destination field to retry elsewhere, like `unarchive --to`.
 export function ArchivedPanel({ api, entries, run }: Props) {
   const [open, setOpen] = useState(false);
   const [retry, setRetry] = useState<{ ref: string; to: string } | null>(null);
+  const [detail, setDetail] = useState<{ ref: string; node?: ArchiveDetail } | null>(null);
   if (entries.length === 0) return null;
 
   const restore = async (e: ArchiveEntry, to?: string) => {
-    const name = e.ref.replace(/^_archives\//, "");
     // run() surfaces any error as a banner and resolves to undefined on failure.
-    const res = await run(api.unarchive(name, to));
+    const res = await run(api.unarchive(nameOf(e.ref), to));
     setRetry(res === undefined ? { ref: e.ref, to: to ?? e.from } : null);
+  };
+
+  const toggleDetail = async (e: ArchiveEntry) => {
+    if (detail?.ref === e.ref) {
+      setDetail(null);
+      return;
+    }
+    setDetail({ ref: e.ref });
+    const node = await run(api.getArchive(nameOf(e.ref)));
+    if (node) setDetail({ ref: e.ref, node });
   };
 
   return (
@@ -36,34 +48,59 @@ export function ArchivedPanel({ api, entries, run }: Props) {
         <ul className={s.list}>
           {entries.map((e) => (
             <li key={e.ref} className={s.row} data-status={e.status}>
-              <div className={s.text}>
-                <div className={s.title}>{e.title || e.ref}</div>
-                <div className={s.from}>
-                  {e.from}
-                  {e.archivedAt && <span className={s.date}> · {e.archivedAt}</span>}
-                </div>
-                {retry?.ref === e.ref && (
-                  <div className={s.retry}>
-                    <input
-                      className={s.dest}
-                      value={retry.to}
-                      placeholder="restore to ref…"
-                      onChange={(ev) => setRetry({ ref: e.ref, to: ev.target.value })}
-                    />
-                    <button
-                      type="button"
-                      className={s.restore}
-                      disabled={retry.to.trim() === ""}
-                      onClick={() => restore(e, retry.to.trim())}
-                    >
-                      Restore here
-                    </button>
+              <div className={s.main}>
+                <button type="button" className={s.text} aria-expanded={detail?.ref === e.ref} onClick={() => toggleDetail(e)}>
+                  <div className={s.title}>{e.title || e.ref}</div>
+                  <div className={s.from}>
+                    {e.from}
+                    {e.archivedAt && <span className={s.date}> · {e.archivedAt}</span>}
                   </div>
-                )}
+                </button>
+                <button type="button" className={s.restore} onClick={() => restore(e)}>
+                  Restore
+                </button>
               </div>
-              <button type="button" className={s.restore} onClick={() => restore(e)}>
-                Restore
-              </button>
+
+              {retry?.ref === e.ref && (
+                <div className={s.retry}>
+                  <input
+                    className={s.dest}
+                    value={retry.to}
+                    placeholder="restore to ref…"
+                    onChange={(ev) => setRetry({ ref: e.ref, to: ev.target.value })}
+                  />
+                  <button
+                    type="button"
+                    className={s.restore}
+                    disabled={retry.to.trim() === ""}
+                    onClick={() => restore(e, retry.to.trim())}
+                  >
+                    Restore here
+                  </button>
+                </div>
+              )}
+
+              {detail?.ref === e.ref && (
+                <div className={s.detail}>
+                  {detail.node ? (
+                    <>
+                      <div className={s.meta}>
+                        {[e.type, detail.node.status, detail.node.priority, detail.node.category]
+                          .filter(Boolean)
+                          .join(" · ")}
+                        {detail.node.tags?.length ? ` · ${detail.node.tags.join(", ")}` : ""}
+                      </div>
+                      {detail.node.body ? (
+                        <pre className={s.body}>{detail.node.body.replace(/\n+$/, "")}</pre>
+                      ) : (
+                        <div className={s.empty}>no body</div>
+                      )}
+                    </>
+                  ) : (
+                    <div className={s.empty}>loading…</div>
+                  )}
+                </div>
+              )}
             </li>
           ))}
         </ul>

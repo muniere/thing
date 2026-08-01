@@ -136,6 +136,7 @@ POST   /api/projects/<p>/nodes/<parent>    create a child; the parent decides th
 PATCH  /api/projects/<p>/nodes/<ref>       {status|priority|title|category|body|move|addLink|removeLink|archive}
 DELETE /api/projects/<p>/nodes/<ref>       remove (an epic/issue takes its subtree)
 GET    /api/projects/<p>/archives          archived entries (ref, from, title, type, priority, status, archivedAt)
+GET    /api/projects/<p>/archives/<name>   one archived entry's detail (from, status, body, ...)
 PATCH  /api/projects/<p>/archives/<name>   restore _archives/<name> to where it came from, or {to:"<ref>"}
 GET    /api/projects/<p>/events            Server-Sent Events reload stream (per project)
 ```

@@ -52,6 +52,15 @@ export interface ArchiveEntry {
   archivedAt?: string;
 }
 
+// ArchiveDetail is one archived entry with its full read-only content, as served
+// by GET /archives/<name> — the web equivalent of `show _archives/<name>`.
+export interface ArchiveDetail extends ArchiveEntry {
+  category?: string;
+  tags?: string[];
+  links?: { url: string; label?: string }[];
+  body?: string;
+}
+
 // projects lists the registered projects for the root picker. It is the only
 // route not scoped to a single project.
 export function listProjects(): Promise<ProjectInfo[]> {
@@ -137,6 +146,8 @@ export function forProject(project: string) {
     archive: (ref: string) => req<{ ref: string }>("PATCH", `${base}/nodes/${ref}`, { archive: true }),
     // listArchive returns the shelved entries.
     listArchive: () => req<ArchiveEntry[]>("GET", `${base}/archives`),
+    // getArchive returns one shelved entry's read-only detail (incl. body).
+    getArchive: (name: string) => req<ArchiveDetail>("GET", `${base}/archives/${name}`),
     // unarchive restores _archives/<name> to where it came from, or to `to` when
     // given, returning the restored ref.
     unarchive: (name: string, to?: string) =>
