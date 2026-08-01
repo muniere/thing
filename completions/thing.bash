@@ -24,7 +24,7 @@ _thing() {
         cword=$COMP_CWORD
     }
 
-    local commands="init add ls show status priority mv rm link find tree export import server help --version"
+    local commands="init add ls show status priority mv rm archive unarchive link find tree export import server help --version"
     local link_verbs="add rm list"
     local server_verbs="start stop restart status logs"
     local statuses="todo doing done paused"
@@ -68,6 +68,12 @@ _thing() {
         find)
             [[ "$cur" == -* ]] && COMPREPLY=($(compgen -W "$global_flags --json" -- "$cur"))
             ;;
+        ls)
+            [[ "$cur" == -* ]] && COMPREPLY=($(compgen -W "$global_flags --archived --all" -- "$cur"))
+            ;;
+        unarchive)
+            [[ "$cur" == -* ]] && COMPREPLY=($(compgen -W "$global_flags --to" -- "$cur"))
+            ;;
         import)
             if [[ "$cur" == -* ]]; then
                 COMPREPLY=($(compgen -W "$global_flags --dry-run" -- "$cur"))
@@ -89,7 +95,7 @@ _thing() {
             esac
             ;;
         *)
-            # ls, show, mv, rm, init, tree, export: global flags only.
+            # show, mv, rm, archive, init, tree, export: global flags only.
             [[ "$cur" == -* ]] && COMPREPLY=($(compgen -W "$global_flags" -- "$cur"))
             ;;
     esac

@@ -35,6 +35,8 @@ func NewRootCmd(version string) *cobra.Command {
 		newPriorityCmd(),
 		newMvCmd(),
 		newRmCmd(),
+		newArchiveCmd(),
+		newUnarchiveCmd(),
 		newLinkCmd(),
 		newFindCmd(),
 		newTreeCmd(),
@@ -56,6 +58,12 @@ func openStore(cmd *cobra.Command) (*store.Store, error) {
 
 func today() string {
 	return time.Now().Format("2006-01-02")
+}
+
+// now is the RFC3339 instant used where a write records a time, not just a date
+// (an archive stamp). Date-only writes use today.
+func now() string {
+	return time.Now().Format(time.RFC3339)
 }
 
 // Environment variables that override the data and config directories.
