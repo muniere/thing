@@ -11,11 +11,11 @@ import (
 	"github.com/muniere/thing/internal/slug"
 )
 
-// ArchiveEntry pairs an archived node with its place under _archive/. The Node
+// ArchiveEntry pairs an archived node with its place under _archives/. The Node
 // is the top of an archived subtree, with ArchivedRef/ArchivedAt set. Name is
-// the on-disk name (machine-generated, unique within _archive/) and Ref is
-// "_archive/<name>". File is the node's own Markdown file; Dir is the directory
-// it owns (the _archive/ dir itself for a task, since a task is a single file).
+// the on-disk name (machine-generated, unique within _archives/) and Ref is
+// "_archives/<name>". File is the node's own Markdown file; Dir is the directory
+// it owns (the _archives/ dir itself for a task, since a task is a single file).
 type ArchiveEntry struct {
 	Node *model.Node
 	Ref  string
@@ -24,10 +24,10 @@ type ArchiveEntry struct {
 	Dir  string
 }
 
-// archiveDir is the OS path of this store's _archive/ directory.
+// archiveDir is the OS path of this store's _archives/ directory.
 func (s *Store) archiveDir() string { return filepath.Join(s.Root, ArchiveDir) }
 
-// archiveNames returns the entry names already used under _archive/ (directory
+// archiveNames returns the entry names already used under _archives/ (directory
 // names and file basenames without the ".md"), the uniqueness scope for a newly
 // archived node's on-disk name.
 func (s *Store) archiveNames() (map[string]bool, error) {
@@ -50,11 +50,11 @@ func (s *Store) archiveNames() (map[string]bool, error) {
 	return set, nil
 }
 
-// Archive moves the node at e out of the live tree and into _archive/, recording
+// Archive moves the node at e out of the live tree and into _archives/, recording
 // its source ref in the node's frontmatter so it can be restored later. An epic
 // or issue takes its whole subtree (its directory); a task takes only its file.
-// The on-disk name under _archive/ is made unique, so the archived node's own
-// slug is irrelevant to callers — its identity while archived is "_archive/<name>",
+// The on-disk name under _archives/ is made unique, so the archived node's own
+// slug is irrelevant to callers — its identity while archived is "_archives/<name>",
 // and its source lives in ArchivedRef. at is the RFC3339 instant it is archived:
 // its full value is recorded as archived_at and its date stamps Updated. Backlinks
 // are left as-is (dangling while archived, like Remove), and re-resolve if the node
@@ -93,7 +93,7 @@ func (s *Store) Archive(e *Entry, at string) (string, error) {
 	return ArchiveDir + "/" + name, nil
 }
 
-// ArchiveList reads every archived entry under _archive/. Each entry's type is
+// ArchiveList reads every archived entry under _archives/. Each entry's type is
 // recovered from its on-disk shape: a bare "*.md" file was a task, a directory
 // with an _epic.md/_issue.md marker was an epic/issue. Children are not loaded —
 // they travel with the directory on restore and are not needed in memory.
@@ -135,7 +135,7 @@ func (s *Store) ArchiveList() ([]*ArchiveEntry, error) {
 	return out, nil
 }
 
-// loadArchiveDir loads a directory entry under _archive/ as an epic or issue,
+// loadArchiveDir loads a directory entry under _archives/ as an epic or issue,
 // deciding the type from which marker file it holds. A directory with neither
 // marker is not a node and yields nil (skipped).
 func loadArchiveDir(path, name string) (*ArchiveEntry, error) {
@@ -162,7 +162,7 @@ func fileExists(path string) bool {
 	return err == nil && !fi.IsDir()
 }
 
-// ArchiveLocate returns the archived entry at ref ("_archive/<name>"), or nil.
+// ArchiveLocate returns the archived entry at ref ("_archives/<name>"), or nil.
 func (s *Store) ArchiveLocate(ref string) (*ArchiveEntry, error) {
 	list, err := s.ArchiveList()
 	if err != nil {

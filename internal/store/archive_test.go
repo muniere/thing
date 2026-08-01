@@ -9,7 +9,7 @@ import (
 	"github.com/muniere/thing/internal/model"
 )
 
-// Archiving a task moves just its file under _archive/, records where it came
+// Archiving a task moves just its file under _archives/, records where it came
 // from, and drops it from the live tree.
 func TestArchiveTask(t *testing.T) {
 	s := Open(fixture(t))
@@ -18,15 +18,15 @@ func TestArchiveTask(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Archive: %v", err)
 	}
-	if ref != "_archive/task-a" {
-		t.Errorf("archive ref = %q, want _archive/task-a", ref)
+	if ref != "_archives/task-a" {
+		t.Errorf("archive ref = %q, want _archives/task-a", ref)
 	}
 	// Gone from the live tree.
 	if loc, _ := s.Locate("alpha/one/task-a"); loc != nil {
 		t.Error("archived task still resolves in the live tree")
 	}
 	// Present in the archive, with its origin recorded.
-	ae, err := s.ArchiveGet("_archive/task-a")
+	ae, err := s.ArchiveGet("_archives/task-a")
 	if err != nil {
 		t.Fatalf("ArchiveGet: %v", err)
 	}
@@ -59,13 +59,13 @@ func TestArchiveIssueSubtree(t *testing.T) {
 	}
 }
 
-// A failed relocation into _archive must not leave archive metadata on the
+// A failed relocation into _archives must not leave archive metadata on the
 // still-live node. Archive moves the file first and stamps the metadata at the
 // destination, so a rename error leaves the origin untouched and retryable.
 func TestArchiveRenameFailureLeavesLiveNodeClean(t *testing.T) {
 	s := Open(fixture(t))
 	// Block the destination: a non-empty directory sits where the task's archive
-	// file (_archive/task-a.md) would land, so os.Rename into it fails.
+	// file (_archives/task-a.md) would land, so os.Rename into it fails.
 	write(t, filepath.Join(s.Root, ArchiveDir, "task-a.md", "blocker"), "x")
 
 	task, _ := s.Get("alpha/one/task-a")
@@ -93,10 +93,10 @@ func TestArchiveEpicSubtreeRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Archive epic: %v", err)
 	}
-	if ref != "_archive/alpha" {
-		t.Errorf("archive ref = %q, want _archive/alpha", ref)
+	if ref != "_archives/alpha" {
+		t.Errorf("archive ref = %q, want _archives/alpha", ref)
 	}
-	// Gone from the live tree, and the whole subtree moved under _archive/.
+	// Gone from the live tree, and the whole subtree moved under _archives/.
 	if loc, _ := s.Locate("alpha"); loc != nil {
 		t.Error("archived epic still resolves in the live tree")
 	}
@@ -110,7 +110,7 @@ func TestArchiveEpicSubtreeRoundTrip(t *testing.T) {
 		}
 	}
 	// Recovered as an epic, with its origin recorded.
-	ae, err := s.ArchiveGet("_archive/alpha")
+	ae, err := s.ArchiveGet("_archives/alpha")
 	if err != nil {
 		t.Fatalf("ArchiveGet: %v", err)
 	}
@@ -136,7 +136,7 @@ func TestArchiveEpicSubtreeRoundTrip(t *testing.T) {
 	if loc.Node.ArchivedRef != "" || loc.Node.ArchivedAt != "" {
 		t.Errorf("archive metadata not cleared: %+v", loc.Node)
 	}
-	if got, _ := s.ArchiveLocate("_archive/alpha"); got != nil {
+	if got, _ := s.ArchiveLocate("_archives/alpha"); got != nil {
 		t.Error("archived entry should be gone after restore")
 	}
 }
@@ -148,7 +148,7 @@ func TestUnarchiveToOrigin(t *testing.T) {
 	if _, err := s.Archive(task, "2026-07-27T09:00:00Z"); err != nil {
 		t.Fatal(err)
 	}
-	ae, _ := s.ArchiveGet("_archive/task-a")
+	ae, _ := s.ArchiveGet("_archives/task-a")
 	ref, err := s.Unarchive(ae, "", "2026-07-28")
 	if err != nil {
 		t.Fatalf("Unarchive: %v", err)
@@ -165,7 +165,7 @@ func TestUnarchiveToOrigin(t *testing.T) {
 		t.Errorf("archive metadata not cleared: %+v", loc.Node)
 	}
 	// And it is gone from the archive.
-	if got, _ := s.ArchiveLocate("_archive/task-a"); got != nil {
+	if got, _ := s.ArchiveLocate("_archives/task-a"); got != nil {
 		t.Error("archived entry should be gone after restore")
 	}
 }
@@ -180,7 +180,7 @@ func TestUnarchiveCollisionErrors(t *testing.T) {
 	}
 	// Recreate a node at the same origin ref while the original is archived.
 	write(t, filepath.Join(s.Root, "alpha", "one", "task-a.md"), "---\ntitle: New A\n---\n")
-	ae, _ := s.ArchiveGet("_archive/task-a")
+	ae, _ := s.ArchiveGet("_archives/task-a")
 	if _, err := s.Unarchive(ae, "", "2026-07-28"); err == nil {
 		t.Error("expected a collision error restoring onto an occupied ref")
 	}
@@ -198,7 +198,7 @@ func TestUnarchiveTo(t *testing.T) {
 	if _, err := s.Archive(task, "2026-07-27T09:00:00Z"); err != nil {
 		t.Fatal(err)
 	}
-	ae, _ := s.ArchiveGet("_archive/task-a")
+	ae, _ := s.ArchiveGet("_archives/task-a")
 	ref, err := s.Unarchive(ae, "alpha/two/moved", "2026-07-28")
 	if err != nil {
 		t.Fatalf("Unarchive --to: %v", err)
@@ -226,13 +226,13 @@ func TestUnarchiveParentGoneErrors(t *testing.T) {
 	if err := s.Remove(issue); err != nil {
 		t.Fatal(err)
 	}
-	ae, _ := s.ArchiveGet("_archive/task-a")
+	ae, _ := s.ArchiveGet("_archives/task-a")
 	if _, err := s.Unarchive(ae, "", "2026-07-28"); err == nil {
 		t.Error("expected an error: origin parent alpha/one no longer exists")
 	}
 }
 
-// A second archive of a node sharing a slug gets a unique name under _archive/.
+// A second archive of a node sharing a slug gets a unique name under _archives/.
 func TestArchiveNameCollision(t *testing.T) {
 	s := Open(fixture(t))
 	// alpha/one/task-a and a same-slug task under alpha/two.
@@ -266,7 +266,7 @@ func TestUnarchiveBacklinks(t *testing.T) {
 	if _, err := s.Archive(issue, "2026-07-27T09:00:00Z"); err != nil {
 		t.Fatal(err)
 	}
-	ae, _ := s.ArchiveGet("_archive/one")
+	ae, _ := s.ArchiveGet("_archives/one")
 	if _, err := s.Unarchive(ae, "beta/one", "2026-07-28"); err != nil {
 		t.Fatalf("Unarchive --to: %v", err)
 	}
@@ -295,7 +295,7 @@ func TestUnarchiveToDoesNotHijackReusedOriginBacklinks(t *testing.T) {
 	// [[alpha/one]] references legitimately belong to this new node now.
 	write(t, filepath.Join(s.Root, "alpha", "one", "_issue.md"), "---\ntitle: New One\n---\n")
 
-	ae, _ := s.ArchiveGet("_archive/one")
+	ae, _ := s.ArchiveGet("_archives/one")
 	if _, err := s.Unarchive(ae, "beta/one", "2026-07-28"); err != nil {
 		t.Fatalf("Unarchive --to: %v", err)
 	}

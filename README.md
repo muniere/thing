@@ -133,8 +133,10 @@ PATCH  /api/projects/<p>                    reorder <p>: {before|after:"<name>"}
 DELETE /api/projects/<p>                    unregister <p> (leaves its data dir on disk)
 GET    /api/projects/<p>/tree              whole tree as JSON (each node carries its ref)
 POST   /api/projects/<p>/nodes/<parent>    create a child; the parent decides the type
-PATCH  /api/projects/<p>/nodes/<ref>       {status|priority|title|category|body|move|addLink|removeLink}
+PATCH  /api/projects/<p>/nodes/<ref>       {status|priority|title|category|body|move|addLink|removeLink|archive}
 DELETE /api/projects/<p>/nodes/<ref>       remove (an epic/issue takes its subtree)
+GET    /api/projects/<p>/archives          archived entries (ref, from, title, type, priority, status, archivedAt)
+PATCH  /api/projects/<p>/archives/<name>   restore _archives/<name> to where it came from, or {to:"<ref>"}
 GET    /api/projects/<p>/events            Server-Sent Events reload stream (per project)
 ```
 
@@ -187,7 +189,7 @@ thing status   <ref> <todo|doing|done|paused>
 thing priority <ref> <high|medium|low>
 thing mv <src> <dst>                         # move and/or rename a node (src/dst are refs)
 thing rm <ref>                               # remove a node (an epic/issue takes its subtree)
-thing archive <ref>                          # archive a node into _archive/ (takes its subtree)
+thing archive <ref>                          # archive a node into _archives/ (takes its subtree)
 thing unarchive <archive-ref> [--to <ref>]   # restore an archived node to the live tree
 thing link add  <ref> <url> [--label <l>]    # add or update a related link
 thing link rm   <ref> <url|index>            # remove a link by URL, or 1-based index
@@ -240,13 +242,13 @@ thing mv alpha/one _orphan/one             # detach an issue into _orphan
 
 ### `archive` / `unarchive` — shelve and restore
 
-`archive` moves a node out of the live tree into a hidden `_archive/` region (a
+`archive` moves a node out of the live tree into a hidden `_archives/` region (a
 sibling of `_orphan/`), taking its whole subtree; a task takes only its file. The
 ref it was archived from and the time are recorded in its frontmatter
 (`archived_ref` / `archived_at`, an RFC3339 instant), and the archived entry is
-addressed as `_archive/<name>` — printed by `archive` and listed by
+addressed as `_archives/<name>` — printed by `archive` and listed by
 `thing ls --archived`. Archived nodes drop out of `tree`, `ls`, `find`, and
-`export`; reach one with `thing show _archive/<name>`.
+`export`; reach one with `thing show _archives/<name>`.
 
 `unarchive` restores an entry to its recorded `archived_ref`, or to `--to <ref>`
 when given. Restoring onto an occupied ref, or one whose parent no longer exists, is
@@ -261,10 +263,10 @@ elsewhere with `--to` leaves those references with the new occupant rather than
 following the restored node.
 
 ```
-thing archive alpha/one                    # shelve issue "one" and its tasks -> _archive/one
-thing ls --archived                        # _archive/one  <- alpha/one  One  (2026-07-27T09:00:00+09:00)
-thing unarchive _archive/one               # restore to alpha/one
-thing unarchive _archive/one --to beta/one # restore under a different parent
+thing archive alpha/one                    # shelve issue "one" and its tasks -> _archives/one
+thing ls --archived                        # _archives/one  <- alpha/one  One  (2026-07-27T09:00:00+09:00)
+thing unarchive _archives/one               # restore to alpha/one
+thing unarchive _archives/one --to beta/one # restore under a different parent
 ```
 
 The `--data-dir`, `--config`, and `-g` / `--global` flags apply to every
