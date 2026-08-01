@@ -28,7 +28,7 @@ import (
 )
 
 // version is overridable at build time via -ldflags "-X main.version=...".
-var version = "1.2.0"
+var version = "1.3.0"
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
