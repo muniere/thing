@@ -85,7 +85,7 @@ Human-readable listings (not JSON) are also available:
 ```
 thing tree --data-dir <path>              # whole tree as an indented outline
 thing ls [<ref>] --data-dir <path>        # a node's children, or the top level
-thing ls --archived --data-dir <path>     # only archived entries (the hidden _archive/ region)
+thing ls --archived --data-dir <path>     # only archived entries (the hidden _archives/ region)
 thing ls --all --data-dir <path>          # the top level plus archived entries
 thing show <ref> --data-dir <path>        # one node incl. body
 ```
@@ -104,8 +104,8 @@ thing status   <ref> <todo|doing|done|paused|auto> --data-dir <path>   # 'auto' 
 thing priority <ref> <high|medium|low> --data-dir <path>
 thing mv <src-ref> <dst-ref> --data-dir <path>        # move and/or rename; backlinks follow
 thing rm <ref> --data-dir <path>                      # an epic/issue removes its whole subtree
-thing archive   <ref> --data-dir <path>               # shelve into _archive/ (an epic/issue takes its subtree)
-thing unarchive <_archive/name> [--to <ref>] --data-dir <path>  # restore an archived node to the live tree
+thing archive   <ref> --data-dir <path>               # shelve into _archives/ (an epic/issue takes its subtree)
+thing unarchive <_archives/name> [--to <ref>] --data-dir <path>  # restore an archived node to the live tree
 thing link add  <ref> <url> [--label "<l>"] --data-dir <path>   # add or update a related link
 thing link rm   <ref> <url|index> --data-dir <path>            # remove by URL, else by 1-based index
 thing link list <ref> --data-dir <path>
@@ -136,14 +136,14 @@ thing mv web-release/monitor-rollout _orphan/monitor-rollout  # detach into _orp
 
 ## Archiving
 
-`archive` moves a node out of the live tree into a hidden `_archive/` region (a
+`archive` moves a node out of the live tree into a hidden `_archives/` region (a
 sibling of `_orphan/`); an epic or issue takes its whole subtree, a task takes
 only its file. Archived nodes drop out of `export`, `tree`, `ls`, and `find`, so
 they never appear in normal reads. The archived entry is addressed as
-`_archive/<name>` (a machine-unique name, printed by `archive`), and its origin is
+`_archives/<name>` (a machine-unique name, printed by `archive`), and its origin is
 recorded in frontmatter — `archived_ref` (the live-tree ref it was archived from)
 and `archived_at` (the RFC3339 instant). Reach one with `thing ls --archived` or
-`thing show _archive/<name>`.
+`thing show _archives/<name>`.
 
 `unarchive` restores an entry to its recorded `archived_ref`, or to `--to <ref>`
 when given. Restoring onto an occupied ref, or one whose parent no longer exists,
@@ -152,10 +152,10 @@ elsewhere rewrites `[[<ref>]]` backlinks to the new ref, like `mv`. While a node
 archived its backlinks dangle, so do not reuse an archived node's ref.
 
 ```
-thing archive alpha/one --data-dir "$D"                     # -> _archive/one (issue "one" + its tasks)
-thing ls --archived --data-dir "$D"                        # _archive/one  <- alpha/one  One  (2026-07-27T09:00:00+09:00)
-thing unarchive _archive/one --data-dir "$D"               # restore to alpha/one
-thing unarchive _archive/one --to beta/one --data-dir "$D" # restore under a different parent
+thing archive alpha/one --data-dir "$D"                     # -> _archives/one (issue "one" + its tasks)
+thing ls --archived --data-dir "$D"                        # _archives/one  <- alpha/one  One  (2026-07-27T09:00:00+09:00)
+thing unarchive _archives/one --data-dir "$D"               # restore to alpha/one
+thing unarchive _archives/one --to beta/one --data-dir "$D" # restore under a different parent
 ```
 
 ## Bulk import
@@ -193,8 +193,8 @@ dedupe before calling it.
   flag) exits non-zero with a message on stderr. Check the exit code; the
   state-change verbs are silent on success, so empty output is not a failure.
 - `rm` on an epic/issue removes the whole subtree.
-- `archive` hides a node under `_archive/` (out of `export`/`tree`/`ls`/`find`);
-  read it with `ls --archived` / `show _archive/<name>` and restore with `unarchive`.
+- `archive` hides a node under `_archives/` (out of `export`/`tree`/`ls`/`find`);
+  read it with `ls --archived` / `show _archives/<name>` and restore with `unarchive`.
 - A node's body is free-form Markdown; `[[<ref>]]` denotes a link to another
   node, and `mv` rewrites those backlinks automatically on a rename.
 
