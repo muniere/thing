@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -119,6 +120,32 @@ func TestArchiveListStatusIsOwnNotRolledUp(t *testing.T) {
 	// zero loaded children.
 	if st, ok := items[0]["status"]; ok && st != "" {
 		t.Errorf("archived issue status = %v, want absent (own status is empty)", st)
+	}
+}
+
+// GET /archives/<name> returns the archived node's detail — where it came from,
+// its own status, and its body — the web equivalent of `show _archives/<name>`.
+func TestArchiveGetEndpoint(t *testing.T) {
+	s := newServer(t)
+	do(t, s, "PATCH", "/api/projects/test/nodes/alpha/one/do-it", `{"body":"hello body"}`)
+	do(t, s, "PATCH", "/api/projects/test/nodes/alpha/one/do-it", `{"archive":true}`)
+
+	w := do(t, s, "GET", "/api/projects/test/archives/do-it", "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("get = %d; body=%s", w.Code, w.Body.String())
+	}
+	var res map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
+		t.Fatalf("body not JSON: %v", err)
+	}
+	body, _ := res["body"].(string)
+	if res["ref"] != "_archives/do-it" || res["from"] != "alpha/one/do-it" || !strings.Contains(body, "hello body") {
+		t.Fatalf("archive detail = %v", res)
+	}
+
+	// An unknown archive name is a 404.
+	if w := do(t, s, "GET", "/api/projects/test/archives/ghost", ""); w.Code != http.StatusNotFound {
+		t.Errorf("unknown = %d, want 404", w.Code)
 	}
 }
 
