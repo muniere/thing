@@ -22,9 +22,12 @@ export function ArchivedPanel({ api, entries, run }: Props) {
   if (entries.length === 0) return null;
 
   const restore = async (e: ArchiveEntry, to?: string) => {
+    const dest = to ?? e.from;
+    // Confirm before moving the node back, mirroring the Archive action.
+    if (!confirm(`Restore "${e.title || e.ref}" to ${dest}?`)) return;
     // run() surfaces any error as a banner and resolves to undefined on failure.
     const res = await run(api.unarchive(nameOf(e.ref), to));
-    setRetry(res === undefined ? { ref: e.ref, to: to ?? e.from } : null);
+    setRetry(res === undefined ? { ref: e.ref, to: dest } : null);
   };
 
   const toggleDetail = async (e: ArchiveEntry) => {
