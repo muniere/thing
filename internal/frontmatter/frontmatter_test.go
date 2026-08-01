@@ -105,6 +105,37 @@ func TestRoundTrip(t *testing.T) {
 	}
 }
 
+// The archive metadata (archived_ref / archived_at) round-trips, and is omitted
+// entirely for a node that is not archived.
+func TestArchiveMetadataRoundTrip(t *testing.T) {
+	orig := &model.Node{
+		Title:       "Shelved",
+		ArchivedRef: "alpha/one/task-a",
+		ArchivedAt:  "2026-07-27T09:00:00Z",
+		Body:        "Body.",
+	}
+	data, err := Marshal(orig)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	got, err := Parse(data)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if got.ArchivedRef != "alpha/one/task-a" || got.ArchivedAt != "2026-07-27T09:00:00Z" {
+		t.Errorf("archive metadata = {from:%q at:%q}", got.ArchivedRef, got.ArchivedAt)
+	}
+
+	// A non-archived node writes neither key.
+	plain, err := Marshal(&model.Node{Title: "Plain"})
+	if err != nil {
+		t.Fatalf("Marshal plain: %v", err)
+	}
+	if s := string(plain); strings.Contains(s, "archived_ref") || strings.Contains(s, "archived_at") {
+		t.Errorf("archive keys should be omitted for a non-archived node, got:\n%s", s)
+	}
+}
+
 func TestMarshalOmitsEmpty(t *testing.T) {
 	data, err := Marshal(&model.Node{Title: "Only title"})
 	if err != nil {

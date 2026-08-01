@@ -15,13 +15,15 @@ const delimiter = "---"
 
 // doc mirrors the subset of model.Node that is persisted in frontmatter.
 type doc struct {
-	Title    string         `yaml:"title,omitempty"`
-	Status   model.Status   `yaml:"status,omitempty"`
-	Priority model.Priority `yaml:"priority,omitempty"`
-	Category string         `yaml:"category,omitempty"`
-	Tags     []string       `yaml:"tags,omitempty"`
-	Updated  string         `yaml:"updated,omitempty"`
-	Links    []model.Link   `yaml:"links,omitempty"`
+	Title       string         `yaml:"title,omitempty"`
+	Status      model.Status   `yaml:"status,omitempty"`
+	Priority    model.Priority `yaml:"priority,omitempty"`
+	Category    string         `yaml:"category,omitempty"`
+	Tags        []string       `yaml:"tags,omitempty"`
+	Updated     string         `yaml:"updated,omitempty"`
+	Links       []model.Link   `yaml:"links,omitempty"`
+	ArchivedRef string         `yaml:"archived_ref,omitempty"` // the live-tree ref it was archived from
+	ArchivedAt  string         `yaml:"archived_at,omitempty"`  // RFC3339 instant it was archived
 }
 
 // Parse reads a node file's raw bytes into a Node holding the frontmatter
@@ -53,14 +55,16 @@ func Parse(data []byte) (*model.Node, error) {
 		return nil, fmt.Errorf("frontmatter: %w", err)
 	}
 	return &model.Node{
-		Title:    d.Title,
-		Status:   d.Status,
-		Priority: d.Priority,
-		Category: d.Category,
-		Tags:     d.Tags,
-		Updated:  d.Updated,
-		Links:    d.Links,
-		Body:     body,
+		Title:       d.Title,
+		Status:      d.Status,
+		Priority:    d.Priority,
+		Category:    d.Category,
+		Tags:        d.Tags,
+		Updated:     d.Updated,
+		Links:       d.Links,
+		ArchivedRef: d.ArchivedRef,
+		ArchivedAt:  d.ArchivedAt,
+		Body:        body,
 	}, nil
 }
 
@@ -68,13 +72,15 @@ func Parse(data []byte) (*model.Node, error) {
 // The output always ends with a single trailing newline.
 func Marshal(n *model.Node) ([]byte, error) {
 	d := doc{
-		Title:    n.Title,
-		Status:   n.Status,
-		Priority: n.Priority,
-		Category: n.Category,
-		Tags:     n.Tags,
-		Updated:  n.Updated,
-		Links:    n.Links,
+		Title:       n.Title,
+		Status:      n.Status,
+		Priority:    n.Priority,
+		Category:    n.Category,
+		Tags:        n.Tags,
+		Updated:     n.Updated,
+		Links:       n.Links,
+		ArchivedRef: n.ArchivedRef,
+		ArchivedAt:  n.ArchivedAt,
 	}
 	yamlPart, err := yaml.Marshal(d)
 	if err != nil {

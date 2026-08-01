@@ -27,8 +27,11 @@ import (
 const (
 	// OrphanDir holds issues that belong to no epic.
 	OrphanDir = "_orphan"
-	epicFile  = "_epic.md"
-	issueFile = "_issue.md"
+	// ArchiveDir holds archived subtrees, hidden from the live tree. Its entries
+	// are addressed as "_archive/<name>" and loaded only through the Archive* API.
+	ArchiveDir = "_archive"
+	epicFile   = "_epic.md"
+	issueFile  = "_issue.md"
 )
 
 // ProjectDir is the per-project directory name, searched for upward git-style.
@@ -105,6 +108,9 @@ func (s *Store) Load() ([]*model.Node, error) {
 			continue
 		}
 		name := e.Name()
+		if name == ArchiveDir {
+			continue // archived subtrees are hidden from the live tree
+		}
 		if name == OrphanDir {
 			issues, err := s.loadIssues(filepath.Join(s.Root, name))
 			if err != nil {
