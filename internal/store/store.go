@@ -28,8 +28,8 @@ const (
 	// OrphanDir holds issues that belong to no epic.
 	OrphanDir = "_orphan"
 	// ArchiveDir holds archived subtrees, hidden from the live tree. Its entries
-	// are addressed as "_archive/<name>" and loaded only through the Archive* API.
-	ArchiveDir = "_archive"
+	// are addressed as "_archives/<name>" and loaded only through the Archive* API.
+	ArchiveDir = "_archives"
 	epicFile   = "_epic.md"
 	issueFile  = "_issue.md"
 )

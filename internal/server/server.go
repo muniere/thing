@@ -43,9 +43,10 @@ import (
 
 // Options configures a Server.
 type Options struct {
-	Static fs.FS         // built SPA assets; nil disables static serving
-	Now    func() string // today's date stamp for write timestamps; defaults to time.Now
-	Logger *log.Logger   // access log; nil disables it
+	Static   fs.FS         // built SPA assets; nil disables static serving
+	Now      func() string // today's date stamp for write timestamps; defaults to time.Now
+	NowStamp func() string // RFC3339 instant for the archive time; defaults to time.Now
+	Logger   *log.Logger   // access log; nil disables it
 	// RegistryFile is projects.yaml's path. Dynamic register/unregister write the
 	// updated registry back here so it survives a restart. Empty disables
 	// persistence (the in-memory registry still mutates) — used in tests.
@@ -83,10 +84,11 @@ type project struct {
 
 // Server serves the JSON API and the SPA. It is an http.Handler.
 type Server struct {
-	static fs.FS
-	now    func() string
-	logger *log.Logger
-	mux    *http.ServeMux
+	static   fs.FS
+	now      func() string
+	nowStamp func() string
+	logger   *log.Logger
+	mux      *http.ServeMux
 	// regmu guards the project registry (projects/order). A read takes RLock; a
 	// dynamic register/unregister (a later phase) takes Lock.
 	regmu    sync.RWMutex
@@ -112,9 +114,13 @@ func New(mounts []Mount, opts Options) *Server {
 	if opts.Now == nil {
 		opts.Now = func() string { return time.Now().Format("2006-01-02") }
 	}
+	if opts.NowStamp == nil {
+		opts.NowStamp = func() string { return time.Now().Format(time.RFC3339) }
+	}
 	s := &Server{
 		static:   opts.Static,
 		now:      opts.Now,
+		nowStamp: opts.NowStamp,
 		logger:   opts.Logger,
 		regFile:  opts.RegistryFile,
 		projects: make(map[string]*project, len(mounts)),
@@ -132,10 +138,12 @@ func New(mounts []Mount, opts Options) *Server {
 	mux.HandleFunc("DELETE /api/projects/{project}", s.handleUnregister)
 	mux.HandleFunc("GET /api/projects/{project}/tree", s.withProject(s.handleTree))
 	mux.HandleFunc("GET /api/projects/{project}/config", s.withProject(s.handleConfig))
+	mux.HandleFunc("GET /api/projects/{project}/archives", s.withProject(s.handleArchiveList))
 	mux.HandleFunc("GET /api/projects/{project}/events", s.withProject(s.handleEvents))
 	mux.HandleFunc("POST /api/projects/{project}/nodes/{parent...}", s.withProject(s.handleCreate))
 	mux.HandleFunc("PATCH /api/projects/{project}/nodes/{ref...}", s.withProject(s.handleUpdate))
 	mux.HandleFunc("DELETE /api/projects/{project}/nodes/{ref...}", s.withProject(s.handleRemove))
+	mux.HandleFunc("PATCH /api/projects/{project}/archives/{name}", s.withProject(s.handleUnarchive))
 	mux.HandleFunc("/", s.handleStatic)
 	s.mux = mux
 	return s
@@ -822,6 +830,7 @@ type patchReq struct {
 	Move       *string  `json:"move"` // new parent ref
 	AddLink    *linkReq `json:"addLink"`
 	RemoveLink *string  `json:"removeLink"` // url or 1-based index
+	Archive    *bool    `json:"archive"`    // true archives the node into _archives/
 }
 
 type linkReq struct {
@@ -850,7 +859,7 @@ func (s *Server) handleUpdate(p *project, w http.ResponseWriter, r *http.Request
 	frontmatter := req.Status != nil || req.Priority != nil || req.Title != nil ||
 		req.Category != nil || req.Body != nil
 	ops := 0
-	for _, present := range []bool{frontmatter, req.AddLink != nil, req.RemoveLink != nil, req.Move != nil} {
+	for _, present := range []bool{frontmatter, req.AddLink != nil, req.RemoveLink != nil, req.Move != nil, req.Archive != nil} {
 		if present {
 			ops++
 		}
@@ -931,6 +940,21 @@ func (s *Server) handleUpdate(p *project, w http.ResponseWriter, r *http.Request
 		}
 	}
 
+	// Archive moves the node out of the live tree; report its archive ref.
+	if req.Archive != nil {
+		if !*req.Archive {
+			s.fail(w, http.StatusBadRequest, fmt.Errorf("archive must be true"))
+			return
+		}
+		ref, err := p.store.Archive(e, s.nowStamp())
+		if err != nil {
+			s.fail(w, http.StatusInternalServerError, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"ref": ref})
+		return
+	}
+
 	// A move changes the node's ref; do it last and report the new ref.
 	if req.Move != nil {
 		dst := e.Node.Slug
@@ -945,6 +969,78 @@ func (s *Server) handleUpdate(p *project, w http.ResponseWriter, r *http.Request
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"ref": e.Ref})
+}
+
+// handleArchiveList serves the archived entries: each entry's archive ref, the
+// ref it was archived from, its title, type, priority, own status, and the
+// RFC3339 time it was archived. It reads under the project's read lock, like the
+// tree. Archived subtrees are not loaded past their top node, so the row carries
+// the node's own status rather than a status rolled up from children it never
+// loaded (which would collapse every rollup node to "todo").
+func (s *Server) handleArchiveList(p *project, w http.ResponseWriter, _ *http.Request) {
+	p.mu.RLock()
+	entries, err := p.store.ArchiveList()
+	p.mu.RUnlock()
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	type item struct {
+		Ref        string         `json:"ref"`
+		From       string         `json:"from"`
+		Title      string         `json:"title"`
+		Type       model.NodeType `json:"type"`
+		Priority   model.Priority `json:"priority,omitempty"`
+		Status     model.Status   `json:"status,omitempty"`
+		ArchivedAt string         `json:"archivedAt,omitempty"`
+	}
+	out := make([]item, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, item{
+			Ref:        e.Ref,
+			From:       e.Node.ArchivedRef,
+			Title:      e.Node.Title,
+			Type:       e.Node.Type,
+			Priority:   e.Node.Priority,
+			Status:     e.Node.Status,
+			ArchivedAt: e.Node.ArchivedAt,
+		})
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// unarchiveReq is the PATCH /archives/{name} body: an optional destination that
+// overrides the recorded source (the ref it was archived from).
+type unarchiveReq struct {
+	To string `json:"to"`
+}
+
+// handleUnarchive restores the archived entry named in the path. A missing entry
+// is a 404; a restore that collides or whose parent is gone is a 400 (retry with
+// "to"). On success it returns the restored ref.
+func (s *Server) handleUnarchive(p *project, w http.ResponseWriter, r *http.Request) {
+	var req unarchiveReq
+	if !decode(w, r, &req) {
+		return
+	}
+	ref := store.ArchiveDir + "/" + r.PathValue("name")
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	ae, err := p.store.ArchiveLocate(ref)
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	if ae == nil {
+		s.fail(w, http.StatusNotFound, fmt.Errorf("no such archived node %q", ref))
+		return
+	}
+	newRef, err := p.store.Unarchive(ae, strings.TrimSpace(req.To), s.now())
+	if err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"ref": newRef})
 }
 
 func (s *Server) handleRemove(p *project, w http.ResponseWriter, r *http.Request) {

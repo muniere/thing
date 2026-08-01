@@ -162,7 +162,7 @@ func listLine(n *model.Node) string {
 	return s
 }
 
-// ArchiveItem is one archived entry as shown by `ls _archive`: its archive ref,
+// ArchiveItem is one archived entry as shown by `ls --archived`: its archive ref,
 // the origin it was archived from, its title, and the date it was archived.
 type ArchiveItem struct {
 	Ref        string

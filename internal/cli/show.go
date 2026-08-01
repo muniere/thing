@@ -20,7 +20,7 @@ func newShowCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			// An archived node is addressed by its "_archive/<name>" ref and lives
+			// An archived node is addressed by its "_archives/<name>" ref and lives
 			// outside the live tree, so it is looked up through the archive API.
 			if args[0] == store.ArchiveDir || strings.HasPrefix(args[0], store.ArchiveDir+"/") {
 				ae, err := st.ArchiveGet(args[0])

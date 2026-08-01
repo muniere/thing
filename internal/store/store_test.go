@@ -79,12 +79,12 @@ func TestLoad(t *testing.T) {
 	}
 }
 
-// The _archive/ directory is a special top-level region like _orphan/, but its
+// The _archives/ directory is a special top-level region like _orphan/, but its
 // contents are hidden: Load and Index must not surface archived entries as epics
 // (or anything else) in the live tree.
 func TestLoadIgnoresArchive(t *testing.T) {
 	root := fixture(t)
-	// An archived task and an archived issue subtree parked under _archive/.
+	// An archived task and an archived issue subtree parked under _archives/.
 	write(t, filepath.Join(root, ArchiveDir, "task-a.md"),
 		"---\ntitle: Task A\narchived_ref: alpha/one/task-a\narchived_at: \"2026-07-27T09:00:00Z\"\n---\n")
 	write(t, filepath.Join(root, ArchiveDir, "gone", "_issue.md"),
@@ -94,13 +94,13 @@ func TestLoadIgnoresArchive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	// Still just alpha (epic) and loose (orphan issue) — _archive is not an epic.
+	// Still just alpha (epic) and loose (orphan issue) — _archives is not an epic.
 	if len(top) != 2 {
 		t.Fatalf("top-level count = %d, want 2 (archive must be hidden)", len(top))
 	}
 	for _, n := range top {
 		if n.Slug == ArchiveDir {
-			t.Errorf("_archive surfaced as a top-level node: %+v", n)
+			t.Errorf("_archives surfaced as a top-level node: %+v", n)
 		}
 	}
 	idx, err := Open(root).Index()
