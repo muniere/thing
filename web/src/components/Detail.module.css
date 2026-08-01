@@ -184,6 +184,7 @@
   border-top: 1px solid var(--line);
 }
 .actionText {
+  flex: 1;
   min-width: 0;
 }
 .actionTitle {

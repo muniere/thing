@@ -1,0 +1,124 @@
+/* The Archived list under the tree: a collapsible header and status-railed rows,
+   each with a restore action. Muted by default — archived work is out of sight. */
+.panel {
+  margin-top: 1.6rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.8rem;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.3rem 0.5rem;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.head:hover {
+  color: var(--ink-2);
+}
+.caret {
+  display: inline-block;
+  transition: transform 0.12s ease;
+}
+.caret[data-open="true"] {
+  transform: rotate(90deg);
+}
+.count {
+  font-weight: 500;
+  color: var(--ink-3);
+}
+
+.list {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--c, var(--ink-3)) 6%, var(--panel));
+  opacity: 0.85;
+}
+
+.text {
+  flex: 1;
+  min-width: 0;
+}
+.title {
+  color: var(--ink-2);
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.from {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.date {
+  color: var(--ink-3);
+}
+
+.restore {
+  flex: none;
+  background: none;
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+  border-radius: 7px;
+  padding: 0.22rem 0.6rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.restore:hover {
+  border-color: var(--amber);
+  color: var(--amber);
+}
+.restore:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-color: var(--line);
+  color: var(--ink-3);
+}
+
+/* Revealed after a restore fails (occupied ref / parent gone): pick a new
+   destination and retry, like `unarchive --to`. */
+.retry {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+}
+.dest {
+  flex: 1;
+  min-width: 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 0.22rem 0.5rem;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--ink-2);
+}
+.dest:focus {
+  outline: none;
+  border-color: var(--amber);
+}

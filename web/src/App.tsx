@@ -1,6 +1,6 @@
 import { type MouseEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { Node } from "./domain/generated.ts";
-import { forProject } from "./api.ts";
+import { forProject, type ArchiveEntry } from "./api.ts";
 import { useLiveReload } from "./live.ts";
 import { collectCategories, collectPriorityCounts, collectStatusCounts, collectTags, filterTree, filtersActive, filtersFromQuery, filtersToQuery, type Filters } from "./filter.ts";
 import { findNode, isPlainClick } from "./util.ts";
@@ -10,6 +10,7 @@ import { FilterBar } from "./components/FilterBar.tsx";
 import { Detail } from "./components/Detail.tsx";
 import { AddForm } from "./components/AddForm.tsx";
 import { ProjectSwitcher } from "./components/ProjectSwitcher.tsx";
+import { ArchivedPanel } from "./components/ArchivedPanel.tsx";
 import s from "./App.module.css";
 
 interface Props {
@@ -32,6 +33,7 @@ function refFromPath(project: string): string | null {
 export function App({ project, onSwitch }: Props) {
   const api = useMemo(() => forProject(project), [project]);
   const [tree, setTree] = useState<Node[]>([]);
+  const [archived, setArchived] = useState<ArchiveEntry[]>([]);
   const [title, setTitle] = useState(project);
   const [dir, setDir] = useState("");
   const [activeRef, setActiveRef] = useState<string | null>(() => refFromPath(project));
@@ -43,11 +45,17 @@ export function App({ project, onSwitch }: Props) {
   const pathFor = useCallback((ref: string) => (ref ? `/${project}/${ref}` : `/${project}`), [project]);
 
   const reload = useCallback(async () => {
-    try {
-      setTree(await api.tree());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+    // The tree is the primary view; the archive list is supplementary. Fetch both
+    // together but handle them independently so a failing archive fetch never
+    // blanks the tree.
+    const [t, a] = await Promise.allSettled([api.tree(), api.listArchive()]);
+    if (t.status === "fulfilled") {
+      setTree(t.value);
+    } else {
+      setError(t.reason instanceof Error ? t.reason.message : String(t.reason));
+      return;
     }
+    setArchived(a.status === "fulfilled" ? a.value : []);
   }, [api]);
 
   // Load the configured title and keep the browser tab in sync with it. It also
@@ -190,6 +198,7 @@ export function App({ project, onSwitch }: Props) {
         <section className={s.treePane}>
           {dir && <div className={s.dir}>{dir}</div>}
           <Tree nodes={filtered} activeRef={activeRef} hrefFor={hrefFor} onNav={onNav} expanded={fold.expanded} onToggle={fold.toggle} />
+          <ArchivedPanel api={api} entries={archived} run={run} />
         </section>
 
         <section className={s.detailPane}>
