@@ -1,11 +1,14 @@
 import { Priority, Status } from "../domain/generated.ts";
-import { emptyFilters, filtersActive, type Filters } from "../filter.ts";
+import { filtersActive, filtersEqual, type Filters } from "../filter.ts";
 import { StatusBadge } from "./StatusBadge.tsx";
 import { PriorityBadge } from "./PriorityBadge.tsx";
 import s from "./FilterBar.module.css";
 
 interface Props {
   filters: Filters;
+  // The configured starting point. The clear button returns here, not to a bare
+  // filter state, so a board with defaults reopens the way it was configured.
+  defaults: Filters;
   categories: string[];
   tags: string[];
   statusCounts: Record<string, number>;
@@ -19,7 +22,7 @@ const PRIORITIES = [Priority.High, Priority.Medium, Priority.Low];
 // FilterBar is the left sidebar: a text search plus status and priority facet
 // toggles (each with a node count) and category/tag pulldowns. The status/priority
 // badges fill the facet row and read their accent from the badge components.
-export function FilterBar({ filters, categories, tags, statusCounts, priorityCounts, onChange }: Props) {
+export function FilterBar({ filters, defaults, categories, tags, statusCounts, priorityCounts, onChange }: Props) {
   // toggleFacet flips one value in a multi-select facet set (statuses/priorities).
   const toggleFacet = (key: "statuses" | "priorities", v: string) => {
     const next = new Set(filters[key]);
@@ -99,9 +102,9 @@ export function FilterBar({ filters, categories, tags, statusCounts, priorityCou
         </select>
       </div>
 
-      {filtersActive(filters) && (
-        <button type="button" className={s.clear} onClick={() => onChange(emptyFilters)}>
-          clear filters
+      {!filtersEqual(filters, defaults) && (
+        <button type="button" className={s.clear} onClick={() => onChange(defaults)}>
+          {filtersActive(defaults) ? "reset filters" : "clear filters"}
         </button>
       )}
     </aside>
