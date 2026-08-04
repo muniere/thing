@@ -33,6 +33,12 @@ directory. (`--config` / `THING_CONFIG_DIR` resolve the config directory the sam
 way, but fall back to the global config dir; most commands need only the data
 directory.)
 
+`config.yaml` holds `title`, `categories`, and `filter` (the web board's starting
+filter state). `filter` is the one key thingd reads from two files: the global
+config.yaml supplies defaults for every project and a project's own file overrides
+it key by key. The CLI does not filter its output, so `filter` affects `thingd`
+only.
+
 ## Reading (agents: read via JSON)
 
 To read the whole tree, use `export`, which prints JSON:
