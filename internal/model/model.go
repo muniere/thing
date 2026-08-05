@@ -107,6 +107,7 @@ type Node struct {
 	Links    []Link
 	Body     string
 	Children []*Node
+	Files    []string // attachment file names in the node's own directory (never for a task, which owns no directory)
 
 	ArchivedRef string // the live-tree ref this node was archived from; empty on live nodes
 	ArchivedAt  string // RFC3339 instant it was archived; empty on live nodes

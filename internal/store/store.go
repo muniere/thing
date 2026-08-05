@@ -143,6 +143,12 @@ func (s *Store) loadEpic(dir, slug string) (*model.Node, error) {
 		return nil, err
 	}
 	n.Children = issues
+
+	files, err := listFiles(dir, func(name string) bool { return name == epicFile })
+	if err != nil {
+		return nil, err
+	}
+	n.Files = files
 	return n, nil
 }
 
@@ -183,7 +189,37 @@ func (s *Store) loadIssue(dir, slug string) (*model.Node, error) {
 		return nil, err
 	}
 	n.Children = tasks
+
+	files, err := listFiles(dir, func(name string) bool { return strings.HasSuffix(name, ".md") })
+	if err != nil {
+		return nil, err
+	}
+	n.Files = files
 	return n, nil
+}
+
+// listFiles lists a node's attachment files: every immediate file in dir except
+// subdirectories, dotfiles, and whatever isNodeFile identifies as belonging to
+// the tree itself (the node's own marker file, or — for an issue — every "*.md",
+// since those load as its task children). Names are sorted for a stable order.
+func listFiles(dir string, isNodeFile func(name string) bool) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	var files []string
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if strings.HasPrefix(name, ".") || isNodeFile(name) {
+			continue
+		}
+		files = append(files, name)
+	}
+	sort.Strings(files)
+	return files, nil
 }
 
 // loadTasks reads every "*.md" file in dir (except _issue.md) as a task.

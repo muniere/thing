@@ -29,6 +29,11 @@
         "updated": { "type": "string" },
         "links": { "type": "array", "items": { "$ref": "#/definitions/NodeLink" } },
         "body": { "type": "string" },
+        "files": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Attachment file names in the node's own directory, other than the tree's own files. Empty for a task, which owns no directory."
+        },
         "children": { "type": "array", "items": { "$ref": "#/definitions/Node" } }
       }
     },

@@ -1,8 +1,8 @@
 // Package server implements thingd's HTTP layer: a JSON API over the shared Go
-// data layer, an SSE reload stream, and static serving of the embedded SPA. It
-// is transport only — every read goes through
-// internal/exporter and every write through internal/store, so the web and the
-// CLI share identical semantics.
+// data layer, an SSE reload stream, raw serving of node attachment files, and
+// static serving of the embedded SPA. It is transport only — every read goes
+// through internal/exporter and every write through internal/store, so the web
+// and the CLI share identical semantics.
 //
 // A single server hosts multiple projects, each a named mount over its own data
 // directory. Project routes nest under /api/projects/<project>/: .../tree,
@@ -10,7 +10,9 @@
 // root picker. Within a project, nodes are addressed by their ref (a slug-path
 // like "epic/issue/task"), used verbatim as the URL path. Because a ref spans
 // multiple path segments, per-field operations are carried in the PATCH body
-// rather than as a path suffix; each PATCH carries exactly one operation.
+// rather than as a path suffix; each PATCH carries exactly one operation. Node
+// attachment files sit outside /api, at /files/<project>/<ref>/<name>, since
+// they serve raw bytes rather than JSON.
 package server
 
 import (
@@ -145,6 +147,7 @@ func New(mounts []Mount, opts Options) *Server {
 	mux.HandleFunc("PATCH /api/projects/{project}/nodes/{ref...}", s.withProject(s.handleUpdate))
 	mux.HandleFunc("DELETE /api/projects/{project}/nodes/{ref...}", s.withProject(s.handleRemove))
 	mux.HandleFunc("PATCH /api/projects/{project}/archives/{name}", s.withProject(s.handleUnarchive))
+	mux.HandleFunc("GET /files/{project}/{path...}", s.withProject(s.handleNodeFile))
 	mux.HandleFunc("/", s.handleStatic)
 	s.mux = mux
 	return s
@@ -841,6 +844,40 @@ func (s *Server) handleConfig(p *project, w http.ResponseWriter, _ *http.Request
 		Dir:    dir,
 		Filter: newFilterRes(config.ResolveFilter(global, cfg)),
 	})
+}
+
+// handleNodeFile serves one attachment file from a node's own directory. The
+// path is "<ref>/<name>", split at the last segment since a ref itself spans
+// multiple path segments. The name must be one the node's Files actually lists
+// — populated from a directory listing at load time — so this can only ever
+// serve a file the tree already knows about, never an arbitrary path traversal.
+func (s *Server) handleNodeFile(p *project, w http.ResponseWriter, r *http.Request) {
+	ref, name := splitLast(r.PathValue("path"))
+	if name == "" {
+		s.fail(w, http.StatusBadRequest, fmt.Errorf("no file name given"))
+		return
+	}
+
+	p.mu.RLock()
+	e, err := p.store.Locate(ref)
+	p.mu.RUnlock()
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	if e == nil || !slices.Contains(e.Node.Files, name) {
+		s.fail(w, http.StatusNotFound, fmt.Errorf("no such file %q", r.PathValue("path")))
+		return
+	}
+	http.ServeFile(w, r, filepath.Join(e.Dir, name))
+}
+
+// splitLast splits a "<ref>/<name>" path at its last segment.
+func splitLast(path string) (ref, name string) {
+	if i := strings.LastIndex(path, "/"); i >= 0 {
+		return path[:i], path[i+1:]
+	}
+	return "", path
 }
 
 // --- writes ---
