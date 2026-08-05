@@ -13,8 +13,13 @@ export interface Node {
      * and filter a node's status.
      */
     effectiveStatus: Status;
-    links?:          NodeLink[];
-    priority?:       Priority;
+    /**
+     * Attachment file names in the node's own directory, other than the tree's own files. Empty
+     * for a task, which owns no directory.
+     */
+    files?:    string[];
+    links?:    NodeLink[];
+    priority?: Priority;
     /**
      * The node's full slug-path identity (e.g. "epic/issue/task"), used to address it in the
      * API. Its bare slug is the last segment; the ref is unique across the tree, a slug only

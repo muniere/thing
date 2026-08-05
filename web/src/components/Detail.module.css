@@ -295,27 +295,73 @@
   line-height: 1.7;
 }
 
+/* Same card treatment as bodyPanel, so files/links read as their own bounded
+   section instead of trailing off into the surrounding whitespace. */
+.listPanel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.75rem 1.05rem;
+  margin: 0 0 0.6rem;
+}
+/* A bullet marks these as a list, matching the markdown body's own bullet
+   lists — another cue (alongside the link styling) that this isn't a childRow
+   card. */
 .links {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  margin: 0 0 0.6rem;
-  padding: 0;
-  list-style: none;
+  gap: 0.65rem;
+  margin: 0;
+  padding: 0 0 0 1.5em;
+  list-style: disc;
 }
-.links li {
+/* li stays a plain list-item (its default display) so the bullet marker
+   renders; setting display:flex directly on a <li> switches it away from
+   list-item and silently drops the marker. The flex layout instead lives on
+   this inner wrapper. */
+.linkItem {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.8rem;
 }
-.links a {
-  font-family: var(--mono);
-  font-size: 0.78rem;
-  color: var(--amber);
+.links li::marker {
+  color: var(--ink-3);
+}
+/* A link/file reads as clickable through the link cues themselves — an
+   always-on underline plus an outbound-arrow glyph — rather than a card
+   background, so it doesn't get mistaken for a childRow (the task/issue list
+   above uses that card treatment; relying on color alone here would also fail
+   contrast-independent link recognition). */
+.linkRow {
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  color: var(--link);
   text-decoration: none;
 }
-.links a:hover {
+.linkRow:hover .linkText {
+  filter: brightness(1.2);
+}
+.linkText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--sans);
+  font-size: 0.92rem;
   text-decoration: underline;
+  text-underline-offset: 3px;
+}
+/* An outbound-arrow glyph — signals "opens elsewhere" without an emoji. */
+.linkGo {
+  flex: none;
+  font-size: 0.86rem;
+  color: var(--ink-3);
+}
+.linkGo::before {
+  content: "↗";
 }
 
 /* button + input primitives */
@@ -405,4 +451,20 @@ textarea.input {
 }
 .btnLink:hover {
   text-decoration: underline;
+}
+.removeLink {
+  flex: none;
+  display: flex;
+  background: none;
+  border: 0;
+  padding: 0.3rem;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.removeLink svg {
+  width: 20px;
+  height: 20px;
+}
+.removeLink:hover {
+  color: var(--high);
 }

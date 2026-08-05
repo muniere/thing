@@ -79,6 +79,35 @@ func TestLoad(t *testing.T) {
 	}
 }
 
+// TestLoadFiles checks that Load lists attachment files in a node's own
+// directory: everything except node files (the marker file, and — for an
+// issue — any "*.md", since those become task children) and dotfiles. A task
+// owns no directory of its own, so it never has attachments.
+func TestLoadFiles(t *testing.T) {
+	root := fixture(t)
+	write(t, filepath.Join(root, "alpha", "notes.txt"), "epic attachment\n")
+	write(t, filepath.Join(root, "alpha", ".DS_Store"), "junk\n")
+	write(t, filepath.Join(root, "alpha", "one", "report.html"), "<p>issue attachment</p>\n")
+	write(t, filepath.Join(root, "alpha", "one", ".hidden"), "junk\n")
+
+	top, err := Open(root).Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	epic := top[0]
+	if got := epic.Files; len(got) != 1 || got[0] != "notes.txt" {
+		t.Errorf("epic files = %v, want [notes.txt]", got)
+	}
+	issue := epic.Children[0]
+	if got := issue.Files; len(got) != 1 || got[0] != "report.html" {
+		t.Errorf("issue files = %v, want [report.html]", got)
+	}
+	task := issue.Children[0]
+	if len(task.Files) != 0 {
+		t.Errorf("task files = %v, want none", task.Files)
+	}
+}
+
 // The _archives/ directory is a special top-level region like _orphan/, but its
 // contents are hidden: Load and Index must not surface archived entries as epics
 // (or anything else) in the live tree.

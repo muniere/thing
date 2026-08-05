@@ -154,6 +154,10 @@ export function forProject(project: string) {
     // given, returning the restored ref.
     unarchive: (name: string, to?: string) =>
       req<{ ref: string }>("PATCH", `${base}/archives/${name}`, to ? { to } : {}),
+    // fileHref is the URL for one of a node's attachment files (node.files),
+    // served straight from its directory — link to it, don't fetch it here. It
+    // lives outside /api (raw bytes, not JSON), at /files/<project>/<ref>/<name>.
+    fileHref: (ref: string, name: string) => `/files/${project}/${ref}/${name}`,
   };
 }
 

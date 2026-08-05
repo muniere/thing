@@ -53,6 +53,7 @@ func fixture(t *testing.T) *store.Store {
 	mk(filepath.Join(root, "alpha", "_epic.md"), "---\ntitle: Alpha\ncategory: Project\n---\n")
 	mk(filepath.Join(root, "alpha", "one", "_issue.md"), "---\ntitle: One\nstatus: todo\n---\nIssue body.\n")
 	mk(filepath.Join(root, "alpha", "one", "do-it.md"), "---\ntitle: Do it\nstatus: todo\n---\n")
+	mk(filepath.Join(root, "alpha", "one", "notes.html"), "<p>attachment</p>\n")
 	return store.Open(root)
 }
 
@@ -99,6 +100,35 @@ func TestGetTree(t *testing.T) {
 	}
 	if _, ok := nodes[0]["slug"]; ok {
 		t.Error("export should not emit a separate slug (derivable from ref)")
+	}
+}
+
+func TestGetNodeFile(t *testing.T) {
+	s := newServer(t)
+	w := do(t, s, "GET", "/files/test/alpha/one/notes.html", "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", w.Code, w.Body.String())
+	}
+	if got := w.Body.String(); got != "<p>attachment</p>\n" {
+		t.Errorf("body = %q", got)
+	}
+}
+
+func TestGetNodeFileUnlistedIs404(t *testing.T) {
+	s := newServer(t)
+	// do-it.md is a task file, not a listed attachment, so it must not be
+	// servable through the files route even though it exists on disk.
+	w := do(t, s, "GET", "/files/test/alpha/one/do-it.md", "")
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404; body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestGetNodeFileUnknownRefIs404(t *testing.T) {
+	s := newServer(t)
+	w := do(t, s, "GET", "/files/test/alpha/nope/notes.html", "")
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404; body=%s", w.Code, w.Body.String())
 	}
 }
 
