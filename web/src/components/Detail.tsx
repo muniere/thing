@@ -35,6 +35,7 @@ export function Detail({ api, node, allNodes, run, onSelect, hrefFor, onNav }: P
   const [preview, setPreview] = useState(true);
   const [linkURL, setLinkURL] = useState("");
   const [linkLabel, setLinkLabel] = useState("");
+  const [addingLink, setAddingLink] = useState(false);
   const [moveTo, setMoveTo] = useState("");
   const [moving, setMoving] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -199,42 +200,84 @@ export function Detail({ api, node, allNodes, run, onSelect, hrefFor, onNav }: P
         </>
       )}
 
+      {(node.files ?? []).length > 0 && (
+        <>
+          <div className={s.label}>files</div>
+          <div className={s.listPanel}>
+            <ul className={s.links}>
+              {(node.files ?? []).map((f) => (
+                <li key={f}>
+                  <span className={s.linkItem}>
+                    <a className={s.linkRow} href={api.fileHref(node.ref, f)} target="_blank" rel="noreferrer">
+                      <span className={s.linkText}>{f}</span>
+                      <span className={s.linkGo} aria-hidden="true" />
+                    </a>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </>
+      )}
+
       <div className={s.label}>links</div>
       {(node.links ?? []).length > 0 && (
-        <ul className={s.links}>
+        <div className={s.listPanel}>
+          <ul className={s.links}>
           {(node.links ?? []).map((l) => (
             <li key={l.url}>
-              <a href={l.url} target="_blank" rel="noreferrer">{l.label || l.url}</a>
-              <button
-                type="button"
-                className={s.btnLink}
-                onClick={() => {
-                  if (!confirm(`Remove link "${l.label || l.url}"?`)) return;
-                  run(api.removeLink(node.ref, l.url));
-                }}
-              >
-                remove
-              </button>
+              <span className={s.linkItem}>
+                <a className={s.linkRow} href={l.url} target="_blank" rel="noreferrer">
+                  <span className={s.linkText}>{l.label || l.url}</span>
+                  <span className={s.linkGo} aria-hidden="true" />
+                </a>
+                <button
+                  type="button"
+                  className={s.removeLink}
+                  aria-label={`Remove link "${l.label || l.url}"`}
+                  title="Remove link"
+                  onClick={() => {
+                    if (!confirm(`Remove link "${l.label || l.url}"?`)) return;
+                    run(api.removeLink(node.ref, l.url));
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M4 7h16M9 7V4h6v3M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13" />
+                    <path d="M10 11v6M14 11v6" />
+                  </svg>
+                </button>
+              </span>
             </li>
           ))}
-        </ul>
+          </ul>
+        </div>
       )}
-      <div className={s.inlineForm}>
-        <input className={s.input} placeholder="https://…" value={linkURL} onChange={(e) => setLinkURL(e.target.value)} />
-        <input className={s.input} placeholder="label (optional)" value={linkLabel} onChange={(e) => setLinkLabel(e.target.value)} />
-        <button
-          type="button"
-          className={s.btn}
-          onClick={async () => {
-            if (!linkURL.trim()) return;
-            await run(api.addLink(node.ref, linkURL.trim(), linkLabel.trim()));
-            setLinkURL("");
-            setLinkLabel("");
-          }}
-        >
-          Add link
+      {addingLink ? (
+        <div className={s.inlineForm}>
+          <input className={s.input} autoFocus placeholder="https://…" value={linkURL} onChange={(e) => setLinkURL(e.target.value)} />
+          <input className={s.input} placeholder="label (optional)" value={linkLabel} onChange={(e) => setLinkLabel(e.target.value)} />
+          <button
+            type="button"
+            className={s.btn}
+            onClick={async () => {
+              if (!linkURL.trim()) return;
+              await run(api.addLink(node.ref, linkURL.trim(), linkLabel.trim()));
+              setLinkURL("");
+              setLinkLabel("");
+              setAddingLink(false);
+            }}
+          >
+            Add link
+          </button>
+          <button type="button" className={s.btnLink} onClick={() => { setAddingLink(false); setLinkURL(""); setLinkLabel(""); }}>
+            cancel
+          </button>
+        </div>
+      ) : (
+        <button type="button" className={s.btnLink} onClick={() => setAddingLink(true)}>
+          + Add link
         </button>
-      </div>
+      )}
 
       <div className={s.label}>actions</div>
       <div className={s.actions}>
