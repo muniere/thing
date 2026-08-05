@@ -1,8 +1,8 @@
-import { type MouseEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Node } from "./domain/generated.ts";
 import { forProject, type ArchiveEntry } from "./api.ts";
 import { useLiveReload } from "./live.ts";
-import { collectCategories, collectPriorityCounts, collectStatusCounts, collectTags, filterTree, filtersActive, filtersFromQuery, filtersToQuery, type Filters } from "./filter.ts";
+import { collectCategories, collectPriorityCounts, collectStatusCounts, collectTags, defaultsToFilters, emptyFilters, filterTree, filtersActive, filtersFromQuery, filtersToQuery, hasFilterQuery, type Filters } from "./filter.ts";
 import { findNode, isPlainClick } from "./util.ts";
 import { useTreeFold, useTreeNav } from "./tree.ts";
 import { Tree } from "./components/Tree.tsx";
@@ -38,6 +38,11 @@ export function App({ project, onSwitch }: Props) {
   const [dir, setDir] = useState("");
   const [activeRef, setActiveRef] = useState<string | null>(() => refFromPath(project));
   const [filters, setFilters] = useState<Filters>(() => filtersFromQuery(window.location.search));
+  const [defaults, setDefaults] = useState<Filters>(emptyFilters);
+  // Whether the config fetch has settled (either way — see loadConfig's catch).
+  // Until then `defaults` is a placeholder, not "no configured defaults", so the
+  // replaceState effect below must not write the URL from it: see its comment.
+  const [configReady, setConfigReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // pathFor builds the URL path for a node ref within this project: /<project> at
@@ -66,8 +71,17 @@ export function App({ project, onSwitch }: Props) {
       const c = await api.config();
       setTitle(c.title || project);
       setDir(c.dir);
-    } catch {
-      // a missing/unreachable config just leaves the defaults
+      setDefaults(defaultsToFilters(c.filter));
+      setConfigReady(true);
+    } catch (e) {
+      // A missing/unreachable config just leaves the defaults, but still marks
+      // config as settled so the URL sync below (and the effect above) can proceed
+      // — an unreachable /api/config must not stall the UI indefinitely. Deliberately
+      // not setError: this can fire on a transient reconnect (e.g. thingd restarting),
+      // and a banner would flash on an otherwise-healthy board. Still worth knowing
+      // about, so it is not completely silent — just not user-facing.
+      console.warn("GET /api/config failed; using placeholder title/dir and no configured filter defaults", e);
+      setConfigReady(true);
     }
   }, [api, project]);
   useEffect(() => {
@@ -83,6 +97,19 @@ export function App({ project, onSwitch }: Props) {
   useEffect(() => {
     document.title = title;
   }, [title]);
+
+  // The configured defaults arrive with the config fetch, one tick after the first
+  // render has already read the URL. Apply them only when the URL said nothing about
+  // filters, and let the replaceState effect below spell them out in the URL so a
+  // shared link does not depend on the reader's own config. Keyed on the defaults'
+  // value so a live-reload refetch never resets a filter the user is working with.
+  const appliedDefaults = useRef<string | null>(null);
+  useEffect(() => {
+    const key = filtersToQuery(defaults);
+    if (appliedDefaults.current === key) return;
+    appliedDefaults.current = key;
+    if (!hasFilterQuery(window.location.search)) setFilters(defaults);
+  }, [defaults]);
 
   // run awaits a mutation, surfaces any error, then refreshes the tree.
   const run = useCallback(
@@ -104,12 +131,26 @@ export function App({ project, onSwitch }: Props) {
   // and detail fire it when the user picks a node.
   const activate = useCallback((ref: string) => setActiveRef(ref || null), []);
 
+  // queryString is the filter portion of the URL. Before the config fetch
+  // settles, `defaults` is still the emptyFilters placeholder rather than the
+  // real (possibly empty) configured value, so deriving it from filters/defaults
+  // here would be wrong in the same way the replaceState effect below guards
+  // against: e.g. landing on ?filter=none and reading it as the placeholder's
+  // "nothing configured" would turn the query into a bare URL, and the sentinel
+  // for the user's explicit "show everything" would be lost the moment they
+  // click a row or copy a link. So until configReady, keep whatever the URL
+  // already says, verbatim.
+  const queryString = useCallback(
+    () => (configReady ? filtersToQuery(filters, defaults) : window.location.search),
+    [configReady, filters, defaults],
+  );
+
   // hrefFor is the URL a node's anchor points at: its ref as the path plus the
   // current filters as the query. Tree rows, child rows, and the logo are real
   // <a> links so the URL is real (a ⌘/Ctrl/Shift/middle click opens the node in a
   // new tab, and the link is copyable), but a plain click is intercepted (see
   // onNav) and handled in-app rather than reloading the page.
-  const hrefFor = useCallback((ref: string) => `${pathFor(ref)}${filtersToQuery(filters)}`, [pathFor, filters]);
+  const hrefFor = useCallback((ref: string) => `${pathFor(ref)}${queryString()}`, [pathFor, queryString]);
 
   // navigate selects a node and pushes a history entry, so a plain click behaves
   // like a page navigation (Back/Forward step through visited nodes) without the
@@ -117,10 +158,10 @@ export function App({ project, onSwitch }: Props) {
   // onto the connection pool.
   const navigate = useCallback(
     (ref: string) => {
-      window.history.pushState(null, "", `${pathFor(ref)}${filtersToQuery(filters)}`);
+      window.history.pushState(null, "", `${pathFor(ref)}${queryString()}`);
       setActiveRef(ref || null);
     },
-    [pathFor, filters],
+    [pathFor, queryString],
   );
 
   // onNav handles an anchor click: a plain click navigates in-app; a modified or
@@ -137,20 +178,27 @@ export function App({ project, onSwitch }: Props) {
   // Keyboard nav, filter toggles, and create/delete/rename change the view without
   // pushing history, so mirror them into the current URL in place — no new entry,
   // no reload — keeping it shareable and correct if the page is then reloaded.
+  //
+  // Wait for the config fetch to settle first. Before it does, `defaults` is
+  // still the emptyFilters placeholder, not the real (possibly empty) configured
+  // value — writing the URL from it here would encode ?filter=none (an explicit
+  // "no filters", which reads as empty against a placeholder empty defaults) as a
+  // bare URL, permanently erasing the sentinel before the real defaults arrive.
   useEffect(() => {
-    window.history.replaceState(null, "", `${pathFor(activeRef ?? "")}${filtersToQuery(filters)}`);
-  }, [pathFor, activeRef, filters]);
+    if (!configReady) return;
+    window.history.replaceState(null, "", `${pathFor(activeRef ?? "")}${filtersToQuery(filters, defaults)}`);
+  }, [pathFor, activeRef, filters, defaults, configReady]);
 
   // Restore the view from the URL on Back/Forward (a popstate, which pushState
   // navigation produces).
   useEffect(() => {
     const onPop = () => {
       setActiveRef(refFromPath(project));
-      setFilters(filtersFromQuery(window.location.search));
+      setFilters(filtersFromQuery(window.location.search, defaults));
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
-  }, [project]);
+  }, [project, defaults]);
 
   const filtered = useMemo(() => filterTree(tree, filters), [tree, filters]);
   const categories = useMemo(() => collectCategories(tree), [tree]);
@@ -188,6 +236,7 @@ export function App({ project, onSwitch }: Props) {
       <div className={s.split}>
         <FilterBar
           filters={filters}
+          defaults={defaults}
           categories={categories}
           tags={tags}
           statusCounts={statusCounts}

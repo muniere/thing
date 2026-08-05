@@ -1,4 +1,5 @@
 import type { Node } from "./domain/generated.ts";
+import type { FilterDefaults } from "./filter.ts";
 
 // Thin client over thingd's JSON API. One server hosts multiple projects, so
 // every node route is scoped under /api/projects/<project>/. Nodes are addressed
@@ -120,8 +121,9 @@ export function forProject(project: string) {
   return {
     tree: () => req<Node[]>("GET", `${base}/tree`),
     // config carries the display settings the UI reads: the title from
-    // config.yaml and the served data directory path.
-    config: () => req<{ title: string; dir: string }>("GET", `${base}/config`),
+    // config.yaml, the served data directory path, and the filter state the
+    // board starts from (absent when nothing is configured).
+    config: () => req<{ title: string; dir: string; filter?: FilterDefaults }>("GET", `${base}/config`),
     // create adds a child under the parent ref; the parent decides the type. An
     // empty parent ("") creates a top-level epic.
     create: (parent: string, input: CreateInput) =>

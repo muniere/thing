@@ -355,8 +355,39 @@ move or rename files by hand; use `thing mv`.
 
 ## Configuration
 
-`config.yaml` holds the board `title` and the `categories` used to group epics.
-See [`config.example.yaml`](config.example.yaml).
+`config.yaml` holds the board `title`, the `categories` used to group epics, and
+the `filter` state the web board starts from. See
+[`config.example.yaml`](config.example.yaml).
+
+```yaml
+filter:
+  statuses: [todo, doing]   # open the board on todo and doing only
+  tag: wip
+```
+
+Keys mirror the sidebar facets (`statuses`, `priorities`, `category`, `tag`,
+`query`); an omitted key means that facet is not filtered. Unlike `title` and
+`categories`, `filter` is layered across two files: the global config.yaml
+(`THING_CONFIG_DIR`, else `$XDG_CONFIG_HOME/thing` when that is an absolute path,
+else `~/.config/thing`) applies to every project, and a project's own
+`.thing/config.yaml` overrides it key by key. For the CLI, `THING_CONFIG_DIR`
+means something narrower — the one config directory, overriding the project
+lookup entirely — so exporting it at a project's `.thing/` would hand that
+project's `filter` to thingd as the global default for every other project. An
+explicit null drops an inherited value rather than inheriting it:
+
+```yaml
+# <project>/.thing/config.yaml
+filter:
+  tag: null                 # this project does not filter by tag
+                            # statuses is omitted, so it stays [todo, doing]
+```
+
+The defaults are the *starting* state, not a floor: they apply when the URL says
+nothing about filters, and thingd then writes them into the query string so a
+shared link shows the same board to everyone. Clearing every facet yields
+`?filter=none`, which survives a reload; the sidebar's reset button returns to the
+configured defaults.
 
 ## License
 

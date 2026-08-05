@@ -15,9 +15,29 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/muniere/thing/internal/model"
 	"github.com/muniere/thing/internal/registry"
 	"github.com/muniere/thing/internal/store"
 )
+
+// TestMain insulates every test in this package from the developer's real
+// global config (~/.config/thing/config.yaml, or wherever XDG_CONFIG_HOME
+// points): it sets THING_CONFIG_DIR to a disposable directory before any test
+// runs, so globalConfig() never reads a file this package does not control. A
+// malformed real-world global filter block would otherwise turn into a 500 on
+// every /api/.../config request in the suite. Tests that need a specific
+// global config still set THING_CONFIG_DIR themselves via t.Setenv, which
+// shadows this for their own duration.
+func TestMain(m *testing.M) {
+	dir, err := os.MkdirTemp("", "thing-server-test-config")
+	if err != nil {
+		panic(err)
+	}
+	os.Setenv("THING_CONFIG_DIR", dir)
+	code := m.Run()
+	os.RemoveAll(dir)
+	os.Exit(code)
+}
 
 func fixture(t *testing.T) *store.Store {
 	t.Helper()
@@ -370,16 +390,28 @@ func TestStaticServingAndSPAFallback(t *testing.T) {
 }
 
 func TestConfigEndpoint(t *testing.T) {
-	// No config.yaml -> the default title.
+	// No global config in play: point THING_CONFIG_DIR at an empty directory so the
+	// developer's real ~/.config/thing never leaks into the test.
+	t.Setenv("THING_CONFIG_DIR", t.TempDir())
+
+	// No config.yaml -> the default title, and no filter at all.
 	s := newServer(t)
 	w := do(t, s, "GET", "/api/projects/test/config", "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("config = %d, want 200; body=%s", w.Code, w.Body.String())
 	}
-	var got map[string]string
-	_ = json.Unmarshal(w.Body.Bytes(), &got)
-	if got["title"] != "thing" {
-		t.Errorf("default title = %q, want thing", got["title"])
+	var got configRes
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.Title != "thing" {
+		t.Errorf("default title = %q, want thing", got.Title)
+	}
+	if got.Filter != nil {
+		t.Errorf("filter = %+v, want it omitted", got.Filter)
+	}
+	if strings.Contains(w.Body.String(), `"filter"`) {
+		t.Errorf("body = %s, want no filter key", w.Body.String())
 	}
 
 	// A config.yaml title is served, along with the data dir path.
@@ -389,12 +421,83 @@ func TestConfigEndpoint(t *testing.T) {
 	}
 	s2 := New([]Mount{{Name: "test", Store: store.Open(root)}}, Options{Now: func() string { return "x" }})
 	w2 := do(t, s2, "GET", "/api/projects/test/config", "")
-	_ = json.Unmarshal(w2.Body.Bytes(), &got)
-	if got["title"] != "My Board" {
-		t.Errorf("title = %q, want My Board", got["title"])
+	var got2 configRes
+	if err := json.Unmarshal(w2.Body.Bytes(), &got2); err != nil {
+		t.Fatalf("decode: %v", err)
 	}
-	if got["dir"] != root {
-		t.Errorf("dir = %q, want %q", got["dir"], root)
+	if got2.Title != "My Board" {
+		t.Errorf("title = %q, want My Board", got2.Title)
+	}
+	if got2.Dir != root {
+		t.Errorf("dir = %q, want %q", got2.Dir, root)
+	}
+}
+
+// The global config supplies filter defaults for every project, and a project's
+// own config.yaml overrides them key by key.
+func TestConfigEndpointFilter(t *testing.T) {
+	globalDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(globalDir, "config.yaml"),
+		[]byte("filter:\n  statuses: [todo, doing]\n  tag: wip\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("THING_CONFIG_DIR", globalDir)
+
+	// Global only.
+	s := newServer(t)
+	var got configRes
+	if err := json.Unmarshal(do(t, s, "GET", "/api/projects/test/config", "").Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.Filter == nil {
+		t.Fatal("filter = nil, want the global default")
+	}
+	if len(got.Filter.Statuses) != 2 || got.Filter.Statuses[0] != model.Todo {
+		t.Errorf("statuses = %v, want [todo doing]", got.Filter.Statuses)
+	}
+	if got.Filter.Tag != "wip" {
+		t.Errorf("tag = %q, want wip", got.Filter.Tag)
+	}
+
+	// The project clears the inherited tag with an explicit null and keeps statuses.
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "config.yaml"), []byte("filter:\n  tag:\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s2 := New([]Mount{{Name: "test", Store: store.Open(root)}}, Options{Now: func() string { return "x" }})
+	body := do(t, s2, "GET", "/api/projects/test/config", "").Body.String()
+	var got2 configRes
+	if err := json.Unmarshal([]byte(body), &got2); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got2.Filter.Statuses) != 2 {
+		t.Errorf("statuses = %v, want the inherited [todo doing]", got2.Filter.Statuses)
+	}
+	if got2.Filter.Tag != "" {
+		t.Errorf("tag = %q, want it cleared", got2.Filter.Tag)
+	}
+	// An empty facet is left out of the payload, matching config.yaml's own
+	// "an absent key means no filter".
+	if strings.Contains(body, `"tag"`) {
+		t.Errorf("body = %s, want no tag key", body)
+	}
+}
+
+// With no global config, a project's own filter block stands on its own.
+func TestConfigEndpointFilterProjectOnly(t *testing.T) {
+	t.Setenv("THING_CONFIG_DIR", t.TempDir())
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "config.yaml"),
+		[]byte("filter:\n  priorities: [high]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s := New([]Mount{{Name: "test", Store: store.Open(root)}}, Options{Now: func() string { return "x" }})
+	var got configRes
+	if err := json.Unmarshal(do(t, s, "GET", "/api/projects/test/config", "").Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.Filter == nil || len(got.Filter.Priorities) != 1 || got.Filter.Priorities[0] != model.High {
+		t.Fatalf("filter = %+v, want priorities [high]", got.Filter)
 	}
 }
 

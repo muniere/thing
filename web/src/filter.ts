@@ -20,10 +20,62 @@ export function filtersActive(f: Filters): boolean {
   return f.statuses.size > 0 || f.priorities.size > 0 || f.category !== "" || f.tag !== "" || f.query !== "";
 }
 
+// FilterDefaults is the configured starting filter, as served by GET /api/config.
+// It mirrors the wire shape: a missing key means that facet is not filtered, so
+// no key ever has to carry "" to mean "absent".
+export interface FilterDefaults {
+  statuses?: string[];
+  priorities?: string[];
+  category?: string;
+  tag?: string;
+  query?: string;
+}
+
+// defaultsToFilters converts the configured defaults into the app's filter state.
+// Missing keys become the same empty values emptyFilters uses.
+export function defaultsToFilters(d: FilterDefaults | undefined): Filters {
+  return {
+    statuses: new Set(d?.statuses ?? []),
+    priorities: new Set(d?.priorities ?? []),
+    category: d?.category ?? "",
+    tag: d?.tag ?? "",
+    query: d?.query ?? "",
+  };
+}
+
+function setsEqual(a: Set<string>, b: Set<string>): boolean {
+  return a.size === b.size && [...a].every((v) => b.has(v));
+}
+
+// filtersEqual compares two filter states by value, so the UI can tell whether the
+// current filters still match the configured defaults.
+export function filtersEqual(a: Filters, b: Filters): boolean {
+  return (
+    setsEqual(a.statuses, b.statuses) &&
+    setsEqual(a.priorities, b.priorities) &&
+    a.category === b.category &&
+    a.tag === b.tag &&
+    a.query === b.query
+  );
+}
+
+// FILTER_KEYS are every query-string key the filter state uses, including the
+// sentinel. hasFilterQuery asks whether a URL says anything about filters at all:
+// when it does not, the configured defaults apply.
+const FILTER_KEYS = ["status", "priority", "category", "tag", "q", "filter"];
+const NONE = "none";
+
+export function hasFilterQuery(search: string): boolean {
+  const p = new URLSearchParams(search);
+  return FILTER_KEYS.some((k) => p.has(k));
+}
+
 // filtersToQuery / filtersFromQuery round-trip the filters through the URL query
 // string so a filtered view survives a reload and is shareable. Empty facets are
-// omitted, so no filter yields "" (a bare path).
-export function filtersToQuery(f: Filters): string {
+// omitted. A bare query means "apply the configured defaults", so when defaults
+// exist, a fully cleared filter is spelled out as ?filter=none instead of an empty
+// query — otherwise reloading would silently re-apply them.
+export function filtersToQuery(f: Filters, defaults: Filters = emptyFilters): string {
   const p = new URLSearchParams();
   if (f.statuses.size > 0) p.set("status", [...f.statuses].join(","));
   if (f.priorities.size > 0) p.set("priority", [...f.priorities].join(","));
@@ -31,11 +83,17 @@ export function filtersToQuery(f: Filters): string {
   if (f.tag !== "") p.set("tag", f.tag);
   if (f.query !== "") p.set("q", f.query);
   const s = p.toString();
-  return s ? `?${s}` : "";
+  if (s) return `?${s}`;
+  return filtersActive(defaults) ? `?filter=${NONE}` : "";
 }
 
-export function filtersFromQuery(search: string): Filters {
+// filtersFromQuery reads the filters back. A URL that says nothing about filters
+// yields the configured defaults; ?filter=none is an explicit "no filters"; anything
+// else is taken verbatim, with no defaults mixed into the facets it leaves out.
+export function filtersFromQuery(search: string, defaults: Filters = emptyFilters): Filters {
   const p = new URLSearchParams(search);
+  if (p.get("filter") === NONE) return emptyFilters;
+  if (!hasFilterQuery(search)) return defaults;
   const status = p.get("status");
   const priority = p.get("priority");
   return {

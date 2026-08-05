@@ -747,17 +747,84 @@ func (s *Server) handleTree(p *project, w http.ResponseWriter, _ *http.Request) 
 	}
 }
 
-// handleConfig serves the display config the web UI reads: the title (from
+// configRes is the display config the web UI reads: the title (from config.yaml
+// in the served data directory), the data directory path shown as a label, and
+// the filter state the board starts from.
+type configRes struct {
+	Title  string     `json:"title"`
+	Dir    string     `json:"dir"`
+	Filter *filterRes `json:"filter,omitempty"`
+}
+
+// filterRes is the resolved default filter. Empty facets are omitted, so on the
+// wire — as in config.yaml — an absent key means "this facet is not filtered".
+type filterRes struct {
+	Statuses   []model.Status   `json:"statuses,omitempty"`
+	Priorities []model.Priority `json:"priorities,omitempty"`
+	Category   string           `json:"category,omitempty"`
+	Tag        string           `json:"tag,omitempty"`
+	Query      string           `json:"query,omitempty"`
+}
+
+// newFilterRes converts a resolved filter to its wire form, returning nil when
+// nothing is filtered — including the case where every configured facet resolved
+// to empty, which is indistinguishable from no configuration at all.
+func newFilterRes(f *config.Filter) *filterRes {
+	if f == nil {
+		return nil
+	}
+	res := &filterRes{
+		Statuses:   f.Statuses,
+		Priorities: f.Priorities,
+		Category:   f.Category,
+		Tag:        f.Tag,
+		Query:      f.Query,
+	}
+	if len(res.Statuses) == 0 && len(res.Priorities) == 0 &&
+		res.Category == "" && res.Tag == "" && res.Query == "" {
+		return nil
+	}
+	return res
+}
+
+// globalConfig loads the global config.yaml, whose filter block supplies defaults
+// for every project. THING_CONFIG_DIR overrides where it lives, matching the CLI's
+// env knob. An unresolvable home directory is not fatal: it just means no global
+// defaults.
+func globalConfig() (*config.Config, error) {
+	dir := os.Getenv("THING_CONFIG_DIR")
+	if dir == "" {
+		var err error
+		if dir, err = store.GlobalConfigDir(); err != nil {
+			return &config.Config{}, nil
+		}
+	}
+	return config.Load(dir)
+}
+
+// handleConfig serves the display config the web UI reads. The title comes from
 // config.yaml in the served data directory — the project-local .thing/ holds it
-// alongside the nodes) and the data directory path itself, shown as a label. A
-// missing or title-less config yields the default "thing", so the endpoint always
-// returns a usable title.
+// alongside the nodes — and a missing or title-less config yields the default
+// "thing", so the endpoint always returns a usable title. The filter defaults are
+// layered: the global config.yaml applies to every project, and the project's own
+// filter block overrides it key by key.
 func (s *Server) handleConfig(p *project, w http.ResponseWriter, _ *http.Request) {
 	p.mu.RLock()
 	root := p.store.Root
 	cfg, err := config.Load(root)
 	p.mu.RUnlock()
 	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	global, err := globalConfig()
+	if err != nil {
+		// A broken global config.yaml fails this endpoint for every project, not
+		// just this one, and s.fail itself is silent — log so the failure is
+		// discoverable in the thingd terminal rather than only as an opaque 500.
+		if s.logger != nil {
+			s.logger.Printf("load global config: %v", err)
+		}
 		s.fail(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -769,7 +836,11 @@ func (s *Server) handleConfig(p *project, w http.ResponseWriter, _ *http.Request
 	if abs, err := filepath.Abs(root); err == nil {
 		dir = abs
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"title": title, "dir": dir})
+	writeJSON(w, http.StatusOK, configRes{
+		Title:  title,
+		Dir:    dir,
+		Filter: newFilterRes(config.ResolveFilter(global, cfg)),
+	})
 }
 
 // --- writes ---
