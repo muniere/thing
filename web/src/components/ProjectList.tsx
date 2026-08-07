@@ -310,25 +310,34 @@ function AddProject({ onAdded, onError }: AddProps) {
         + Project
       </button>
       <Dialog open={open} onClose={close} title="Add project">
-        <input
-          className={s.input}
-          autoFocus
-          placeholder="name (url-safe: a-z 0-9 -)"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <input
-          className={s.input}
-          placeholder="data directory (an existing thing tree)"
-          value={dir}
-          onChange={(e) => setDir(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") submit();
-          }}
-        />
-        <p className={s.hint}>
-          The directory must already be a thing tree. Create a new one with <code>thing init</code> first.
-        </p>
+        <label className={s.field}>
+          <span className={s.fieldLabel}>Name</span>
+          <input
+            className={s.input}
+            autoFocus
+            placeholder="my-project"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <span className={s.fieldHint}>
+            Lower-case letters, digits, and dashes. It becomes the project's URL.
+          </span>
+        </label>
+        <label className={s.field}>
+          <span className={s.fieldLabel}>Data directory</span>
+          <input
+            className={s.input}
+            placeholder="/path/to/project/.thing"
+            value={dir}
+            onChange={(e) => setDir(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") submit();
+            }}
+          />
+          <span className={s.fieldHint}>
+            Must already be a thing tree. Create one with <code>thing init</code> first.
+          </span>
+        </label>
         <div className={s.actions}>
           <button type="button" className={`${s.btn} ${s.btnAmber}`} onClick={submit} disabled={!name.trim() || !dir.trim()}>
             Add
@@ -382,25 +391,31 @@ function EditProject({ project, onSaved, onError, onClose }: EditProps) {
 
   return (
     <Dialog open onClose={onClose} title="Edit project">
-      <input
-        className={s.input}
-        autoFocus
-        placeholder="name (url-safe: a-z 0-9 -)"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-      />
-      <input
-        className={s.input}
-        placeholder="data directory (an existing thing tree)"
-        value={dir}
-        onChange={(e) => setDir(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") submit();
-        }}
-      />
-      <p className={s.hint}>
-        Renaming changes the project's URL (<code>/{(name.trim() || project.name)}</code>).
-      </p>
+      <label className={s.field}>
+        <span className={s.fieldLabel}>Name</span>
+        <input
+          className={s.input}
+          autoFocus
+          placeholder="my-project"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <span className={s.fieldHint}>
+          Renaming changes the project's URL (<code>/{(name.trim() || project.name)}</code>).
+        </span>
+      </label>
+      <label className={s.field}>
+        <span className={s.fieldLabel}>Data directory</span>
+        <input
+          className={s.input}
+          placeholder="/path/to/project/.thing"
+          value={dir}
+          onChange={(e) => setDir(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") submit();
+          }}
+        />
+      </label>
       <div className={s.actions}>
         <button type="button" className={`${s.btn} ${s.btnAmber}`} onClick={submit} disabled={!name.trim() || !dir.trim()}>
           Save
