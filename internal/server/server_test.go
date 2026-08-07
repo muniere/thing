@@ -18,6 +18,7 @@ import (
 	"github.com/muniere/thing/internal/model"
 	"github.com/muniere/thing/internal/registry"
 	"github.com/muniere/thing/internal/store"
+	"gopkg.in/yaml.v3"
 )
 
 // TestMain insulates every test in this package from the developer's real
@@ -463,24 +464,20 @@ func TestConfigEndpoint(t *testing.T) {
 	}
 }
 
-// The global config supplies filter defaults for every project, and a project's
-// own config.yaml overrides them key by key.
+// projects.yaml's top-level defaults supply the filter for every project, and a
+// project's own entry overrides them key by key.
 func TestConfigEndpointFilter(t *testing.T) {
-	globalDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(globalDir, "config.yaml"),
-		[]byte("filter:\n  statuses: [todo, doing]\n  tag: wip\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("THING_CONFIG_DIR", globalDir)
+	defaults := &registry.Defaults{Filter: parseFilter(t, "statuses: [todo, doing]\ntag: wip\n")}
 
-	// Global only.
-	s := newServer(t)
+	// Defaults only: the project writes no filter of its own.
+	s := New([]Mount{{Name: "test", Store: fixture(t)}},
+		Options{Defaults: defaults, Now: func() string { return "x" }})
 	var got configRes
 	if err := json.Unmarshal(do(t, s, "GET", "/api/projects/test/config", "").Body.Bytes(), &got); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
 	if got.Filter == nil {
-		t.Fatal("filter = nil, want the global default")
+		t.Fatal("filter = nil, want the defaults")
 	}
 	if len(got.Filter.Statuses) != 2 || got.Filter.Statuses[0] != model.Todo {
 		t.Errorf("statuses = %v, want [todo doing]", got.Filter.Statuses)
@@ -489,12 +486,9 @@ func TestConfigEndpointFilter(t *testing.T) {
 		t.Errorf("tag = %q, want wip", got.Filter.Tag)
 	}
 
-	// The project clears the inherited tag with an explicit null and keeps statuses.
-	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "config.yaml"), []byte("filter:\n  tag:\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	s2 := New([]Mount{{Name: "test", Store: store.Open(root)}}, Options{Now: func() string { return "x" }})
+	// The entry clears the inherited tag with an explicit null and keeps statuses.
+	s2 := New([]Mount{{Name: "test", Store: fixture(t), Filter: parseFilter(t, "tag:\n")}},
+		Options{Defaults: defaults, Now: func() string { return "x" }})
 	body := do(t, s2, "GET", "/api/projects/test/config", "").Body.String()
 	var got2 configRes
 	if err := json.Unmarshal([]byte(body), &got2); err != nil {
@@ -506,22 +500,17 @@ func TestConfigEndpointFilter(t *testing.T) {
 	if got2.Filter.Tag != "" {
 		t.Errorf("tag = %q, want it cleared", got2.Filter.Tag)
 	}
-	// An empty facet is left out of the payload, matching config.yaml's own
+	// An empty facet is left out of the payload, matching projects.yaml's own
 	// "an absent key means no filter".
 	if strings.Contains(body, `"tag"`) {
 		t.Errorf("body = %s, want no tag key", body)
 	}
 }
 
-// With no global config, a project's own filter block stands on its own.
+// With no defaults configured, a project's own entry stands on its own.
 func TestConfigEndpointFilterProjectOnly(t *testing.T) {
-	t.Setenv("THING_CONFIG_DIR", t.TempDir())
-	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "config.yaml"),
-		[]byte("filter:\n  priorities: [high]\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	s := New([]Mount{{Name: "test", Store: store.Open(root)}}, Options{Now: func() string { return "x" }})
+	s := New([]Mount{{Name: "test", Store: fixture(t), Filter: parseFilter(t, "priorities: [high]\n")}},
+		Options{Now: func() string { return "x" }})
 	var got configRes
 	if err := json.Unmarshal(do(t, s, "GET", "/api/projects/test/config", "").Body.Bytes(), &got); err != nil {
 		t.Fatalf("decode: %v", err)
@@ -529,6 +518,18 @@ func TestConfigEndpointFilterProjectOnly(t *testing.T) {
 	if got.Filter == nil || len(got.Filter.Priorities) != 1 || got.Filter.Priorities[0] != model.High {
 		t.Fatalf("filter = %+v, want priorities [high]", got.Filter)
 	}
+}
+
+// parseFilter builds a registry.Filter from a YAML filter block, so tests state
+// the same thing projects.yaml does — including presence, which decides whether a
+// key inherits or clears.
+func parseFilter(t *testing.T, body string) *registry.Filter {
+	t.Helper()
+	var f registry.Filter
+	if err := yaml.Unmarshal([]byte(body), &f); err != nil {
+		t.Fatalf("parse filter %q: %v", body, err)
+	}
+	return &f
 }
 
 func TestNoStaticReturns404(t *testing.T) {
@@ -723,8 +724,8 @@ func TestRegisterPersistsToRegistry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load after register: %v", err)
 	}
-	if len(got) != 2 || got[1].Name != "added" || got[1].Dir != dir {
-		t.Fatalf("registry after register = %+v, want test then {added %s}", got, dir)
+	if len(got.Projects) != 2 || got.Projects[1].Name != "added" || got.Projects[1].Dir != dir {
+		t.Fatalf("registry after register = %+v, want test then {added %s}", got.Projects, dir)
 	}
 
 	// Unregister drops only "added"; "test" remains persisted.
@@ -733,8 +734,8 @@ func TestRegisterPersistsToRegistry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load after unregister: %v", err)
 	}
-	if len(got) != 1 || got[0].Name != "test" {
-		t.Fatalf("registry after unregister = %+v, want just test", got)
+	if len(got.Projects) != 1 || got.Projects[0].Name != "test" {
+		t.Fatalf("registry after unregister = %+v, want just test", got.Projects)
 	}
 }
 
@@ -829,8 +830,8 @@ func TestMovePersists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if len(got) != 2 || got[0].Name != "added" || got[1].Name != "test" {
-		t.Fatalf("persisted order = %+v, want added then test", got)
+	if len(got.Projects) != 2 || got.Projects[0].Name != "added" || got.Projects[1].Name != "test" {
+		t.Fatalf("persisted order = %+v, want added then test", got.Projects)
 	}
 }
 
@@ -844,7 +845,7 @@ func TestReloadReconcilesFromFile(t *testing.T) {
 	bDir := thingTreeDir(t)
 
 	// The file gains "b" alongside the boot-mounted "test": reload mounts it.
-	if err := registry.Save(regFile, []registry.Project{{Name: "test", Dir: testDir}, {Name: "b", Dir: bDir}}); err != nil {
+	if err := registry.Save(regFile, &registry.Registry{Projects: []registry.Project{{Name: "test", Dir: testDir}, {Name: "b", Dir: bDir}}}); err != nil {
 		t.Fatal(err)
 	}
 	res, err := s.Reload()
@@ -862,7 +863,7 @@ func TestReloadReconcilesFromFile(t *testing.T) {
 	}
 
 	// The file reorders to [b, test]: reload matches the picker order to it.
-	if err := registry.Save(regFile, []registry.Project{{Name: "b", Dir: bDir}, {Name: "test", Dir: testDir}}); err != nil {
+	if err := registry.Save(regFile, &registry.Registry{Projects: []registry.Project{{Name: "b", Dir: bDir}, {Name: "test", Dir: testDir}}}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Reload(); err != nil {
@@ -873,7 +874,7 @@ func TestReloadReconcilesFromFile(t *testing.T) {
 	}
 
 	// The file drops "b": reload unmounts it, leaving only "test".
-	if err := registry.Save(regFile, []registry.Project{{Name: "test", Dir: testDir}}); err != nil {
+	if err := registry.Save(regFile, &registry.Registry{Projects: []registry.Project{{Name: "test", Dir: testDir}}}); err != nil {
 		t.Fatal(err)
 	}
 	res, err = s.Reload()
@@ -899,7 +900,7 @@ func TestReloadRepointsChangedDir(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(newDir, "config.yaml"), []byte("title: Repointed\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := registry.Save(regFile, []registry.Project{{Name: "test", Dir: newDir}}); err != nil {
+	if err := registry.Save(regFile, &registry.Registry{Projects: []registry.Project{{Name: "test", Dir: newDir}}}); err != nil {
 		t.Fatal(err)
 	}
 	res, err := s.Reload()
@@ -924,7 +925,7 @@ func TestReloadSkipsBadDir(t *testing.T) {
 	})
 	testDir := proj(t, s).store.Root
 	badDir := t.TempDir() // no config.yaml → not a thing tree
-	if err := registry.Save(regFile, []registry.Project{{Name: "test", Dir: testDir}, {Name: "bad", Dir: badDir}}); err != nil {
+	if err := registry.Save(regFile, &registry.Registry{Projects: []registry.Project{{Name: "test", Dir: testDir}, {Name: "bad", Dir: badDir}}}); err != nil {
 		t.Fatal(err)
 	}
 	res, err := s.Reload()
@@ -952,7 +953,7 @@ func TestReloadEndpoint(t *testing.T) {
 		RegistryFile: regFile,
 	})
 	testDir := proj(t, s).store.Root
-	if err := registry.Save(regFile, []registry.Project{{Name: "test", Dir: testDir}, {Name: "b", Dir: thingTreeDir(t)}}); err != nil {
+	if err := registry.Save(regFile, &registry.Registry{Projects: []registry.Project{{Name: "test", Dir: testDir}, {Name: "b", Dir: thingTreeDir(t)}}}); err != nil {
 		t.Fatal(err)
 	}
 	w := do(t, s, "POST", "/api/projects/reload", "")
@@ -998,8 +999,8 @@ func TestEditRenamesKeepingPosition(t *testing.T) {
 		t.Fatalf("order = %v, want [test mid c]", got)
 	}
 	got, _ := registry.Load(regFile)
-	names := make([]string, len(got))
-	for i, p := range got {
+	names := make([]string, len(got.Projects))
+	for i, p := range got.Projects {
 		names[i] = p.Name
 	}
 	if !slices.Equal(names, []string{"test", "mid", "c"}) {
@@ -1028,8 +1029,8 @@ func TestEditRepointsDir(t *testing.T) {
 		t.Fatalf("config = %v, want title Repointed / dir %q", cfg, dir2)
 	}
 	got, _ := registry.Load(regFile)
-	if len(got) != 2 || got[1].Name != "added" || got[1].Dir != dir2 {
-		t.Fatalf("persisted = %+v, want added -> %q", got, dir2)
+	if len(got.Projects) != 2 || got.Projects[1].Name != "added" || got.Projects[1].Dir != dir2 {
+		t.Fatalf("persisted = %+v, want added -> %q", got.Projects, dir2)
 	}
 }
 

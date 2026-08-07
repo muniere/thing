@@ -16,10 +16,14 @@ import (
 // FileName is the registry file's name within the state directory.
 const FileName = "projects.yaml"
 
-// Project is one registered project: a URL-safe name and its data directory.
+// Project is one registered project: a URL-safe name, its data directory, and
+// the display settings thingd applies to that board. Only settings thingd itself
+// owns live here — what a tree *is* (its title and categories) stays in the
+// tree's own config.yaml, which the CLI reads too.
 type Project struct {
-	Name string `yaml:"name"`
-	Dir  string `yaml:"dir"`
+	Name   string  `yaml:"name"`
+	Dir    string  `yaml:"dir"`
+	Filter *Filter `yaml:"filter,omitempty"`
 }
 
 // StateDir resolves the directory holding projects.yaml, in order:
@@ -50,39 +54,68 @@ func File() (string, error) {
 	return filepath.Join(dir, FileName), nil
 }
 
-type projectsFile struct {
+// Registry is projects.yaml as a whole: the registered projects plus the
+// defaults that apply to every one of them.
+type Registry struct {
+	Defaults *Defaults `yaml:"defaults,omitempty"`
 	Projects []Project `yaml:"projects"`
 }
 
-// Load reads and validates projects.yaml at path. A missing file is not an error;
-// it yields an empty slice. Names must be URL-safe slugs and unique.
-func Load(path string) ([]Project, error) {
+// Defaults holds the settings a project entry inherits when it does not set them
+// itself.
+type Defaults struct {
+	Filter *Filter `yaml:"filter,omitempty"`
+}
+
+// filter returns d's filter block, tolerating nil defaults.
+func (d *Defaults) filter() *Filter {
+	if d == nil {
+		return nil
+	}
+	return d.Filter
+}
+
+// Filters returns the filter state project p's board starts from, layering its
+// entry over the registry-wide defaults. An unknown name resolves to the
+// defaults alone, which is what a project registered at runtime gets.
+func (r *Registry) Filters(name string) *Filter {
+	for i := range r.Projects {
+		if r.Projects[i].Name == name {
+			return ResolveFilter(r.Defaults.filter(), r.Projects[i].Filter)
+		}
+	}
+	return ResolveFilter(r.Defaults.filter(), nil)
+}
+
+// Load reads and validates projects.yaml at path. A missing file is not an
+// error; it yields an empty registry. Names must be URL-safe slugs and unique.
+func Load(path string) (*Registry, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil
+			return &Registry{}, nil
 		}
 		return nil, err
 	}
-	var pf projectsFile
-	if err := yaml.Unmarshal(data, &pf); err != nil {
+	var r Registry
+	if err := yaml.Unmarshal(data, &r); err != nil {
 		return nil, err
 	}
-	if err := validate(pf.Projects); err != nil {
+	if err := validate(r.Projects); err != nil {
 		return nil, err
 	}
-	return pf.Projects, nil
+	return &r, nil
 }
 
 // Save writes projects to projects.yaml at path, creating the enclosing state
 // directory if needed. It validates the same way Load does, so a bad in-memory
 // list is rejected before it touches disk rather than being written back and
 // then failing to load. The write is atomic: it lands a temp file and renames.
-func Save(path string, projects []Project) error {
-	if err := validate(projects); err != nil {
+func Save(path string, r *Registry) error {
+	if err := validate(r.Projects); err != nil {
 		return err
 	}
-	data, err := yaml.Marshal(projectsFile{Projects: projects})
+	data, err := yaml.Marshal(r)
 	if err != nil {
 		return err
 	}
