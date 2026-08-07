@@ -1,0 +1,38 @@
+/* slate — a thing board palette, selected with `theme: slate` on a project's
+   entry in projects.yaml. Derived from the default amber palette by rotating
+   hue in OKLCH; see README.md in this directory for how the palettes are built
+   and how to add or override one. */
+:root[data-theme="slate"] {
+  --bg: #121416;
+  --panel: #1a1c20;
+  --panel-2: #202428;
+  --line: #2d3137;
+  --ink: #e4e8ef;
+  --ink-2: #a2a8b2;
+  --ink-3: #6a7079;
+  --amber: #8dbdee;
+  --link: var(--amber);
+  --todo: #898272;
+  --doing: #e77602;
+  --done: #3cb395;
+  --paused: #c57f2c;
+  --high: #d7744e;
+}
+@media (prefers-color-scheme: light) {
+  :root[data-theme="slate"] {
+    --bg: #e5e7ec;
+    --panel: #f7f8fb;
+    --panel-2: #ebecf2;
+    --line: #d1d4dc;
+    --ink: #1a1c21;
+    --ink-2: #60636b;
+    --ink-3: #8d909a;
+    --amber: #5e83a9;
+    --link: #1d4ed8;
+    --todo: #8c7e6e;
+    --doing: #e84b39;
+    --done: #428d55;
+    --paused: #b15b37;
+    --high: #c05052;
+  }
+}

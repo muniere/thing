@@ -41,11 +41,13 @@ import (
 	"github.com/muniere/thing/internal/registry"
 	"github.com/muniere/thing/internal/slug"
 	"github.com/muniere/thing/internal/store"
+	"github.com/muniere/thing/internal/theme"
 )
 
 // Options configures a Server.
 type Options struct {
 	Static   fs.FS         // built SPA assets; nil disables static serving
+	Themes   fs.FS         // built-in theme stylesheets; the layer under the reader's own theme dir
 	Now      func() string // today's date stamp for write timestamps; defaults to time.Now
 	NowStamp func() string // RFC3339 instant for the archive time; defaults to time.Now
 	Logger   *log.Logger   // access log; nil disables it
@@ -67,6 +69,8 @@ type Mount struct {
 	// the defaults are layered over it per request, so persisting the registry
 	// writes back the entry the file had rather than a copy of the defaults.
 	Filter *registry.Filter
+	// Theme is the project's own theme name, likewise unresolved.
+	Theme string
 }
 
 // project is one mounted project: its store plus a dedicated SSE hub so a change
@@ -77,6 +81,7 @@ type project struct {
 	store  *store.Store
 	hub    *hub
 	filter *registry.Filter
+	theme  string
 	// mu serializes store access across concurrent HTTP requests. The store reads
 	// and writes the data dir directly, so without it two in-flight mutations (a
 	// double-submit, a second tab, two nodes racing on the same slug) could
@@ -95,6 +100,7 @@ type project struct {
 // Server serves the JSON API and the SPA. It is an http.Handler.
 type Server struct {
 	static   fs.FS
+	themes   theme.Loader
 	now      func() string
 	nowStamp func() string
 	logger   *log.Logger
@@ -133,6 +139,7 @@ func New(mounts []Mount, opts Options) *Server {
 	}
 	s := &Server{
 		static:   opts.Static,
+		themes:   theme.Loader{Builtin: opts.Themes},
 		now:      opts.Now,
 		nowStamp: opts.NowStamp,
 		logger:   opts.Logger,
@@ -142,7 +149,7 @@ func New(mounts []Mount, opts Options) *Server {
 		bootID:   newBootID(),
 	}
 	for _, m := range mounts {
-		s.projects[m.Name] = &project{name: m.Name, store: m.Store, hub: newHub(), filter: m.Filter}
+		s.projects[m.Name] = &project{name: m.Name, store: m.Store, hub: newHub(), filter: m.Filter, theme: m.Theme}
 		s.order = append(s.order, m.Name)
 	}
 	mux := http.NewServeMux()
@@ -161,6 +168,7 @@ func New(mounts []Mount, opts Options) *Server {
 	mux.HandleFunc("DELETE /api/projects/{project}/nodes/{ref...}", s.withProject(s.handleRemove))
 	mux.HandleFunc("PATCH /api/projects/{project}/archives/{name}", s.withProject(s.handleUnarchive))
 	mux.HandleFunc("GET /files/{project}/{path...}", s.withProject(s.handleNodeFile))
+	mux.HandleFunc("GET /themes/{file}", s.handleTheme)
 	mux.HandleFunc("/", s.handleStatic)
 	s.mux = mux
 	return s
@@ -209,7 +217,7 @@ func (s *Server) Register(name, dir string) (p *project, created bool, err error
 		return nil, false, &httpError{http.StatusConflict, fmt.Errorf("project %q is already registered to a different directory", name)}
 	}
 
-	p = s.mountLocked(name, dir, nil)
+	p = s.mountLocked(name, dir, nil, "")
 	if err := s.persistLocked(); err != nil {
 		s.unmountLocked(name) // undo the mount so disk and memory stay in step
 		return nil, false, &httpError{http.StatusInternalServerError, fmt.Errorf("persist registry: %w", err)}
@@ -294,7 +302,7 @@ func (s *Server) Reload() (*ReloadResult, error) {
 	for _, p := range desired.Projects {
 		existing, mounted := s.projects[p.Name]
 		if mounted && filepath.Clean(existing.store.Root) == filepath.Clean(p.Dir) {
-			existing.filter = p.Filter
+			existing.filter, existing.theme = p.Filter, p.Theme
 			continue // same directory; only the display settings may have moved
 		}
 		if !isThingTree(p.Dir) {
@@ -306,10 +314,10 @@ func (s *Server) Reload() (*ReloadResult, error) {
 			// the mount so the refetch resolves the new directory under the same name.
 			existing.hub.broadcast()
 			s.unmountLocked(p.Name)
-			s.mountLocked(p.Name, p.Dir, p.Filter)
+			s.mountLocked(p.Name, p.Dir, p.Filter, p.Theme)
 			res.Repointed = append(res.Repointed, p.Name)
 		} else {
-			s.mountLocked(p.Name, p.Dir, p.Filter)
+			s.mountLocked(p.Name, p.Dir, p.Filter, p.Theme)
 			res.Added = append(res.Added, p.Name)
 		}
 	}
@@ -460,7 +468,7 @@ func (s *Server) persistLocked() error {
 	list := make([]registry.Project, 0, len(s.order))
 	for _, name := range s.order {
 		p := s.projects[name]
-		list = append(list, registry.Project{Name: name, Dir: p.store.Root, Filter: p.filter})
+		list = append(list, registry.Project{Name: name, Dir: p.store.Root, Filter: p.filter, Theme: p.theme})
 	}
 	return registry.Save(s.regFile, &registry.Registry{Defaults: s.defaults, Projects: list})
 }
@@ -476,8 +484,8 @@ func isThingTree(dir string) bool {
 // mountLocked adds a mount for name over dir and starts its watcher, returning
 // the new project. The caller holds regmu and has already validated name and dir;
 // it does not persist.
-func (s *Server) mountLocked(name, dir string, filter *registry.Filter) *project {
-	p := &project{name: name, store: store.Open(dir), hub: newHub(), filter: filter}
+func (s *Server) mountLocked(name, dir string, filter *registry.Filter, theme string) *project {
+	p := &project{name: name, store: store.Open(dir), hub: newHub(), filter: filter, theme: theme}
 	s.projects[name] = p
 	s.order = append(s.order, name)
 	s.startWatchLocked(p)
@@ -775,6 +783,7 @@ type configRes struct {
 	Title  string     `json:"title"`
 	Dir    string     `json:"dir"`
 	Filter *filterRes `json:"filter,omitempty"`
+	Theme  string     `json:"theme,omitempty"`
 }
 
 // filterRes is the resolved default filter. Empty facets are omitted, so on the
@@ -813,9 +822,10 @@ func newFilterRes(f *registry.Filter) *filterRes {
 // alongside the nodes — and a missing or title-less config yields the default
 // "thing", so the endpoint always returns a usable title.
 //
-// The filter comes from the other side of that split: it shapes a thingd board
-// rather than describing the tree, so it lives on the project's projects.yaml
-// entry, layered key by key over the registry-wide defaults.
+// The filter and the theme come from the other side of that split: they shape a
+// thingd board rather than describing the tree, so they live on the project's
+// projects.yaml entry. The filter layers key by key over the registry-wide
+// defaults; the theme, being one indivisible choice, is a plain first-match.
 func (s *Server) handleConfig(p *project, w http.ResponseWriter, _ *http.Request) {
 	p.mu.RLock()
 	root := p.store.Root
@@ -826,11 +836,13 @@ func (s *Server) handleConfig(p *project, w http.ResponseWriter, _ *http.Request
 		return
 	}
 	s.regmu.RLock()
-	var defaults *registry.Filter
+	var defaultFilter *registry.Filter
+	var defaultTheme string
 	if s.defaults != nil {
-		defaults = s.defaults.Filter
+		defaultFilter, defaultTheme = s.defaults.Filter, s.defaults.Theme
 	}
-	filter := registry.ResolveFilter(defaults, p.filter)
+	filter := registry.ResolveFilter(defaultFilter, p.filter)
+	theme := registry.ResolveTheme(defaultTheme, p.theme)
 	s.regmu.RUnlock()
 	title := cfg.Title
 	if title == "" {
@@ -844,6 +856,7 @@ func (s *Server) handleConfig(p *project, w http.ResponseWriter, _ *http.Request
 		Title:  title,
 		Dir:    dir,
 		Filter: newFilterRes(filter),
+		Theme:  theme,
 	})
 }
 
@@ -1250,6 +1263,37 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+// handleTheme serves one theme's stylesheet, layering the built-in set with the
+// theme directories on disk (see package theme). It sits outside /api because it
+// serves CSS the browser links to directly, like the attachment file route.
+//
+// An unknown name is a plain 404 rather than an SPA fallback: the client links
+// this stylesheet, and handing it index.html would have the browser refuse a
+// document as CSS and log a MIME error. A 404 simply leaves the board on its
+// default palette, which is the right answer for a theme that does not exist.
+func (s *Server) handleTheme(w http.ResponseWriter, r *http.Request) {
+	name, ok := strings.CutSuffix(r.PathValue("file"), ".css")
+	if !ok {
+		themeNotFound(w)
+		return
+	}
+	css, ok := s.themes.Read(name)
+	if !ok {
+		themeNotFound(w)
+		return
+	}
+	w.Header().Set("Content-Type", "text/css; charset=utf-8")
+	_, _ = w.Write(css)
+}
+
+// themeNotFound answers a missing theme with a bare 404 — no body, so no
+// Content-Type. http.NotFound's text/plain explanation would be read as a failed
+// stylesheet by the browser that requested it, which logs a MIME-type error on
+// top of the 404 and buries the frontend's own "no such theme" warning.
+func themeNotFound(w http.ResponseWriter) {
+	w.WriteHeader(http.StatusNotFound)
 }
 
 // handleStatic serves the embedded SPA for any path not handled by the API,

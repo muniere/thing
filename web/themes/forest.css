@@ -1,0 +1,38 @@
+/* forest — a thing board palette, selected with `theme: forest` on a project's
+   entry in projects.yaml. Derived from the default amber palette by rotating
+   hue in OKLCH; see README.md in this directory for how the palettes are built
+   and how to add or override one. */
+:root[data-theme="forest"] {
+  --bg: #0f1511;
+  --panel: #171e17;
+  --panel-2: #1e261d;
+  --line: #283529;
+  --ink: #ddede2;
+  --ink-2: #98ae9e;
+  --ink-3: #617667;
+  --amber: #70d275;
+  --link: var(--amber);
+  --todo: #8a8272;
+  --doing: #ee6f07;
+  --done: #44b38e;
+  --paused: #c97d33;
+  --high: #d87256;
+}
+@media (prefers-color-scheme: light) {
+  :root[data-theme="forest"] {
+    --bg: #ddeae4;
+    --panel: #f2fbf7;
+    --panel-2: #e2f1ea;
+    --line: #c6dad0;
+    --ink: #141f19;
+    --ink-2: #56695f;
+    --ink-3: #7e978c;
+    --amber: #46934b;
+    --link: #1d4ed8;
+    --todo: #88806d;
+    --doing: #db5f00;
+    --done: #16906c;
+    --paused: #aa621a;
+    --high: #bf5532;
+  }
+}

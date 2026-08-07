@@ -1,0 +1,38 @@
+/* violet — a thing board palette, selected with `theme: violet` on a project's
+   entry in projects.yaml. Derived from the default amber palette by rotating
+   hue in OKLCH; see README.md in this directory for how the palettes are built
+   and how to add or override one. */
+:root[data-theme="violet"] {
+  --bg: #151219;
+  --panel: #1d1a23;
+  --panel-2: #24222d;
+  --line: #322e3d;
+  --ink: #ebe4f4;
+  --ink-2: #aca3ba;
+  --ink-3: #736b80;
+  --amber: #bea7ff;
+  --link: var(--amber);
+  --todo: #8d8073;
+  --doing: #f56449;
+  --done: #62b077;
+  --paused: #d1754b;
+  --high: #d96e71;
+}
+@media (prefers-color-scheme: light) {
+  :root[data-theme="violet"] {
+    --bg: #ebe4ee;
+    --panel: #fbf6fc;
+    --panel-2: #f1e9f5;
+    --line: #dbcfe0;
+    --ink: #1f1a24;
+    --ink-2: #695f6f;
+    --ink-3: #988b9e;
+    --amber: #866dc5;
+    --link: #1d4ed8;
+    --todo: #8c7e6e;
+    --doing: #e84b39;
+    --done: #428d55;
+    --paused: #b15b36;
+    --high: #c05052;
+  }
+}

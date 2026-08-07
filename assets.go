@@ -25,3 +25,21 @@ func WebAssets() fs.FS {
 	}
 	return sub
 }
+
+// themes holds the built-in theme stylesheets. They are embedded separately from
+// the SPA bundle because they are not bundled at all: thingd serves each one
+// as-is when the board asks for it, so that the same route can also serve themes
+// the reader drops in a directory on disk.
+//
+//go:embed web/themes/*.css
+var themes embed.FS
+
+// ThemeAssets returns the built-in themes rooted at the directory holding them,
+// so a theme is addressed as "<name>.css".
+func ThemeAssets() fs.FS {
+	sub, err := fs.Sub(themes, "web/themes")
+	if err != nil {
+		panic(err) // the embed path is a build-time constant
+	}
+	return sub
+}
