@@ -66,6 +66,46 @@ only mounts an **existing** thing tree (a directory that already holds a
 `config.yaml`); create new ones with `thing init` first. Unregistering removes
 the mount only and never deletes the data directory.
 
+### Themes
+
+Since one process serves several projects, each can pick its own palette — the
+quickest way to tell at a glance which board you are looking at. Name one on the
+project's entry in `projects.yaml` (see [Configuration](#configuration)):
+
+```yaml
+projects:
+  - name: work
+    dir: /path/to/work/.thing
+    theme: teal   # amber (default), teal, violet, slate, crimson, forest
+```
+
+A theme is one stylesheet, served at `/themes/<name>.css`, that redefines the
+design tokens under `:root[data-theme="<name>"]`. **Adding one is adding a
+file** — nothing in `thingd` or the frontend enumerates the names that exist, so
+no code change and no rebuild are involved. Two layers are read: the themes built
+into the binary ([`web/themes/`](web/themes/)), then `themes/` under the same
+state directory `projects.yaml` resolves to, so a `THING_DATA_DIR` holds a
+complete thingd setup:
+
+```
+~/.local/state/thingd/
+  projects.yaml
+  themes/
+    ocean.css      # a theme of your own
+    teal.css       # ... or a few tokens layered over the built-in teal
+```
+
+Both layers contribute when both define a name, built-in first, so yours
+overrides through the normal CSS cascade and only has to restate the tokens it
+changes — a `teal.css` holding a single `--amber` recolors the built-in teal's
+accent and leaves the rest. A name neither layer defines simply 404s and the
+board keeps the default palette, which is also what a typo comes to. See
+[`web/themes/README.md`](web/themes/README.md) for how to write one.
+
+Every built-in theme covers both the dark and the light color scheme, and follows
+the reader's system preference the way the default does. All of this affects
+`thingd` only; CLI output is never colored.
+
 ### Development
 
 ```
@@ -143,6 +183,8 @@ GET    /api/projects/<p>/archives          archived entries (ref, from, title, t
 GET    /api/projects/<p>/archives/<name>   one archived entry's detail (from, status, body, ...)
 PATCH  /api/projects/<p>/archives/<name>   restore _archives/<name> to where it came from, or {to:"<ref>"}
 GET    /api/projects/<p>/events            Server-Sent Events reload stream (per project)
+GET    /api/projects/<p>/config            display config (title, dir, filter defaults, theme)
+GET    /themes/<name>.css                  one theme's stylesheet, layered over the reader's own
 ```
 
 Open browsers live-reload over SSE whenever that project's tree changes — whether
@@ -368,25 +410,31 @@ it is the same for everyone who works on the tree. See
 
 `projects.yaml` holds what **thingd** does with it. Alongside each project's
 `name` and `dir`, its entry carries the display settings that shape only the web
-board — today, the `filter` state it starts from — and a top-level `defaults`
-block supplies them for every project that does not:
+board — the `filter` state it starts from and the `theme` it renders in — and a
+top-level `defaults` block supplies them for every project that does not:
 
 ```yaml
 defaults:
+  theme: amber
   filter:
     statuses: [todo, doing]   # every board opens on todo and doing only
     tag: wip
 projects:
   - name: work
     dir: /path/to/work/.thing
+    theme: teal               # ... this one is teal, not amber
     filter:
-      tag: api                # ... except this one, which filters by tag api
+      tag: api                # ... and filters by tag api
   - name: home
     dir: /path/to/home/.thing
     filter:
-      tag: null               # ... and this one, which does not filter by tag
+      tag: null               # ... this one does not filter by tag
                               # (statuses is omitted, so it stays [todo, doing])
 ```
+
+`theme` is a single choice rather than a set of keys, so it is not layered the way
+`filter` is: an entry's value wins outright, and `defaults` supplies it only when
+the entry sets none. See [Themes](#themes).
 
 Filter keys mirror the sidebar facets (`statuses`, `priorities`, `category`,
 `tag`, `query`); an omitted key means that facet is not filtered. An entry is

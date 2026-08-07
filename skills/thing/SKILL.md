@@ -34,9 +34,9 @@ way, but fall back to the global config dir; most commands need only the data
 directory.)
 
 `config.yaml` holds `title` and `categories` — what the tree is, read by both the
-CLI and thingd. Settings that only shape a thingd board, such as the filter state
-it starts from, are not here: they live on the project's entry in thingd's
-`projects.yaml`.
+CLI and thingd. Settings that only shape a thingd board — the filter state it
+starts from, the color theme it renders in — are not here: they live on the
+project's entry in thingd's `projects.yaml`.
 
 ## Reading (agents: read via JSON)
 
