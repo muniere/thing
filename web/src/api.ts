@@ -121,9 +121,10 @@ export function forProject(project: string) {
   return {
     tree: () => req<Node[]>("GET", `${base}/tree`),
     // config carries the display settings the UI reads: the title from
-    // config.yaml, the served data directory path, and the filter state the
-    // board starts from (absent when nothing is configured).
-    config: () => req<{ title: string; dir: string; filter?: FilterDefaults }>("GET", `${base}/config`),
+    // config.yaml, the served data directory path, the filter state the board
+    // starts from (absent when nothing is configured), and the color theme
+    // (absent when the project selects none, meaning the default palette).
+    config: () => req<{ title: string; dir: string; filter?: FilterDefaults; theme?: string }>("GET", `${base}/config`),
     // create adds a child under the parent ref; the parent decides the type. An
     // empty parent ("") creates a top-level epic.
     create: (parent: string, input: CreateInput) =>

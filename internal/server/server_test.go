@@ -1152,3 +1152,96 @@ func waitFor(t *testing.T, cond func() bool) {
 	}
 	t.Fatal("condition not met within deadline")
 }
+// Themes are served as one stylesheet per name from /themes/<name>.css, layering
+// the built-in set with the reader's own directory so adding a theme takes no
+// code change.
+func TestThemeRoute(t *testing.T) {
+	stateDir := t.TempDir()
+	t.Setenv("THING_DATA_DIR", stateDir)
+
+	s := New([]Mount{{Name: "test", Store: fixture(t)}}, Options{
+		Themes: fstest.MapFS{"teal.css": {Data: []byte(":root[data-theme=\"teal\"]{--bg:#0d1616}")}},
+		Now:    func() string { return "x" },
+	})
+
+	w := do(t, s, "GET", "/themes/teal.css", "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("teal.css = %d, want 200", w.Code)
+	}
+	if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/css") {
+		t.Errorf("content-type = %q, want text/css", ct)
+	}
+	if !strings.Contains(w.Body.String(), "#0d1616") {
+		t.Errorf("body = %q, want the built-in teal palette", w.Body.String())
+	}
+
+	// A theme only the reader's own directory defines is served like any other.
+	themes := filepath.Join(stateDir, "themes")
+	if err := os.MkdirAll(themes, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(themes, "ocean.css"), []byte("/*ocean*/"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if w := do(t, s, "GET", "/themes/ocean.css", ""); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "/*ocean*/") {
+		t.Fatalf("ocean.css = %d body=%q, want the user's own theme", w.Code, w.Body.String())
+	}
+}
+
+// An unknown theme is a 404, not an error page: the board keeps its default
+// palette, which is what a typo in config.yaml should come to.
+func TestThemeRouteUnknown(t *testing.T) {
+	t.Setenv("THING_DATA_DIR", t.TempDir())
+	s := New([]Mount{{Name: "test", Store: fixture(t)}}, Options{
+		Themes: fstest.MapFS{"teal.css": {Data: []byte("/*teal*/")}},
+		Static: fstest.MapFS{"index.html": {Data: []byte("<!doctype html>")}},
+		Now:    func() string { return "x" },
+	})
+	for _, path := range []string{"/themes/nope.css", "/themes/teal", "/themes/Teal.css", "/themes/.css"} {
+		if w := do(t, s, "GET", path, ""); w.Code != http.StatusNotFound {
+			t.Errorf("GET %s = %d, want 404 (body=%q)", path, w.Code, w.Body.String())
+		}
+	}
+	// A traversal never reaches the handler: ServeMux normalizes the path and
+	// redirects, so the request lands somewhere else entirely. Whatever the
+	// status, it must not come back as a stylesheet.
+	w := do(t, s, "GET", "/themes/../secret.css", "")
+	if strings.HasPrefix(w.Header().Get("Content-Type"), "text/css") {
+		t.Errorf("traversal served CSS: %d %q", w.Code, w.Body.String())
+	}
+}
+
+// The theme is served alongside the filter so a board can color itself per
+// project. It resolves project-entry first, falling back to the defaults.
+func TestConfigEndpointTheme(t *testing.T) {
+	// Defaults only.
+	s := New([]Mount{{Name: "test", Store: fixture(t)}},
+		Options{Defaults: &registry.Defaults{Theme: "slate"}, Now: func() string { return "x" }})
+	var got configRes
+	if err := json.Unmarshal(do(t, s, "GET", "/api/projects/test/config", "").Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.Theme != "slate" {
+		t.Errorf("theme = %q, want the default slate", got.Theme)
+	}
+
+	// The project's own entry wins.
+	s2 := New([]Mount{{Name: "test", Store: fixture(t), Theme: "teal"}},
+		Options{Defaults: &registry.Defaults{Theme: "slate"}, Now: func() string { return "x" }})
+	var got2 configRes
+	if err := json.Unmarshal(do(t, s2, "GET", "/api/projects/test/config", "").Body.Bytes(), &got2); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got2.Theme != "teal" {
+		t.Errorf("theme = %q, want the project's teal", got2.Theme)
+	}
+}
+
+// With nothing configured anywhere the key is left out entirely, so the frontend
+// keeps its default palette rather than being handed an empty theme name.
+func TestConfigEndpointThemeUnset(t *testing.T) {
+	body := do(t, newServer(t), "GET", "/api/projects/test/config", "").Body.String()
+	if strings.Contains(body, `"theme"`) {
+		t.Errorf("body = %s, want no theme key", body)
+	}
+}

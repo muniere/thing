@@ -1,0 +1,38 @@
+/* teal — a thing board palette, selected with `theme: teal` on a project's
+   entry in projects.yaml. Derived from the default amber palette by rotating
+   hue in OKLCH; see README.md in this directory for how the palettes are built
+   and how to add or override one. */
+:root[data-theme="teal"] {
+  --bg: #0d1616;
+  --panel: #121f1f;
+  --panel-2: #182726;
+  --line: #213535;
+  --ink: #d8ecef;
+  --ink-2: #8fafb1;
+  --ink-3: #597678;
+  --amber: #0bd2d2;
+  --link: var(--amber);
+  --todo: #898272;
+  --doing: #e87501;
+  --done: #3db394;
+  --paused: #c67f2d;
+  --high: #d7734f;
+}
+@media (prefers-color-scheme: light) {
+  :root[data-theme="teal"] {
+    --bg: #dbeaed;
+    --panel: #f1fafd;
+    --panel-2: #e1f0f4;
+    --line: #c3d9df;
+    --ink: #101f21;
+    --ink-2: #52686d;
+    --ink-3: #7a969d;
+    --amber: #069292;
+    --link: #1d4ed8;
+    --todo: #87806d;
+    --doing: #d06404;
+    --done: #0a9071;
+    --paused: #a76412;
+    --high: #be5729;
+  }
+}

@@ -65,7 +65,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	mounts := make([]server.Mount, 0, len(reg.Projects))
 	infos := make([]server.ProjectInfo, 0, len(reg.Projects))
 	for _, p := range reg.Projects {
-		mounts = append(mounts, server.Mount{Name: p.Name, Store: store.Open(p.Dir), Filter: p.Filter})
+		mounts = append(mounts, server.Mount{Name: p.Name, Store: store.Open(p.Dir), Filter: p.Filter, Theme: p.Theme})
 		infos = append(infos, server.ProjectInfo{Name: p.Name, Dir: p.Dir})
 		// A board's filter moved from the tree's config.yaml to its entry here.
 		// Loading ignores the old key, so say so rather than let a setting that
@@ -92,6 +92,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 	srv := server.New(mounts, server.Options{
 		Static:       thing.WebAssets(),
+		Themes:       thing.ThemeAssets(),
 		Now:          func() string { return time.Now().Format("2006-01-02") },
 		Logger:       log.New(stderr, "", log.LstdFlags),
 		RegistryFile: regFile,

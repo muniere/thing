@@ -2,6 +2,7 @@ package registry
 
 import (
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -160,4 +161,27 @@ func ResolveFilter(defaults, project *Filter) *Filter {
 		}
 	}
 	return out
+}
+
+// themeName matches a theme name that is safe to hand the web UI, which puts it
+// straight into a data-theme attribute and into the path of a stylesheet URL.
+var themeName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
+
+// ResolveTheme picks the color theme a board renders with: the project's own
+// entry, else the registry-wide defaults, else "" — which the frontend reads as
+// "use the default palette". Unlike ResolveFilter this is a plain first-match,
+// since a theme is one indivisible choice with no keys to layer.
+//
+// The themes that actually exist are files (see internal/theme), so there is no
+// list to validate against here — only the shape of the name. An unknown but safe
+// name resolves to no stylesheet and falls back to the default palette on its
+// own, while an unsafe one is dropped so it can never reach a data-theme
+// attribute or a URL.
+func ResolveTheme(defaults, project string) string {
+	for _, name := range []string{project, defaults} {
+		if themeName.MatchString(name) {
+			return name
+		}
+	}
+	return ""
 }

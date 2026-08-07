@@ -24,6 +24,7 @@ type Project struct {
 	Name   string  `yaml:"name"`
 	Dir    string  `yaml:"dir"`
 	Filter *Filter `yaml:"filter,omitempty"`
+	Theme  string  `yaml:"theme,omitempty"`
 }
 
 // StateDir resolves the directory holding projects.yaml, in order:
@@ -65,6 +66,7 @@ type Registry struct {
 // itself.
 type Defaults struct {
 	Filter *Filter `yaml:"filter,omitempty"`
+	Theme  string  `yaml:"theme,omitempty"`
 }
 
 // filter returns d's filter block, tolerating nil defaults.

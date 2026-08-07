@@ -1,0 +1,7 @@
+/* amber is the default palette and is defined in web/src/styles/tokens.css as the
+   bare :root, so a board with no theme selected already renders in it.
+
+   This file exists so that naming it explicitly (`theme: amber`) resolves like
+   any other theme rather than 404ing, and so that a higher layer — a shared or
+   user themes directory — can override the default palette by defining
+   amber.css there. It deliberately restates nothing: see README.md. */

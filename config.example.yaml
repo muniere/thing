@@ -13,7 +13,7 @@ categories:
   - Project
   - Personal
 
-# Note: the web board's starting `filter` state is not configured here. It shapes
-# a thingd board rather than describing the tree, so it lives on the project's
-# entry in projects.yaml (with a top-level `defaults` block for every project).
-# See the README's Configuration section.
+# Note: the web board's starting `filter` state and its color `theme` are not
+# configured here. They shape a thingd board rather than describing the tree, so
+# they live on the project's entry in projects.yaml (with a top-level `defaults`
+# block for every project). See the README's Configuration section.

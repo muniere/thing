@@ -305,3 +305,53 @@ projects:
 		t.Errorf("projects = %d, want 2", len(back.Projects))
 	}
 }
+
+// A project's own theme wins over the registry-wide default; either alone stands
+// on its own.
+func TestResolveTheme(t *testing.T) {
+	for _, tc := range []struct{ name, defaults, project, want string }{
+		{"project wins", "amber", "teal", "teal"},
+		{"default fallback", "amber", "", "amber"},
+		{"project only", "", "violet", "violet"},
+		{"neither", "", "", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ResolveTheme(tc.defaults, tc.project); got != tc.want {
+				t.Errorf("ResolveTheme(%q, %q) = %q, want %q", tc.defaults, tc.project, got, tc.want)
+			}
+		})
+	}
+}
+
+// Which themes exist is a question about files, not about this package, so a name
+// is only checked for being safe to put in an attribute and a URL path.
+func TestResolveThemeRejectsUnsafeNames(t *testing.T) {
+	for _, name := range []string{`"><script>`, "Teal", "te al", "teal;", "../teal", "-teal"} {
+		if got := ResolveTheme("", name); got != "" {
+			t.Errorf("ResolveTheme(%q) = %q, want empty", name, got)
+		}
+	}
+}
+
+// The theme reads from the same two places the filter does, so one entry
+// configures a board completely.
+func TestLoadThemes(t *testing.T) {
+	reg, err := Load(writeReg(t, `defaults:
+  theme: slate
+projects:
+  - name: work
+    dir: /tmp/work
+    theme: teal
+  - name: home
+    dir: /tmp/home
+`))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := ResolveTheme(reg.Defaults.Theme, reg.Projects[0].Theme); got != "teal" {
+		t.Errorf("work theme = %q, want teal", got)
+	}
+	if got := ResolveTheme(reg.Defaults.Theme, reg.Projects[1].Theme); got != "slate" {
+		t.Errorf("home theme = %q, want the default slate", got)
+	}
+}

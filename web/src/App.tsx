@@ -4,6 +4,7 @@ import { forProject, type ArchiveEntry } from "./api.ts";
 import { useLiveReload } from "./live.ts";
 import { collectCategories, collectPriorityCounts, collectStatusCounts, collectTags, defaultsToFilters, emptyFilters, filterTree, filtersActive, filtersFromQuery, filtersToQuery, hasFilterQuery, type Filters } from "./filter.ts";
 import { findNode, isPlainClick } from "./util.ts";
+import { applyTheme } from "./theme.ts";
 import { useTreeFold, useTreeNav } from "./tree.ts";
 import { Tree } from "./components/Tree.tsx";
 import { FilterBar } from "./components/FilterBar.tsx";
@@ -72,6 +73,11 @@ export function App({ project, onSwitch }: Props) {
       setTitle(c.title || project);
       setDir(c.dir);
       setDefaults(defaultsToFilters(c.filter));
+      // The theme is a document-level concern (it drives html[data-theme]), not
+      // React state, so it is applied here rather than rendered. Applying it on
+      // every config load also means editing config.yaml recolors the board over
+      // live-reload, the way the title already updates.
+      applyTheme(c.theme);
       setConfigReady(true);
     } catch (e) {
       // A missing/unreachable config just leaves the defaults, but still marks
@@ -88,6 +94,11 @@ export function App({ project, onSwitch }: Props) {
     void reload();
     void loadConfig();
   }, [reload, loadConfig]);
+  // The theme belongs to the open project, so drop it on the way out: leaving it
+  // set would color the root picker — and, briefly, the next project — with the
+  // palette of the project just left. Root remounts this component per project,
+  // so this runs on every switch as well as on the way back to the picker.
+  useEffect(() => () => applyTheme(undefined), []);
   // One SSE subscription refreshes both the tree and the config (title/dir).
   const refresh = useCallback(() => {
     void reload();
