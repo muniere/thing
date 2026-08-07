@@ -154,6 +154,7 @@ func New(mounts []Mount, opts Options) *Server {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/projects", s.handleProjects)
+	mux.HandleFunc("GET /api/themes", s.handleThemes)
 	mux.HandleFunc("POST /api/projects/reload", s.handleReload)
 	mux.HandleFunc("PUT /api/projects/{project}", s.handleRegister)
 	mux.HandleFunc("PATCH /api/projects/{project}", s.handlePatchProject)
@@ -397,7 +398,7 @@ func (s *Server) Move(name, before, after string) error {
 // p.store stay immutable for the lock-free readers in handleProjects. A re-point
 // keeps the URL, so it wakes the project's browsers to refetch the new tree; a
 // rename changes the URL, so those browsers navigate away on their own.
-func (s *Server) Edit(name, newName, newDir string) error {
+func (s *Server) Edit(name, newName, newDir string, newTheme *string) error {
 	if newName == "" {
 		newName = name
 	}
@@ -406,6 +407,13 @@ func (s *Server) Edit(name, newName, newDir string) error {
 	}
 	if newDir != "" && !isThingTree(newDir) {
 		return &httpError{http.StatusBadRequest, fmt.Errorf("%q is not a thing project (no %s)", newDir, config.FileName)}
+	}
+	// Only the shape of a theme name is checked, like everywhere else on the theme
+	// path: one no layer defines resolves to no stylesheet and leaves the board on
+	// the default palette, which is also where a theme deleted from disk later
+	// would land.
+	if newTheme != nil && *newTheme != "" && registry.ResolveTheme("", *newTheme) == "" {
+		return &httpError{http.StatusBadRequest, fmt.Errorf("invalid theme %q: must be lowercase letters, digits, and dashes", *newTheme)}
 	}
 
 	s.regmu.Lock()
@@ -425,8 +433,22 @@ func (s *Server) Edit(name, newName, newDir string) error {
 		dir = newDir
 	}
 	repoint := filepath.Clean(dir) != filepath.Clean(p.store.Root)
-	if newName == name && !repoint {
+	recolor := newTheme != nil && *newTheme != p.theme
+	if newName == name && !repoint && !recolor {
 		return nil // nothing to change
+	}
+
+	// A theme change alone touches no mount: set it in place, persist, and wake
+	// this project's browsers so an open board recolors without a manual reload.
+	if newName == name && !repoint {
+		prevTheme := p.theme
+		p.theme = *newTheme
+		if err := s.persistLocked(); err != nil {
+			p.theme = prevTheme // keep memory and disk in step
+			return &httpError{http.StatusInternalServerError, fmt.Errorf("persist registry: %w", err)}
+		}
+		p.hub.broadcast()
+		return nil
 	}
 
 	prev := append([]string(nil), s.order...)
@@ -438,10 +460,11 @@ func (s *Server) Edit(name, newName, newDir string) error {
 		p.cancelWatch = nil
 	}
 	delete(s.projects, name)
-	// The new mount inherits the display settings the old one carried: a rename or
-	// a re-point says nothing about how the board should look, and rebuilding
-	// without them silently reset the project's filter.
-	np := &project{name: newName, store: store.Open(dir), hub: newHub(), filter: p.filter, theme: p.theme}
+	theme := p.theme
+	if newTheme != nil {
+		theme = *newTheme
+	}
+	np := &project{name: newName, store: store.Open(dir), hub: newHub(), filter: p.filter, theme: theme}
 	s.projects[newName] = np
 	s.startWatchLocked(np)
 	for i, n := range s.order {
@@ -563,6 +586,7 @@ func (s *Server) handleProjects(w http.ResponseWriter, _ *http.Request) {
 		Name  string `json:"name"`
 		Title string `json:"title"`
 		Dir   string `json:"dir"`
+		Theme string `json:"theme,omitempty"`
 	}
 	out := make([]item, 0, len(list))
 	for _, p := range list {
@@ -582,7 +606,7 @@ func (s *Server) handleProjects(w http.ResponseWriter, _ *http.Request) {
 		if abs, err := filepath.Abs(root); err == nil {
 			dir = abs
 		}
-		out = append(out, item{Name: p.name, Title: title, Dir: dir})
+		out = append(out, item{Name: p.name, Title: title, Dir: dir, Theme: p.theme})
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -622,13 +646,15 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 // projectPatchReq is the PATCH /api/projects/{project} body. It carries one of
 // two operations: a reorder (before/after — place this project relative to an
 // anchor; the front is before the current first, the end after the current last)
-// or an edit (name/dir — rename and/or re-point). name and dir are pointers so an
-// omitted field ("keep it") is distinct from an explicit empty one (rejected).
+// or an edit (name/dir/theme — rename, re-point, and/or recolor). The fields are
+// pointers so an omitted one ("keep it") is distinct from an explicit empty one:
+// empty is rejected for name and dir, and clears the project's own theme.
 type projectPatchReq struct {
 	Before string  `json:"before"`
 	After  string  `json:"after"`
 	Name   *string `json:"name"`
 	Dir    *string `json:"dir"`
+	Theme  *string `json:"theme"`
 }
 
 // handlePatchProject dispatches the two PATCH operations on a project: a reorder
@@ -642,11 +668,11 @@ func (s *Server) handlePatchProject(w http.ResponseWriter, r *http.Request) {
 	}
 	name := r.PathValue("project")
 	isMove := req.Before != "" || req.After != ""
-	isEdit := req.Name != nil || req.Dir != nil
+	isEdit := req.Name != nil || req.Dir != nil || req.Theme != nil
 
 	switch {
 	case isMove && isEdit:
-		s.fail(w, http.StatusBadRequest, fmt.Errorf("specify a move (before/after) or an edit (name/dir), not both"))
+		s.fail(w, http.StatusBadRequest, fmt.Errorf("specify a move (before/after) or an edit (name/dir/theme), not both"))
 	case isMove:
 		if err := s.Move(name, strings.TrimSpace(req.Before), strings.TrimSpace(req.After)); err != nil {
 			s.failErr(w, err)
@@ -668,14 +694,26 @@ func (s *Server) handlePatchProject(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		if err := s.Edit(name, newName, newDir); err != nil {
+		var theme *string
+		if req.Theme != nil {
+			t := strings.TrimSpace(*req.Theme)
+			theme = &t
+		}
+		if err := s.Edit(name, newName, newDir, theme); err != nil {
 			s.failErr(w, err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
 	default:
-		s.fail(w, http.StatusBadRequest, fmt.Errorf("empty patch: specify before/after or name/dir"))
+		s.fail(w, http.StatusBadRequest, fmt.Errorf("empty patch: specify before/after, or name/dir/theme"))
 	}
+}
+
+// handleThemes lists the themes that exist, for the picker to offer. The names
+// come from the theme files themselves (see internal/theme), so one the reader
+// drops in appears here without any change in code.
+func (s *Server) handleThemes(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string][]string{"themes": s.themes.List()})
 }
 
 // handleReload re-reads projects.yaml and reconciles the registry to it (see

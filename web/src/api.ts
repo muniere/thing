@@ -39,6 +39,9 @@ export interface ProjectInfo {
   name: string;
   title: string;
   dir: string;
+  // The theme this project's board renders in, absent when it selects none (so
+  // the registry-wide default applies).
+  theme?: string;
 }
 
 // ArchiveEntry is one shelved subtree, as listed by GET /archives. `ref` is its
@@ -104,6 +107,20 @@ export function editProject(name: string, changes: { name?: string; dir?: string
 // the data directory is left on disk.
 export function unregisterProject(name: string): Promise<void> {
   return req<void>("DELETE", `/api/projects/${name}`);
+}
+
+// listThemes names the themes thingd can serve. They come from the theme files
+// themselves rather than from a list in code, so one dropped into the themes
+// directory shows up here without a rebuild.
+export function listThemes(): Promise<string[]> {
+  return req<{ themes: string[] }>("GET", "/api/themes").then((r) => r.themes);
+}
+
+// setProjectTheme changes the palette a project's board renders in, written back
+// to its projects.yaml entry. An empty theme clears the project's own choice,
+// falling back to the registry-wide default.
+export function setProjectTheme(name: string, theme: string): Promise<void> {
+  return req<void>("PATCH", `/api/projects/${name}`, { theme });
 }
 
 // moveProject reorders a project in the picker relative to an anchor project:
