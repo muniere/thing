@@ -139,11 +139,11 @@ func projectCount() int {
 	if err != nil {
 		return 0
 	}
-	projects, err := registry.Load(file)
+	reg, err := registry.Load(file)
 	if err != nil {
 		return 0
 	}
-	return len(projects)
+	return len(reg.Projects)
 }
 
 func newServerLogsCmd() *cobra.Command {

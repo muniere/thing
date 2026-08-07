@@ -22,6 +22,7 @@ import (
 	"time"
 
 	thing "github.com/muniere/thing"
+	"github.com/muniere/thing/internal/config"
 	"github.com/muniere/thing/internal/registry"
 	"github.com/muniere/thing/internal/server"
 	"github.com/muniere/thing/internal/store"
@@ -55,17 +56,24 @@ func run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "thingd: %v\n", err)
 		return 1
 	}
-	projects, err := registry.Load(regFile)
+	reg, err := registry.Load(regFile)
 	if err != nil {
 		fmt.Fprintf(stderr, "thingd: %v\n", err)
 		return 1
 	}
 
-	mounts := make([]server.Mount, 0, len(projects))
-	infos := make([]server.ProjectInfo, 0, len(projects))
-	for _, p := range projects {
-		mounts = append(mounts, server.Mount{Name: p.Name, Store: store.Open(p.Dir)})
+	mounts := make([]server.Mount, 0, len(reg.Projects))
+	infos := make([]server.ProjectInfo, 0, len(reg.Projects))
+	for _, p := range reg.Projects {
+		mounts = append(mounts, server.Mount{Name: p.Name, Store: store.Open(p.Dir), Filter: p.Filter})
 		infos = append(infos, server.ProjectInfo{Name: p.Name, Dir: p.Dir})
+		// A board's filter moved from the tree's config.yaml to its entry here.
+		// Loading ignores the old key, so say so rather than let a setting that
+		// used to work quietly stop.
+		for _, key := range config.StaleServerKeys(p.Dir) {
+			fmt.Fprintf(stderr, "thingd: %s/%s: %q is no longer read here; move it to %s's entry in %s\n",
+				p.Dir, config.FileName, key, p.Name, regFile)
+		}
 	}
 
 	// An explicit --port must be honored exactly; the default may hop to the
@@ -87,6 +95,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		Now:          func() string { return time.Now().Format("2006-01-02") },
 		Logger:       log.New(stderr, "", log.LstdFlags),
 		RegistryFile: regFile,
+		Defaults:     reg.Defaults,
 	})
 
 	// Watch every project's data dir so edits from the CLI or an editor live-reload

@@ -13,17 +13,7 @@ categories:
   - Project
   - Personal
 
-# Filter state the web board (thingd) starts from. The keys mirror the sidebar
-# facets; an omitted key means that facet is not filtered.
-#
-# thingd layers two files: the global config.yaml (THING_CONFIG_DIR, else
-# $XDG_CONFIG_HOME/thing, default ~/.config/thing) applies to every project, and
-# a project's own .thing/config.yaml overrides it key by key. Write `tag:` (an
-# explicit null) to drop an inherited value instead of inheriting it. Title and
-# categories are not layered — they still come from a single config.yaml.
-filter:
-  statuses: [todo, doing]
-  # priorities: [high]
-  # category: Project
-  # tag: wip
-  # query: api
+# Note: the web board's starting `filter` state is not configured here. It shapes
+# a thingd board rather than describing the tree, so it lives on the project's
+# entry in projects.yaml (with a top-level `defaults` block for every project).
+# See the README's Configuration section.

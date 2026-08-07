@@ -49,6 +49,9 @@ type Options struct {
 	Now      func() string // today's date stamp for write timestamps; defaults to time.Now
 	NowStamp func() string // RFC3339 instant for the archive time; defaults to time.Now
 	Logger   *log.Logger   // access log; nil disables it
+	// Defaults holds projects.yaml's top-level display settings, applied to every
+	// project that does not override them on its own entry.
+	Defaults *registry.Defaults
 	// RegistryFile is projects.yaml's path. Dynamic register/unregister write the
 	// updated registry back here so it survives a restart. Empty disables
 	// persistence (the in-memory registry still mutates) — used in tests.
@@ -60,15 +63,20 @@ type Options struct {
 type Mount struct {
 	Name  string
 	Store *store.Store
+	// Filter is the project's own filter block from projects.yaml, unresolved:
+	// the defaults are layered over it per request, so persisting the registry
+	// writes back the entry the file had rather than a copy of the defaults.
+	Filter *registry.Filter
 }
 
 // project is one mounted project: its store plus a dedicated SSE hub so a change
 // in one project reloads only that project's browsers, and its own lock so
 // mutations serialize per-project rather than across the whole server.
 type project struct {
-	name  string
-	store *store.Store
-	hub   *hub
+	name   string
+	store  *store.Store
+	hub    *hub
+	filter *registry.Filter
 	// mu serializes store access across concurrent HTTP requests. The store reads
 	// and writes the data dir directly, so without it two in-flight mutations (a
 	// double-submit, a second tab, two nodes racing on the same slug) could
@@ -97,6 +105,10 @@ type Server struct {
 	projects map[string]*project
 	order    []string // registration order, for the root picker
 	regFile  string   // projects.yaml path for persistence; "" disables it
+	// defaults holds projects.yaml's top-level display settings, applied to every
+	// project that does not override them on its own entry. Guarded by regmu, like
+	// the rest of the registry: Reload replaces it.
+	defaults *registry.Defaults
 	// watchCtx/watchInterval are captured by StartWatch so a project registered
 	// after boot can spin up its own watcher under the same lifetime. watchCtx is
 	// nil until StartWatch runs (so Register before watching just skips it).
@@ -125,11 +137,12 @@ func New(mounts []Mount, opts Options) *Server {
 		nowStamp: opts.NowStamp,
 		logger:   opts.Logger,
 		regFile:  opts.RegistryFile,
+		defaults: opts.Defaults,
 		projects: make(map[string]*project, len(mounts)),
 		bootID:   newBootID(),
 	}
 	for _, m := range mounts {
-		s.projects[m.Name] = &project{name: m.Name, store: m.Store, hub: newHub()}
+		s.projects[m.Name] = &project{name: m.Name, store: m.Store, hub: newHub(), filter: m.Filter}
 		s.order = append(s.order, m.Name)
 	}
 	mux := http.NewServeMux()
@@ -196,7 +209,7 @@ func (s *Server) Register(name, dir string) (p *project, created bool, err error
 		return nil, false, &httpError{http.StatusConflict, fmt.Errorf("project %q is already registered to a different directory", name)}
 	}
 
-	p = s.mountLocked(name, dir)
+	p = s.mountLocked(name, dir, nil)
 	if err := s.persistLocked(); err != nil {
 		s.unmountLocked(name) // undo the mount so disk and memory stay in step
 		return nil, false, &httpError{http.StatusInternalServerError, fmt.Errorf("persist registry: %w", err)}
@@ -259,10 +272,13 @@ func (s *Server) Reload() (*ReloadResult, error) {
 	defer s.regmu.Unlock()
 
 	res := &ReloadResult{Added: []string{}, Removed: []string{}, Repointed: []string{}, Skipped: []SkippedProject{}}
-	want := make(map[string]bool, len(desired))
-	for _, p := range desired {
+	want := make(map[string]bool, len(desired.Projects))
+	for _, p := range desired.Projects {
 		want[p.Name] = true
 	}
+	// The file is the source of truth for display settings too, so a reload picks
+	// up an edited filter block even when the mount itself is unchanged.
+	s.defaults = desired.Defaults
 
 	// Drop projects the file no longer lists. Snapshot the order first, since
 	// unmountLocked mutates it as it goes.
@@ -275,10 +291,11 @@ func (s *Server) Reload() (*ReloadResult, error) {
 
 	// Mount new entries and re-point changed ones. A bad directory is skipped and
 	// reported; an existing mount survives a file that now points it somewhere bad.
-	for _, p := range desired {
+	for _, p := range desired.Projects {
 		existing, mounted := s.projects[p.Name]
 		if mounted && filepath.Clean(existing.store.Root) == filepath.Clean(p.Dir) {
-			continue // unchanged
+			existing.filter = p.Filter
+			continue // same directory; only the display settings may have moved
 		}
 		if !isThingTree(p.Dir) {
 			res.Skipped = append(res.Skipped, SkippedProject{p.Name, fmt.Sprintf("%q is not a thing project (no %s)", p.Dir, config.FileName)})
@@ -289,10 +306,10 @@ func (s *Server) Reload() (*ReloadResult, error) {
 			// the mount so the refetch resolves the new directory under the same name.
 			existing.hub.broadcast()
 			s.unmountLocked(p.Name)
-			s.mountLocked(p.Name, p.Dir)
+			s.mountLocked(p.Name, p.Dir, p.Filter)
 			res.Repointed = append(res.Repointed, p.Name)
 		} else {
-			s.mountLocked(p.Name, p.Dir)
+			s.mountLocked(p.Name, p.Dir, p.Filter)
 			res.Added = append(res.Added, p.Name)
 		}
 	}
@@ -300,7 +317,7 @@ func (s *Server) Reload() (*ReloadResult, error) {
 	// Match the picker order to the file, keeping only names that ended up mounted
 	// (a skipped entry has no mount).
 	order := make([]string, 0, len(s.projects))
-	for _, p := range desired {
+	for _, p := range desired.Projects {
 		if _, ok := s.projects[p.Name]; ok {
 			order = append(order, p.Name)
 		}
@@ -442,9 +459,10 @@ func (s *Server) persistLocked() error {
 	}
 	list := make([]registry.Project, 0, len(s.order))
 	for _, name := range s.order {
-		list = append(list, registry.Project{Name: name, Dir: s.projects[name].store.Root})
+		p := s.projects[name]
+		list = append(list, registry.Project{Name: name, Dir: p.store.Root, Filter: p.filter})
 	}
-	return registry.Save(s.regFile, list)
+	return registry.Save(s.regFile, &registry.Registry{Defaults: s.defaults, Projects: list})
 }
 
 // isThingTree reports whether dir is an initialized thing tree — marked by a
@@ -458,8 +476,8 @@ func isThingTree(dir string) bool {
 // mountLocked adds a mount for name over dir and starts its watcher, returning
 // the new project. The caller holds regmu and has already validated name and dir;
 // it does not persist.
-func (s *Server) mountLocked(name, dir string) *project {
-	p := &project{name: name, store: store.Open(dir), hub: newHub()}
+func (s *Server) mountLocked(name, dir string, filter *registry.Filter) *project {
+	p := &project{name: name, store: store.Open(dir), hub: newHub(), filter: filter}
 	s.projects[name] = p
 	s.order = append(s.order, name)
 	s.startWatchLocked(p)
@@ -772,7 +790,7 @@ type filterRes struct {
 // newFilterRes converts a resolved filter to its wire form, returning nil when
 // nothing is filtered — including the case where every configured facet resolved
 // to empty, which is indistinguishable from no configuration at all.
-func newFilterRes(f *config.Filter) *filterRes {
+func newFilterRes(f *registry.Filter) *filterRes {
 	if f == nil {
 		return nil
 	}
@@ -790,27 +808,14 @@ func newFilterRes(f *config.Filter) *filterRes {
 	return res
 }
 
-// globalConfig loads the global config.yaml, whose filter block supplies defaults
-// for every project. THING_CONFIG_DIR overrides where it lives, matching the CLI's
-// env knob. An unresolvable home directory is not fatal: it just means no global
-// defaults.
-func globalConfig() (*config.Config, error) {
-	dir := os.Getenv("THING_CONFIG_DIR")
-	if dir == "" {
-		var err error
-		if dir, err = store.GlobalConfigDir(); err != nil {
-			return &config.Config{}, nil
-		}
-	}
-	return config.Load(dir)
-}
-
 // handleConfig serves the display config the web UI reads. The title comes from
 // config.yaml in the served data directory — the project-local .thing/ holds it
 // alongside the nodes — and a missing or title-less config yields the default
-// "thing", so the endpoint always returns a usable title. The filter defaults are
-// layered: the global config.yaml applies to every project, and the project's own
-// filter block overrides it key by key.
+// "thing", so the endpoint always returns a usable title.
+//
+// The filter comes from the other side of that split: it shapes a thingd board
+// rather than describing the tree, so it lives on the project's projects.yaml
+// entry, layered key by key over the registry-wide defaults.
 func (s *Server) handleConfig(p *project, w http.ResponseWriter, _ *http.Request) {
 	p.mu.RLock()
 	root := p.store.Root
@@ -820,17 +825,13 @@ func (s *Server) handleConfig(p *project, w http.ResponseWriter, _ *http.Request
 		s.fail(w, http.StatusInternalServerError, err)
 		return
 	}
-	global, err := globalConfig()
-	if err != nil {
-		// A broken global config.yaml fails this endpoint for every project, not
-		// just this one, and s.fail itself is silent — log so the failure is
-		// discoverable in the thingd terminal rather than only as an opaque 500.
-		if s.logger != nil {
-			s.logger.Printf("load global config: %v", err)
-		}
-		s.fail(w, http.StatusInternalServerError, err)
-		return
+	s.regmu.RLock()
+	var defaults *registry.Filter
+	if s.defaults != nil {
+		defaults = s.defaults.Filter
 	}
+	filter := registry.ResolveFilter(defaults, p.filter)
+	s.regmu.RUnlock()
 	title := cfg.Title
 	if title == "" {
 		title = "thing"
@@ -842,7 +843,7 @@ func (s *Server) handleConfig(p *project, w http.ResponseWriter, _ *http.Request
 	writeJSON(w, http.StatusOK, configRes{
 		Title:  title,
 		Dir:    dir,
-		Filter: newFilterRes(config.ResolveFilter(global, cfg)),
+		Filter: newFilterRes(filter),
 	})
 }
 
