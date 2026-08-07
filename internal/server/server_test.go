@@ -1090,7 +1090,7 @@ func TestEditRepointRestartsWatcher(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Register: %v", err)
 	}
-	if err := s.Edit("added", "", thingTreeDir(t)); err != nil {
+	if err := s.Edit("added", "", thingTreeDir(t), nil); err != nil {
 		t.Fatalf("Edit: %v", err)
 	}
 	s.regmu.RLock()
@@ -1246,9 +1246,102 @@ func TestConfigEndpointThemeUnset(t *testing.T) {
 	}
 }
 
+// The picker needs the names of the themes that exist to offer them, and they
+// come from the files rather than from a list in code.
+func TestThemeListEndpoint(t *testing.T) {
+	t.Setenv("THING_DATA_DIR", t.TempDir())
+	s := New([]Mount{{Name: "test", Store: fixture(t)}}, Options{
+		Themes: fstest.MapFS{"teal.css": {Data: []byte("/*teal*/")}, "amber.css": {Data: []byte("")}},
+		Now:    func() string { return "x" },
+	})
+	var got struct {
+		Themes []string `json:"themes"`
+	}
+	w := do(t, s, "GET", "/api/themes", "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("themes = %d, want 200", w.Code)
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !slices.Equal(got.Themes, []string{"amber", "teal"}) {
+		t.Errorf("themes = %v, want [amber teal]", got.Themes)
+	}
+}
+
+// The picker shows which theme each project is on, so the listing carries it.
+func TestListProjectsCarriesTheme(t *testing.T) {
+	s := New([]Mount{{Name: "test", Store: fixture(t), Theme: "teal"}, {Name: "plain", Store: fixture(t)}},
+		Options{Now: func() string { return "x" }})
+	var got []struct {
+		Name  string `json:"name"`
+		Theme string `json:"theme"`
+	}
+	if err := json.Unmarshal(do(t, s, "GET", "/api/projects", "").Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got) != 2 || got[0].Theme != "teal" {
+		t.Fatalf("projects = %+v, want test on teal", got)
+	}
+	if got[1].Theme != "" {
+		t.Errorf("plain theme = %q, want empty", got[1].Theme)
+	}
+}
+
+// Setting a theme from the picker writes it to the project's entry, so it
+// survives a restart.
+func TestPatchProjectTheme(t *testing.T) {
+	regFile := filepath.Join(t.TempDir(), "projects.yaml")
+	s := New([]Mount{{Name: "test", Store: fixture(t)}}, Options{
+		RegistryFile: regFile,
+		Now:          func() string { return "x" },
+	})
+	if w := do(t, s, "PATCH", "/api/projects/test", `{"theme":"teal"}`); w.Code != http.StatusNoContent {
+		t.Fatalf("set theme = %d, want 204; body=%s", w.Code, w.Body.String())
+	}
+	var cfg configRes
+	if err := json.Unmarshal(do(t, s, "GET", "/api/projects/test/config", "").Body.Bytes(), &cfg); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if cfg.Theme != "teal" {
+		t.Errorf("theme = %q, want teal", cfg.Theme)
+	}
+	reg, err := registry.Load(regFile)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if reg.Projects[0].Theme != "teal" {
+		t.Errorf("persisted theme = %q, want teal", reg.Projects[0].Theme)
+	}
+
+	// An empty theme clears the entry, falling back to the registry defaults.
+	if w := do(t, s, "PATCH", "/api/projects/test", `{"theme":""}`); w.Code != http.StatusNoContent {
+		t.Fatalf("clear theme = %d, want 204; body=%s", w.Code, w.Body.String())
+	}
+	reg, _ = registry.Load(regFile)
+	if reg.Projects[0].Theme != "" {
+		t.Errorf("persisted theme = %q, want it cleared", reg.Projects[0].Theme)
+	}
+}
+
+func TestPatchProjectThemeRejects(t *testing.T) {
+	s := newServer(t)
+	// An unsafe name must never reach a data-theme attribute or a URL.
+	if w := do(t, s, "PATCH", "/api/projects/test", `{"theme":"../evil"}`); w.Code != http.StatusBadRequest {
+		t.Errorf("unsafe theme = %d, want 400", w.Code)
+	}
+	// A theme is its own operation, not combinable with a move or an edit.
+	if w := do(t, s, "PATCH", "/api/projects/test", `{"theme":"teal","before":"other"}`); w.Code != http.StatusBadRequest {
+		t.Errorf("theme + move = %d, want 400", w.Code)
+	}
+	if w := do(t, s, "PATCH", "/api/projects/nope", `{"theme":"teal"}`); w.Code != http.StatusNotFound {
+		t.Errorf("unknown project = %d, want 404", w.Code)
+	}
+}
+
 // A rename or re-point rebuilds the mount, so it has to carry the project's
 // display settings across. Dropping them would silently reset a board's filter
-// on an unrelated edit.
+// and palette on an unrelated edit.
 func TestEditKeepsDisplaySettings(t *testing.T) {
 	regFile := filepath.Join(t.TempDir(), "projects.yaml")
 	s := New([]Mount{{Name: "test", Store: fixture(t), Theme: "teal", Filter: parseFilter(t, "tag: api\n")}},
@@ -1261,17 +1354,33 @@ func TestEditKeepsDisplaySettings(t *testing.T) {
 	if err := json.Unmarshal(do(t, s, "GET", "/api/projects/renamed/config", "").Body.Bytes(), &cfg); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if cfg.Filter == nil || cfg.Filter.Tag != "api" {
-		t.Errorf("filter after rename = %+v, want tag api", cfg.Filter)
-	}
 	if cfg.Theme != "teal" {
 		t.Errorf("theme after rename = %q, want teal", cfg.Theme)
+	}
+	if cfg.Filter == nil || cfg.Filter.Tag != "api" {
+		t.Errorf("filter after rename = %+v, want tag api", cfg.Filter)
 	}
 	reg, err := registry.Load(regFile)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if reg.Projects[0].Filter == nil || reg.Projects[0].Theme != "teal" {
-		t.Errorf("persisted = %+v, want the filter and theme kept", reg.Projects[0])
+	if reg.Projects[0].Theme != "teal" || reg.Projects[0].Filter == nil {
+		t.Errorf("persisted = %+v, want the theme and filter kept", reg.Projects[0])
+	}
+}
+
+// The theme rides along with a rename in one request, so the edit dialog can save
+// everything it shows at once.
+func TestEditNameAndTheme(t *testing.T) {
+	s := New([]Mount{{Name: "test", Store: fixture(t)}}, Options{Now: func() string { return "x" }})
+	if w := do(t, s, "PATCH", "/api/projects/test", `{"name":"renamed","theme":"violet"}`); w.Code != http.StatusNoContent {
+		t.Fatalf("edit = %d, want 204; body=%s", w.Code, w.Body.String())
+	}
+	var cfg configRes
+	if err := json.Unmarshal(do(t, s, "GET", "/api/projects/renamed/config", "").Body.Bytes(), &cfg); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if cfg.Theme != "violet" {
+		t.Errorf("theme = %q, want violet", cfg.Theme)
 	}
 }

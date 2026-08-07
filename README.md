@@ -79,6 +79,11 @@ projects:
     theme: teal   # amber (default), teal, violet, slate, crimson, forest
 ```
 
+The root picker's **Edit** dialog offers the same choice, writing it back to
+`projects.yaml`; the open board recolors itself over SSE without a reload. The
+list it offers comes from the theme files themselves, so one you add appears
+there too.
+
 A theme is one stylesheet, served at `/themes/<name>.css`, that redefines the
 design tokens under `:root[data-theme="<name>"]`. **Adding one is adding a
 file** — nothing in `thingd` or the frontend enumerates the names that exist, so
@@ -173,7 +178,7 @@ a single `PATCH` body rather than as a path suffix.
 ```
 GET    /api/projects                       registered projects (name, title, dir)
 PUT    /api/projects/<p>                    register project <p> over {dir} (an existing thing tree); idempotent
-PATCH  /api/projects/<p>                    reorder <p>: {before|after:"<name>"} (relative to an anchor project)
+PATCH  /api/projects/<p>                    reorder <p>: {before|after:"<name>"}, or edit it: {name|dir|theme}
 DELETE /api/projects/<p>                    unregister <p> (leaves its data dir on disk)
 GET    /api/projects/<p>/tree              whole tree as JSON (each node carries its ref)
 POST   /api/projects/<p>/nodes/<parent>    create a child; the parent decides the type
@@ -184,6 +189,7 @@ GET    /api/projects/<p>/archives/<name>   one archived entry's detail (from, st
 PATCH  /api/projects/<p>/archives/<name>   restore _archives/<name> to where it came from, or {to:"<ref>"}
 GET    /api/projects/<p>/events            Server-Sent Events reload stream (per project)
 GET    /api/projects/<p>/config            display config (title, dir, filter defaults, theme)
+GET    /api/themes                         the theme names that exist, for the picker to offer
 GET    /themes/<name>.css                  one theme's stylesheet, layered over the reader's own
 ```
 

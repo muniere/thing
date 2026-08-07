@@ -25,8 +25,9 @@ changes**. To warm up the built-in teal without redefining it:
 ```
 
 A name the built-in set does not define is a theme of its own — drop
-`~/.local/state/thingd/themes/ocean.css` in place, write `theme: ocean` on a
-project's entry in `projects.yaml`, and reload.
+`~/.local/state/thingd/themes/ocean.css` in place and it becomes a choice: write
+`theme: ocean` on a project's entry in `projects.yaml`, or pick it in the root
+picker's Edit dialog, which lists whatever these directories hold.
 
 ## Writing one
 

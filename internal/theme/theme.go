@@ -19,6 +19,8 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
+	"strings"
 
 	"github.com/muniere/thing/internal/registry"
 )
@@ -76,4 +78,53 @@ func Dir() (string, error) {
 		return "", err
 	}
 	return filepath.Join(dir, "themes"), nil
+}
+
+// List returns the names of every theme either layer defines, sorted and
+// deduplicated. It exists so a picker can offer themes without a list of names
+// living in code: the answer comes from the files themselves, so one dropped into
+// the reader's directory becomes a choice with no change here.
+//
+// Names that Read would refuse are left out — offering a theme that cannot
+// resolve would be worse than not offering it.
+func (l Loader) List() []string {
+	seen := make(map[string]bool)
+	add := func(entries []string) {
+		for _, e := range entries {
+			n, ok := strings.CutSuffix(e, ".css")
+			if ok && name.MatchString(n) {
+				seen[n] = true
+			}
+		}
+	}
+	if l.Builtin != nil {
+		if entries, err := fs.ReadDir(l.Builtin, "."); err == nil {
+			add(names(entries))
+		}
+	}
+	if dir, err := Dir(); err == nil {
+		if entries, err := os.ReadDir(dir); err == nil {
+			add(names(entries))
+		}
+	}
+	out := make([]string, 0, len(seen))
+	for n := range seen {
+		out = append(out, n)
+	}
+	slices.Sort(out)
+	return out
+}
+
+// names reduces directory entries to the file names among them.
+func names[E interface {
+	Name() string
+	IsDir() bool
+}](entries []E) []string {
+	out := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if !e.IsDir() {
+			out = append(out, e.Name())
+		}
+	}
+	return out
 }

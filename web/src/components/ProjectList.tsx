@@ -1,5 +1,5 @@
 import { type DragEvent, type MouseEvent, useCallback, useEffect, useState } from "react";
-import { editProject, listProjects, moveProject, type ProjectInfo, registerProject, reloadProjects, unregisterProject } from "../api.ts";
+import { editProject, listProjects, listThemes, moveProject, type ProjectInfo, registerProject, reloadProjects, unregisterProject } from "../api.ts";
 import { isPlainClick } from "../util.ts";
 import { Dialog } from "./Dialog.tsx";
 import s from "./ProjectList.module.css";
@@ -27,6 +27,10 @@ export function ProjectList({ onOpen }: Props) {
   const [menuFor, setMenuFor] = useState<string | null>(null);
   // The project whose edit dialog is open, or null when none is.
   const [editing, setEditing] = useState<ProjectInfo | null>(null);
+  // The themes thingd can serve, offered in the edit dialog. Empty until the
+  // fetch lands, and left empty if it fails — the dialog then omits the field
+  // rather than the picker failing over a cosmetic setting.
+  const [themes, setThemes] = useState<string[]>([]);
 
   const load = useCallback(() => {
     listProjects()
@@ -40,6 +44,9 @@ export function ProjectList({ onOpen }: Props) {
   useEffect(() => {
     document.title = "thing";
     load();
+    listThemes()
+      .then(setThemes)
+      .catch((e) => console.warn("GET /api/themes failed; the theme field is hidden", e));
   }, [load]);
 
   // Close the open kebab menu on any outside click or Escape.
@@ -254,6 +261,7 @@ export function ProjectList({ onOpen }: Props) {
       {editing && (
         <EditProject
           project={editing}
+          themes={themes}
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);
@@ -352,8 +360,10 @@ function AddProject({ onAdded, onError }: AddProps) {
 }
 
 interface EditProps {
-  // The project being edited; its name and dir seed the form.
+  // The project being edited; its name, dir, and theme seed the form.
   project: ProjectInfo;
+  // The themes available to choose from. Empty hides the field.
+  themes: string[];
   // Reload the list after a successful edit.
   onSaved: () => void;
   // Surface an edit error in the page-level banner.
@@ -366,18 +376,22 @@ interface EditProps {
 // and data directory, mirroring AddProject's form but seeded with the current
 // values. It sends only the fields that changed, so a rename that leaves the
 // directory alone does not also re-point it (and vice versa).
-function EditProject({ project, onSaved, onError, onClose }: EditProps) {
+function EditProject({ project, themes, onSaved, onError, onClose }: EditProps) {
   const [name, setName] = useState(project.name);
   const [dir, setDir] = useState(project.dir);
+  const [theme, setTheme] = useState(project.theme ?? "");
 
   const submit = async () => {
     const n = name.trim();
     const d = dir.trim();
     if (!n || !d) return;
-    const changes: { name?: string; dir?: string } = {};
+    const changes: { name?: string; dir?: string; theme?: string } = {};
     if (n !== project.name) changes.name = n;
     if (d !== project.dir) changes.dir = d;
-    if (!changes.name && !changes.dir) {
+    // "" is a real value here — it clears the project's own theme — so this
+    // compares against the current one rather than testing for emptiness.
+    if (theme !== (project.theme ?? "")) changes.theme = theme;
+    if (!changes.name && !changes.dir && changes.theme === undefined) {
       onClose(); // nothing changed
       return;
     }
@@ -416,6 +430,19 @@ function EditProject({ project, onSaved, onError, onClose }: EditProps) {
           }}
         />
       </label>
+      {themes.length > 0 && (
+        <label className={s.field}>
+          <span className={s.fieldLabel}>Theme</span>
+          <select className={s.select} value={theme} onChange={(e) => setTheme(e.target.value)}>
+            <option value="">Default</option>
+            {themes.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <div className={s.actions}>
         <button type="button" className={`${s.btn} ${s.btnAmber}`} onClick={submit} disabled={!name.trim() || !dir.trim()}>
           Save
