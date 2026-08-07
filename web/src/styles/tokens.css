@@ -1,7 +1,12 @@
 /* Design tokens: the warm dark amber palette, type, and radius every component
    reads through var(). Global on purpose — this is the shared theme layer, not a
    component. Ported from the tray web frontend (status-colored rails and dots,
-   mono accents, a 3-pane layout). */
+   mono accents, a 3-pane layout).
+
+   amber is the default palette and lives here as the bare :root. A project can
+   select another one through config.yaml; each of those is a stylesheet thingd
+   serves at /themes/<name>.css, keyed off html[data-theme] and derived from the
+   values below. See web/themes/README.md. */
 :root {
   color-scheme: dark light;
   --bg: #17130d;
