@@ -438,7 +438,10 @@ func (s *Server) Edit(name, newName, newDir string) error {
 		p.cancelWatch = nil
 	}
 	delete(s.projects, name)
-	np := &project{name: newName, store: store.Open(dir), hub: newHub()}
+	// The new mount inherits the display settings the old one carried: a rename or
+	// a re-point says nothing about how the board should look, and rebuilding
+	// without them silently reset the project's filter.
+	np := &project{name: newName, store: store.Open(dir), hub: newHub(), filter: p.filter, theme: p.theme}
 	s.projects[newName] = np
 	s.startWatchLocked(np)
 	for i, n := range s.order {

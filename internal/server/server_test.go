@@ -1245,3 +1245,33 @@ func TestConfigEndpointThemeUnset(t *testing.T) {
 		t.Errorf("body = %s, want no theme key", body)
 	}
 }
+
+// A rename or re-point rebuilds the mount, so it has to carry the project's
+// display settings across. Dropping them would silently reset a board's filter
+// on an unrelated edit.
+func TestEditKeepsDisplaySettings(t *testing.T) {
+	regFile := filepath.Join(t.TempDir(), "projects.yaml")
+	s := New([]Mount{{Name: "test", Store: fixture(t), Theme: "teal", Filter: parseFilter(t, "tag: api\n")}},
+		Options{RegistryFile: regFile, Now: func() string { return "x" }})
+
+	if w := do(t, s, "PATCH", "/api/projects/test", `{"name":"renamed"}`); w.Code != http.StatusNoContent {
+		t.Fatalf("rename = %d, want 204; body=%s", w.Code, w.Body.String())
+	}
+	var cfg configRes
+	if err := json.Unmarshal(do(t, s, "GET", "/api/projects/renamed/config", "").Body.Bytes(), &cfg); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if cfg.Filter == nil || cfg.Filter.Tag != "api" {
+		t.Errorf("filter after rename = %+v, want tag api", cfg.Filter)
+	}
+	if cfg.Theme != "teal" {
+		t.Errorf("theme after rename = %q, want teal", cfg.Theme)
+	}
+	reg, err := registry.Load(regFile)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if reg.Projects[0].Filter == nil || reg.Projects[0].Theme != "teal" {
+		t.Errorf("persisted = %+v, want the filter and theme kept", reg.Projects[0])
+	}
+}
