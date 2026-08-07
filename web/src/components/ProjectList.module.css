@@ -269,15 +269,6 @@
 .topbarAdd {
   margin-left: auto;
 }
-.hint {
-  margin: 0;
-  font-size: 0.76rem;
-  color: var(--ink-3);
-}
-.hint code {
-  font-family: var(--mono);
-  color: var(--ink-2);
-}
 .actions {
   display: flex;
   align-items: center;
@@ -338,4 +329,29 @@
   outline: none;
   border-color: var(--amber);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--amber) 18%, transparent);
+}
+
+/* One labelled row in the add/edit dialogs: a real <label> wrapping its control,
+   so the name of a field survives typing into it and is announced as its label.
+   A placeholder is an example of a value, not a substitute for saying what the
+   field is. */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.fieldLabel {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  color: var(--ink-3);
+}
+.fieldHint {
+  font-size: 0.74rem;
+  color: var(--ink-3);
+}
+.fieldHint code {
+  font-family: var(--mono);
+  color: var(--ink-2);
 }
