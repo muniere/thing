@@ -668,6 +668,66 @@ func TestRegisterConflictOnDifferentDir(t *testing.T) {
 	}
 }
 
+// A project can be registered onto a theme in one request, so the picker's form
+// offers the same fields whether it is adding a project or editing one.
+func TestRegisterWithTheme(t *testing.T) {
+	regFile := filepath.Join(t.TempDir(), "projects.yaml")
+	s := New(nil, Options{RegistryFile: regFile, Now: func() string { return "x" }})
+	dir := thingTreeDir(t)
+	if w := do(t, s, "PUT", "/api/projects/added", `{"dir":"`+dir+`","theme":"teal"}`); w.Code != http.StatusCreated {
+		t.Fatalf("PUT = %d, want 201; body=%s", w.Code, w.Body.String())
+	}
+	reg, err := registry.Load(regFile)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if reg.Projects[0].Theme != "teal" {
+		t.Errorf("persisted theme = %q, want teal", reg.Projects[0].Theme)
+	}
+
+	// A repeat of the same mount carrying a different theme is still idempotent on
+	// the mount (200, not 201) but applies the theme: a value that was sent and
+	// then ignored would be a lie.
+	if w := do(t, s, "PUT", "/api/projects/added", `{"dir":"`+dir+`","theme":"amber"}`); w.Code != http.StatusOK {
+		t.Fatalf("recoloring PUT = %d, want 200; body=%s", w.Code, w.Body.String())
+	}
+	reg, _ = registry.Load(regFile)
+	if reg.Projects[0].Theme != "amber" {
+		t.Errorf("persisted theme = %q, want amber", reg.Projects[0].Theme)
+	}
+
+	// An omitted theme leaves the project's own alone, rather than reading as a
+	// request to clear it — the field is a pointer for exactly this distinction.
+	if w := do(t, s, "PUT", "/api/projects/added", `{"dir":"`+dir+`"}`); w.Code != http.StatusOK {
+		t.Fatalf("themeless PUT = %d, want 200; body=%s", w.Code, w.Body.String())
+	}
+	reg, _ = registry.Load(regFile)
+	if reg.Projects[0].Theme != "amber" {
+		t.Errorf("persisted theme = %q, want it left at amber", reg.Projects[0].Theme)
+	}
+
+	// An explicit empty one does clear it.
+	if w := do(t, s, "PUT", "/api/projects/added", `{"dir":"`+dir+`","theme":""}`); w.Code != http.StatusOK {
+		t.Fatalf("clearing PUT = %d, want 200; body=%s", w.Code, w.Body.String())
+	}
+	reg, _ = registry.Load(regFile)
+	if reg.Projects[0].Theme != "" {
+		t.Errorf("persisted theme = %q, want it cleared", reg.Projects[0].Theme)
+	}
+}
+
+func TestRegisterRejectsBadTheme(t *testing.T) {
+	s := newServer(t)
+	// An unsafe name must never reach a data-theme attribute or a URL, on this
+	// path as much as on the patch one. The project must not be mounted either.
+	if w := do(t, s, "PUT", "/api/projects/added", `{"dir":"`+thingTreeDir(t)+`","theme":"../evil"}`); w.Code != http.StatusBadRequest {
+		t.Fatalf("unsafe theme = %d, want 400; body=%s", w.Code, w.Body.String())
+	}
+	if s.project("added") != nil {
+		t.Error("a rejected theme should leave the server untouched")
+	}
+}
+
 func TestRegisterRejectsBadName(t *testing.T) {
 	s := newServer(t)
 	// A non-slug name in the path (uppercase) is rejected.
@@ -1086,7 +1146,7 @@ func TestEditRepointRestartsWatcher(t *testing.T) {
 		return s.watchCtx != nil
 	})
 
-	old, _, err := s.Register("added", thingTreeDir(t))
+	old, _, err := s.Register("added", thingTreeDir(t), nil)
 	if err != nil {
 		t.Fatalf("Register: %v", err)
 	}
@@ -1117,7 +1177,7 @@ func TestRegisterStartsWatcherUnregisterStops(t *testing.T) {
 	})
 
 	dir := thingTreeDir(t)
-	p, _, err := s.Register("added", dir)
+	p, _, err := s.Register("added", dir, nil)
 	if err != nil {
 		t.Fatalf("Register: %v", err)
 	}

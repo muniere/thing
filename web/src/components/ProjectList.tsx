@@ -1,10 +1,9 @@
 import { type DragEvent, type MouseEvent, useCallback, useEffect, useState } from "react";
-import { editProject, listProjects, listThemes, moveProject, type ProjectInfo, registerProject, reloadProjects, type Scheme, unregisterProject } from "../api.ts";
+import { listProjects, listThemes, moveProject, type ProjectInfo, reloadProjects, type Scheme, unregisterProject } from "../api.ts";
 import { isPlainClick } from "../util.ts";
-import { Dialog } from "./Dialog.tsx";
-import { ThemePreview } from "./ThemePreview.tsx";
+import { ProjectFormDialog } from "./ProjectFormDialog.tsx";
 import { SchemeToggle } from "./SchemeToggle.tsx";
-import { loadThemeMarks, loadThemesForPreview } from "../theme.ts";
+import { loadThemeMarks } from "../theme.ts";
 import s from "./ProjectList.module.css";
 
 // DropHint marks where a dragged card would land: before or after another card.
@@ -24,16 +23,19 @@ interface Props {
 // ProjectList is the root picker shown at "/": a card per registered project,
 // linking into /<name>. Each card is a real <a> so a modified/middle click opens
 // the project in a new tab; a plain click is handled in-app via onOpen. Projects
-// can also be registered (from an existing thing tree) and unregistered here,
-// which writes back to projects.yaml on the server.
+// can also be registered (from an existing thing tree), edited, and unregistered
+// here, which writes back to projects.yaml on the server. Registering and editing
+// share one ProjectFormDialog — the same fields either way — which this component
+// mounts only while it is open, so its draft state resets between openings.
 export function ProjectList({ onOpen, scheme, onScheme }: Props) {
   const [projects, setProjects] = useState<ProjectInfo[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Which row's kebab menu is open, by project name; null when none is.
   const [menuFor, setMenuFor] = useState<string | null>(null);
-  // The project whose edit dialog is open, or null when none is.
-  const [editing, setEditing] = useState<ProjectInfo | null>(null);
-  // The themes thingd can serve, offered in the edit dialog. Empty until the
+  // The open form dialog, or null when none is. A wrapper object rather than the
+  // project itself, so "adding" (no project) stays distinct from "closed".
+  const [form, setForm] = useState<{ project?: ProjectInfo } | null>(null);
+  // The themes thingd can serve, offered in the form dialog. Empty until the
   // fetch lands, and left empty if it fails — the dialog then omits the field
   // rather than the picker failing over a cosmetic setting.
   const [themes, setThemes] = useState<string[]>([]);
@@ -154,7 +156,11 @@ export function ProjectList({ onOpen, scheme, onScheme }: Props) {
         </span>
         {projects && (
           <div className={s.topbarAdd}>
-            <AddProject onAdded={load} onError={setError} />
+            {/* Mirrors the in-project "+ Epic": a button that opens the form as a
+                modal, rather than a bare field in the bar. */}
+            <button type="button" className={`${s.btn} ${s.btnAmber}`} onClick={() => setForm({})}>
+              + Project
+            </button>
           </div>
         )}
       </header>
@@ -254,7 +260,7 @@ export function ProjectList({ onOpen, scheme, onScheme }: Props) {
                       className={s.menuItem}
                       onClick={() => {
                         setMenuFor(null);
-                        setEditing(p);
+                        setForm({ project: p });
                       }}
                     >
                       Edit
@@ -277,228 +283,21 @@ export function ProjectList({ onOpen, scheme, onScheme }: Props) {
 
       </div>
 
-      {editing && (
-        <EditProject
-          project={editing}
+      {form && (
+        <ProjectFormDialog
+          project={form.project}
           themes={themes}
-          onClose={() => setEditing(null)}
+          onClose={() => setForm(null)}
           onSaved={() => {
-            setEditing(null);
+            setForm(null);
             load();
           }}
           onError={(m) => {
-            setEditing(null);
+            setForm(null);
             setError(m);
           }}
         />
       )}
     </div>
-  );
-}
-
-interface AddProps {
-  // Reload the list after a successful registration.
-  onAdded: () => void;
-  // Surface a registration error in the page-level banner.
-  onError: (message: string) => void;
-}
-
-// AddProject is the top-bar "+ Project" action, mirroring the in-project "+ Epic":
-// a button that drops a floating register form (a URL-safe name and the path to
-// an existing thing tree). The server only mounts an already-initialized tree, so
-// the hint points at `thing init` for new ones.
-function AddProject({ onAdded, onError }: AddProps) {
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [dir, setDir] = useState("");
-
-  const close = () => {
-    setOpen(false);
-    setName("");
-    setDir("");
-  };
-
-  const submit = async () => {
-    const n = name.trim();
-    const d = dir.trim();
-    if (!n || !d) return;
-    try {
-      await registerProject(n, d);
-      close();
-      onAdded();
-    } catch (err) {
-      onError(err instanceof Error ? err.message : String(err));
-    }
-  };
-
-  return (
-    <>
-      <button type="button" className={`${s.btn} ${s.btnAmber}`} onClick={() => setOpen(true)}>
-        + Project
-      </button>
-      <Dialog open={open} onClose={close} title="Add project">
-        <label className={s.field}>
-          <span className={s.fieldLabel}>Name</span>
-          <input
-            className={s.input}
-            autoFocus
-            placeholder="my-project"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <span className={s.fieldHint}>
-            Lower-case letters, digits, and dashes. It becomes the project's URL.
-          </span>
-        </label>
-        <label className={s.field}>
-          <span className={s.fieldLabel}>Data directory</span>
-          <input
-            className={s.input}
-            placeholder="/path/to/project/.thing"
-            value={dir}
-            onChange={(e) => setDir(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") submit();
-            }}
-          />
-          <span className={s.fieldHint}>
-            Must already be a thing tree. Create one with <code>thing init</code> first.
-          </span>
-        </label>
-        <div className={s.actions}>
-          <button type="button" className={`${s.btn} ${s.btnAmber}`} onClick={submit} disabled={!name.trim() || !dir.trim()}>
-            Add
-          </button>
-          <button type="button" className={s.btnLink} onClick={close}>
-            Cancel
-          </button>
-        </div>
-      </Dialog>
-    </>
-  );
-}
-
-interface EditProps {
-  // The project being edited; its name, dir, and theme seed the form.
-  project: ProjectInfo;
-  // The themes available to choose from. Empty hides the field.
-  themes: string[];
-  // Reload the list after a successful edit.
-  onSaved: () => void;
-  // Surface an edit error in the page-level banner.
-  onError: (message: string) => void;
-  // Dismiss the dialog without saving.
-  onClose: () => void;
-}
-
-// EditProject is the kebab "Edit" dialog: it edits a registered project's name
-// and data directory, mirroring AddProject's form but seeded with the current
-// values. It sends only the fields that changed, so a rename that leaves the
-// directory alone does not also re-point it (and vice versa).
-function EditProject({ project, themes, onSaved, onError, onClose }: EditProps) {
-  const [name, setName] = useState(project.name);
-  const [dir, setDir] = useState(project.dir);
-  const [theme, setTheme] = useState(project.theme ?? "");
-
-  // Every theme the list offers is loaded, not just the selected one: each row
-  // shows its own color, and the miniature needs the selection. Dropped on
-  // unmount so a closed dialog leaves no stylesheets behind.
-  useEffect(() => {
-    loadThemesForPreview(themes);
-    return () => loadThemesForPreview([]);
-  }, [themes]);
-
-  const submit = async () => {
-    const n = name.trim();
-    const d = dir.trim();
-    if (!n || !d) return;
-    const changes: { name?: string; dir?: string; theme?: string } = {};
-    if (n !== project.name) changes.name = n;
-    if (d !== project.dir) changes.dir = d;
-    // "" is a real value here — it clears the project's own theme — so this
-    // compares against the current one rather than testing for emptiness.
-    if (theme !== (project.theme ?? "")) changes.theme = theme;
-    if (!changes.name && !changes.dir && changes.theme === undefined) {
-      onClose(); // nothing changed
-      return;
-    }
-    try {
-      await editProject(project.name, changes);
-      onSaved();
-    } catch (err) {
-      onError(err instanceof Error ? err.message : String(err));
-    }
-  };
-
-  return (
-    <Dialog open onClose={onClose} title="Edit project" size="wide">
-      <label className={s.field}>
-        <span className={s.fieldLabel}>Name</span>
-        <input
-          className={s.input}
-          autoFocus
-          placeholder="my-project"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <span className={s.fieldHint}>
-          Renaming changes the project's URL (<code>/{(name.trim() || project.name)}</code>).
-        </span>
-      </label>
-      <label className={s.field}>
-        <span className={s.fieldLabel}>Data directory</span>
-        <input
-          className={s.input}
-          placeholder="/path/to/project/.thing"
-          value={dir}
-          onChange={(e) => setDir(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") submit();
-          }}
-        />
-      </label>
-      {themes.length > 0 && (
-        <div className={s.field}>
-          <span className={s.fieldLabel} id="theme-label">Theme</span>
-          {/* List beside preview rather than a select above it: choosing a theme
-              is comparing them, and a dropdown hides the alternatives behind a
-              click each time. Native radios carry the group semantics and
-              arrow-key navigation; the input itself is hidden, the row is the
-              control. */}
-          <div className={s.themeChooser}>
-            <div className={s.themeList} role="radiogroup" aria-labelledby="theme-label">
-              {["", ...themes].map((t) => (
-                <label key={t || "default"} className={s.themeOption} data-selected={theme === t || undefined}>
-                  <input
-                    type="radio"
-                    name="theme"
-                    className={s.themeRadio}
-                    value={t}
-                    checked={theme === t}
-                    onChange={() => setTheme(t)}
-                  />
-                  {/* The dot carries the theme it names, so the list is scannable
-                      by color and not only by name. */}
-                  <span className={s.mark} data-theme={t || undefined} aria-hidden="true" />
-                  {/* Lowercase like the theme names it sits among: it names the
-                      same kind of thing, and a lone capital reads as a different
-                      kind of entry. */}
-                  <span className={s.themeName}>{t || "default"}</span>
-                </label>
-              ))}
-            </div>
-            <ThemePreview theme={theme} />
-          </div>
-        </div>
-      )}
-      <div className={s.actions}>
-        <button type="button" className={`${s.btn} ${s.btnAmber}`} onClick={submit} disabled={!name.trim() || !dir.trim()}>
-          Save
-        </button>
-        <button type="button" className={s.btnLink} onClick={onClose}>
-          Cancel
-        </button>
-      </div>
-    </Dialog>
   );
 }

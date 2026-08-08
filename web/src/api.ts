@@ -88,11 +88,17 @@ export function reloadProjects(): Promise<ReloadResult> {
   return req<ReloadResult>("POST", "/api/projects/reload");
 }
 
-// registerProject mounts a project at name over an existing thing tree at dir.
-// The name is the resource URI, so this is a PUT; it is idempotent for the same
-// name+dir and rejects a name already bound to a different dir.
-export function registerProject(name: string, dir: string): Promise<{ name: string; dir: string }> {
-  return req<{ name: string; dir: string }>("PUT", `/api/projects/${name}`, { dir });
+// registerProject mounts a project at name over an existing thing tree at dir,
+// optionally onto a theme. The name is the resource URI, so this is a PUT; it is
+// idempotent for the same name+dir and rejects a name already bound to a
+// different dir. An omitted theme leaves an already-registered project's own
+// alone, while an empty one clears it — the same distinction editProject draws.
+export function registerProject(
+  name: string,
+  dir: string,
+  theme?: string,
+): Promise<{ name: string; dir: string }> {
+  return req<{ name: string; dir: string }>("PUT", `/api/projects/${name}`, { dir, theme });
 }
 
 // editProject renames a project, re-points its data directory, and/or recolors

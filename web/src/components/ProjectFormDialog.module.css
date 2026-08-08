@@ -1,0 +1,159 @@
+/* One labelled row in the form: a real <label> wrapping its control, so the name
+   of a field survives typing into it and is announced as its label. A placeholder
+   is an example of a value, not a substitute for saying what the field is. */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.fieldLabel {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  color: var(--ink-3);
+}
+.fieldHint {
+  font-size: 0.74rem;
+  color: var(--ink-3);
+}
+.fieldHint code {
+  font-family: var(--mono);
+  color: var(--ink-2);
+}
+
+.input {
+  width: 100%;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.85rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+}
+.input::placeholder {
+  color: var(--ink-3);
+}
+.input:focus {
+  outline: none;
+  border-color: var(--amber);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--amber) 18%, transparent);
+}
+
+/* Theme chooser: the list of choices beside a preview of the selected one, so
+   comparing them is a matter of moving down the list rather than reopening a
+   menu. The list takes a fixed column; the preview gets the rest and sizes
+   itself from that width. */
+/* Both halves are framed the same way, so they read as two panes of one control
+   rather than a list floating beside a boxed preview. Stretching them to a common
+   height keeps that reading when the list is shorter than the miniature. */
+.themeChooser {
+  display: flex;
+  align-items: stretch;
+  gap: 0.8rem;
+}
+.themeList {
+  flex: none;
+  width: 9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  overflow-y: auto;
+  padding: 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-top: 0.15rem;
+}
+.themeOption {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 7px;
+  cursor: pointer;
+  color: var(--ink-2);
+}
+.themeOption:hover {
+  background: var(--panel-2);
+}
+.themeOption[data-selected] {
+  background: color-mix(in srgb, var(--amber) 14%, var(--panel));
+  color: var(--ink);
+}
+/* The input carries the semantics and the keyboard behavior; the row is what is
+   seen. Kept focusable and in the layout rather than display:none, so arrow keys
+   still move through the group and the focus ring lands on the row. */
+.themeRadio {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  margin: 0;
+  pointer-events: none;
+}
+.themeOption:has(.themeRadio:focus-visible) {
+  outline: 2px solid var(--amber);
+  outline-offset: -2px;
+}
+.themeName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.85rem;
+}
+/* The same glowing dot the picker marks a project card with, so a theme is named
+   here by the color it will wear there. --amber resolves through the mark's own
+   data-theme. Carried per stylesheet rather than shared, the way the switcher's
+   menu carries its own. */
+.mark {
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--amber);
+  box-shadow: 0 0 9px var(--amber);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.btn {
+  cursor: pointer;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.82rem;
+  color: var(--ink);
+}
+.btn:hover {
+  border-color: var(--ink-3);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.btnAmber {
+  background: var(--amber);
+  border-color: transparent;
+  color: var(--bg);
+  font-weight: 600;
+}
+.btnAmber:hover {
+  filter: brightness(1.08);
+  border-color: transparent;
+}
+.btnLink {
+  background: none;
+  border: 0;
+  padding: 0.2rem 0.1rem;
+  font-size: 0.76rem;
+  color: var(--amber);
+  cursor: pointer;
+}
+.btnLink:hover {
+  text-decoration: underline;
+}
