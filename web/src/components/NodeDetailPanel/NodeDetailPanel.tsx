@@ -1,12 +1,12 @@
 import { type MouseEvent, useEffect, useRef, useState } from "react";
-import type { Node } from "../domain/generated.ts";
-import { Priority, Status, Type } from "../domain/generated.ts";
-import type { Api } from "../api.ts";
-import { renderMarkdown } from "../markdown.ts";
-import { flatten } from "../util.ts";
-import { AddForm } from "./AddForm.tsx";
-import { PriorityBadge } from "./PriorityBadge.tsx";
-import s from "./Detail.module.css";
+import type { Node } from "../../domain/generated.ts";
+import { Priority, Status, Type } from "../../domain/generated.ts";
+import type { Api } from "../../api.ts";
+import { renderMarkdown } from "../../markdown.ts";
+import { flatten } from "../../util.ts";
+import { NodeFormDialog } from "../NodeFormDialog/NodeFormDialog.tsx";
+import { PriorityBadge } from "../PriorityBadge/PriorityBadge.tsx";
+import s from "./NodeDetailPanel.module.css";
 
 interface Props {
   api: Api;
@@ -21,9 +21,10 @@ interface Props {
 const STATUSES = [Status.Todo, Status.Doing, Status.Done, Status.Paused];
 const PRIORITIES = [Priority.High, Priority.Medium, Priority.Low];
 
-// Detail is the full-edit pane for one node. It is remounted per selection (via
-// a key on the element), so its draft state resets cleanly when the node changes.
-export function Detail({ api, node, allNodes, run, onSelect, hrefFor, onNav }: Props) {
+// NodeDetailPanel is the full-edit surface for one node. It is remounted per
+// selection (via a key on the element), so its draft state resets cleanly when
+// the node changes.
+export function NodeDetailPanel({ api, node, allNodes, run, onSelect, hrefFor, onNav }: Props) {
   const isEpic = node.type === Type.Epic;
   // A parent (epic/issue) can roll its status up from its children, offered as an
   // "auto" choice in the status pulldown; a task's status is always its own.
@@ -239,7 +240,7 @@ export function Detail({ api, node, allNodes, run, onSelect, hrefFor, onNav }: P
             </ul>
           )}
           <div className={s.childAdd}>
-            <AddForm
+            <NodeFormDialog
               api={api}
               parent={node.ref}
               noun={isEpic ? "issue" : "task"}

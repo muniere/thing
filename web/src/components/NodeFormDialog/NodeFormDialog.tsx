@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Priority } from "../domain/generated.ts";
-import type { Api, CreateInput } from "../api.ts";
-import { Dialog } from "./Dialog.tsx";
-import s from "./AddForm.module.css";
+import { Priority } from "../../domain/generated.ts";
+import type { Api, CreateInput } from "../../api.ts";
+import { Dialog } from "../Dialog/Dialog.tsx";
+import s from "./NodeFormDialog.module.css";
 
 interface Props {
   // The per-project API client the create goes through.
@@ -24,12 +24,12 @@ interface Props {
 
 const PRIORITIES = [Priority.High, Priority.Medium, Priority.Low];
 
-// AddForm is a button that opens a modal create form, so a new node is entered
-// through a dialog rather than a bare title box. category is offered only for a
-// top-level epic (parent === ""), matching the server, which rejects a category
-// on anything else. Every field but the title is optional; on success the dialog
-// closes and the new node is activated.
-export function AddForm({ api, parent, noun, label, amber, block, run, onCreated }: Props) {
+// NodeFormDialog is a button that opens a modal create form, so a new node is
+// entered through a dialog rather than a bare title box. category is offered only
+// for a top-level epic (parent === ""), matching the server, which rejects a
+// category on anything else. Every field but the title is optional; on success
+// the dialog closes and the new node is activated.
+export function NodeFormDialog({ api, parent, noun, label, amber, block, run, onCreated }: Props) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState("");

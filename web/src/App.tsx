@@ -6,13 +6,13 @@ import { collectCategories, collectPriorityCounts, collectStatusCounts, collectT
 import { findNode, isPlainClick } from "./util.ts";
 import { applyTheme } from "./theme.ts";
 import { useTreeFold, useTreeNav } from "./tree.ts";
-import { Tree } from "./components/Tree.tsx";
-import { FilterBar } from "./components/FilterBar.tsx";
-import { Detail } from "./components/Detail.tsx";
-import { AddForm } from "./components/AddForm.tsx";
-import { ProjectSwitcher } from "./components/ProjectSwitcher.tsx";
-import { SchemeToggle } from "./components/SchemeToggle.tsx";
-import { ArchivedPanel } from "./components/ArchivedPanel.tsx";
+import { NodeChainList } from "./components/NodeChainList/NodeChainList.tsx";
+import { FilterForm } from "./components/FilterForm/FilterForm.tsx";
+import { NodeDetailPanel } from "./components/NodeDetailPanel/NodeDetailPanel.tsx";
+import { NodeFormDialog } from "./components/NodeFormDialog/NodeFormDialog.tsx";
+import { ProjectSwitcher } from "./components/ProjectSwitcher/ProjectSwitcher.tsx";
+import { SchemeMenu } from "./components/SchemeMenu/SchemeMenu.tsx";
+import { ArchiveList } from "./components/ArchiveList/ArchiveList.tsx";
 import s from "./App.module.css";
 
 interface Props {
@@ -165,7 +165,7 @@ export function App({ project, onSwitch, scheme, onScheme, onRefresh }: Props) {
   );
 
   // hrefFor is the URL a node's anchor points at: its ref as the path plus the
-  // current filters as the query. Tree rows, child rows, and the logo are real
+  // current filters as the query. NodeChainList rows, child rows, and the logo are real
   // <a> links so the URL is real (a ⌘/Ctrl/Shift/middle click opens the node in a
   // new tab, and the link is copyable), but a plain click is intercepted (see
   // onNav) and handled in-app rather than reloading the page.
@@ -246,17 +246,17 @@ export function App({ project, onSwitch, scheme, onScheme, onRefresh }: Props) {
           <ProjectSwitcher current={project} onSwitch={onSwitch} />
         </div>
         <div className={s.topbarAdd}>
-          <AddForm api={api} parent="" noun="Epic" amber run={run} onCreated={activate} />
+          <NodeFormDialog api={api} parent="" noun="Epic" amber run={run} onCreated={activate} />
         </div>
       </header>
       {/* Fixed to the viewport's corner, so it is a sibling of the panes rather
           than part of the bar's layout. */}
-      <SchemeToggle scheme={scheme} onChange={onScheme} />
+      <SchemeMenu scheme={scheme} onChange={onScheme} />
 
       {error && <div className={s.error} onClick={() => setError(null)}>{error}</div>}
 
       <div className={s.split}>
-        <FilterBar
+        <FilterForm
           filters={filters}
           defaults={defaults}
           categories={categories}
@@ -268,13 +268,13 @@ export function App({ project, onSwitch, scheme, onScheme, onRefresh }: Props) {
 
         <section className={s.treePane}>
           {dir && <div className={s.dir}>{dir}</div>}
-          <Tree nodes={filtered} activeRef={activeRef} hrefFor={hrefFor} onNav={onNav} expanded={fold.expanded} onToggle={fold.toggle} />
-          <ArchivedPanel api={api} entries={archived} run={run} />
+          <NodeChainList nodes={filtered} activeRef={activeRef} hrefFor={hrefFor} onNav={onNav} expanded={fold.expanded} onToggle={fold.toggle} />
+          <ArchiveList api={api} entries={archived} run={run} />
         </section>
 
         <section className={s.detailPane}>
           {activeNode ? (
-            <Detail key={activeNode.ref} api={api} node={activeNode} allNodes={tree} run={run} onSelect={activate} hrefFor={hrefFor} onNav={onNav} />
+            <NodeDetailPanel key={activeNode.ref} api={api} node={activeNode} allNodes={tree} run={run} onSelect={activate} hrefFor={hrefFor} onNav={onNav} />
           ) : (
             <p className={s.empty}>Select a node to view and edit it.</p>
           )}

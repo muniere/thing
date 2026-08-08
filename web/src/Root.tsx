@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { App } from "./App.tsx";
-import { ProjectList } from "./components/ProjectList.tsx";
+import { ProjectList } from "./components/ProjectList/ProjectList.tsx";
 import { type Scheme, setScheme as saveScheme, settings } from "./api.ts";
 import { applyScheme } from "./theme.ts";
 

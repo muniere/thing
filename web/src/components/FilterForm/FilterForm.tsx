@@ -1,8 +1,8 @@
-import { Priority, Status } from "../domain/generated.ts";
-import { filtersActive, filtersEqual, type Filters } from "../filter.ts";
-import { StatusBadge } from "./StatusBadge.tsx";
-import { PriorityBadge } from "./PriorityBadge.tsx";
-import s from "./FilterBar.module.css";
+import { Priority, Status } from "../../domain/generated.ts";
+import { filtersActive, filtersEqual, type Filters } from "../../filter.ts";
+import { StatusBadge } from "../StatusBadge/StatusBadge.tsx";
+import { PriorityBadge } from "../PriorityBadge/PriorityBadge.tsx";
+import s from "./FilterForm.module.css";
 
 interface Props {
   filters: Filters;
@@ -19,10 +19,11 @@ interface Props {
 const STATUSES = [Status.Todo, Status.Doing, Status.Done, Status.Paused];
 const PRIORITIES = [Priority.High, Priority.Medium, Priority.Low];
 
-// FilterBar is the left sidebar: a text search plus status and priority facet
-// toggles (each with a node count) and category/tag pulldowns. The status/priority
-// badges fill the facet row and read their accent from the badge components.
-export function FilterBar({ filters, defaults, categories, tags, statusCounts, priorityCounts, onChange }: Props) {
+// FilterForm is the board's filter controls: a text search plus status and
+// priority facet toggles (each with a node count) and category/tag pulldowns. The
+// board seats it in the left sidebar. The status/priority badges fill the facet
+// row and read their accent from the badge components.
+export function FilterForm({ filters, defaults, categories, tags, statusCounts, priorityCounts, onChange }: Props) {
   // toggleFacet flips one value in a multi-select facet set (statuses/priorities).
   const toggleFacet = (key: "statuses" | "priorities", v: string) => {
     const next = new Set(filters[key]);

@@ -1,9 +1,9 @@
 import { type DragEvent, type MouseEvent, useCallback, useEffect, useState } from "react";
-import { listProjects, listThemes, moveProject, type ProjectInfo, reloadProjects, type Scheme, unregisterProject } from "../api.ts";
-import { isPlainClick } from "../util.ts";
-import { ProjectFormDialog } from "./ProjectFormDialog.tsx";
-import { SchemeToggle } from "./SchemeToggle.tsx";
-import { loadThemeMarks } from "../theme.ts";
+import { listProjects, listThemes, moveProject, type ProjectInfo, reloadProjects, type Scheme, unregisterProject } from "../../api.ts";
+import { isPlainClick } from "../../util.ts";
+import { ProjectFormDialog } from "../ProjectFormDialog/ProjectFormDialog.tsx";
+import { SchemeMenu } from "../SchemeMenu/SchemeMenu.tsx";
+import { loadThemeMarks } from "../../theme.ts";
 import s from "./ProjectList.module.css";
 
 // DropHint marks where a dragged card would land: before or after another card.
@@ -166,7 +166,7 @@ export function ProjectList({ onOpen, scheme, onScheme }: Props) {
       </header>
       {/* Fixed to the viewport's corner, so it is a sibling of the content rather
           than part of the bar's layout. */}
-      <SchemeToggle scheme={scheme} onChange={onScheme} />
+      <SchemeMenu scheme={scheme} onChange={onScheme} />
 
       <div className={s.content}>
         {error && <div className={s.error}>{error}</div>}

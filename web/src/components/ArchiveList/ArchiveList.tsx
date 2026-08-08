@@ -1,6 +1,6 @@
 import { useState } from "react";
-import type { Api, ArchiveDetail, ArchiveEntry } from "../api.ts";
-import s from "./ArchivedPanel.module.css";
+import type { Api, ArchiveDetail, ArchiveEntry } from "../../api.ts";
+import s from "./ArchiveList.module.css";
 
 interface Props {
   api: Api;
@@ -10,12 +10,12 @@ interface Props {
 
 const nameOf = (ref: string) => ref.replace(/^_archives\//, "");
 
-// ArchivedPanel is a collapsible list of shelved subtrees below the tree. A row
+// ArchiveList is a collapsible list of shelved subtrees below the tree. A row
 // shows where it came from; clicking it expands a read-only detail (the web
 // equivalent of `show _archives/<name>`). Restore sends it back to where it came
 // from; if that fails (occupied ref or missing parent) the row reveals a
 // destination field to retry elsewhere, like `unarchive --to`.
-export function ArchivedPanel({ api, entries, run }: Props) {
+export function ArchiveList({ api, entries, run }: Props) {
   const [open, setOpen] = useState(false);
   const [retry, setRetry] = useState<{ ref: string; to: string } | null>(null);
   const [detail, setDetail] = useState<{ ref: string; node?: ArchiveDetail } | null>(null);

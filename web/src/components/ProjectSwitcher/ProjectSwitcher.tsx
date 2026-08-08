@@ -1,7 +1,7 @@
 import { type MouseEvent, useEffect, useState } from "react";
-import { listProjects, type ProjectInfo } from "../api.ts";
-import { loadThemeMarks } from "../theme.ts";
-import { isPlainClick } from "../util.ts";
+import { listProjects, type ProjectInfo } from "../../api.ts";
+import { loadThemeMarks } from "../../theme.ts";
+import { isPlainClick } from "../../util.ts";
 import s from "./ProjectSwitcher.module.css";
 
 interface Props {
