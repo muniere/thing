@@ -9,55 +9,61 @@
 // board stays on the default palette defined in styles/tokens.css. That is also
 // what a typo in projects.yaml comes to, so it warns rather than failing.
 
-// The ids of the <link> elements this module owns. The board's theme and a
-// preview are separate so previewing one does not disturb the other, and each is
-// a single element whose href is swapped rather than a stylesheet per theme ever
-// touched.
-const BOARD_LINK_ID = "theme-stylesheet";
-const PREVIEW_LINK_ID = "theme-preview-stylesheet";
+// The <link> elements this module owns are grouped by purpose, so one group's
+// churn never disturbs another's: the board's own theme, the theme an edit dialog
+// is previewing, and the set behind the picker's per-project marks. Within a
+// group an element is reused by name rather than stacking a stylesheet per theme
+// ever touched.
+const BOARD = "board";
+const PREVIEW = "preview";
+const MARKS = "marks";
 
 // Names are a URL path segment on the way to a file name. thingd refuses an
 // unsafe one too, but the check is cheap and keeps a junk name from reaching the
 // DOM at all.
 const SAFE_NAME = /^[a-z0-9][a-z0-9-]*$/;
 
-function linkElement(id: string): HTMLLinkElement {
-  const existing = document.getElementById(id);
-  if (existing instanceof HTMLLinkElement) {
-    return existing;
-  }
-  const link = document.createElement("link");
-  link.id = id;
-  link.rel = "stylesheet";
-  document.head.append(link);
-  return link;
-}
+const linkId = (group: string, name: string) => `theme-${group}-${name}`;
 
-// point aims one of the module's links at a theme, or drops it when the name is
-// empty or unusable. It returns the name actually used, so a caller can mirror it
-// onto whatever element carries data-theme.
-function point(id: string, name: string | undefined, warn: (name: string, href: string) => void): string | undefined {
-  if (name && !SAFE_NAME.test(name)) {
-    console.warn(`ignoring theme ${JSON.stringify(name)}: a theme name is lowercase letters, digits, and dashes`);
-    name = undefined;
+// load reconciles a group's stylesheets to exactly `names`: it adds what is
+// missing, drops what is no longer wanted, and leaves the rest untouched. It
+// returns the names that survived validation, so a caller can mirror them onto
+// whatever elements carry data-theme.
+function load(group: string, names: string[], warn: (name: string, href: string) => void): string[] {
+  const wanted = new Set<string>();
+  for (const name of names) {
+    if (SAFE_NAME.test(name)) {
+      wanted.add(name);
+    } else {
+      console.warn(`ignoring theme ${JSON.stringify(name)}: a theme name is lowercase letters, digits, and dashes`);
+    }
   }
-  if (!name) {
-    document.getElementById(id)?.remove();
-    return undefined;
+  for (const link of document.querySelectorAll<HTMLLinkElement>(`link[data-theme-group="${group}"]`)) {
+    if (!wanted.has(link.dataset.themeName ?? "")) {
+      link.remove();
+    }
   }
-  const link = linkElement(id);
-  const href = `/themes/${name}.css`;
-  if (link.getAttribute("href") !== href) {
+  for (const name of wanted) {
+    if (document.getElementById(linkId(group, name))) {
+      continue;
+    }
+    const href = `/themes/${name}.css`;
+    const link = document.createElement("link");
+    link.id = linkId(group, name);
+    link.rel = "stylesheet";
+    link.dataset.themeGroup = group;
+    link.dataset.themeName = name;
     link.onerror = () => warn(name, href);
-    link.setAttribute("href", href);
+    link.href = href;
+    document.head.append(link);
   }
-  return name;
+  return [...wanted];
 }
 
 // applyTheme points the document at a palette, or back at the default when the
 // name is empty (no theme configured) or unusable.
 export function applyTheme(name: string | undefined): void {
-  const applied = point(BOARD_LINK_ID, name, (n, href) => {
+  const [applied] = load(BOARD, name ? [name] : [], (n, href) => {
     console.warn(`theme ${JSON.stringify(n)} was not found at ${href}; using the default palette. Define it by adding ${n}.css to themes/ beside projects.yaml.`);
   });
   if (applied) {
@@ -70,11 +76,24 @@ export function applyTheme(name: string | undefined): void {
 // loadThemeForPreview makes a theme's tokens available to any element carrying
 // data-theme="<name>", without touching the document's own theme. The theme
 // stylesheets are element-scoped for exactly this: the picker shows what a theme
-// looks like on a swatch rather than by recoloring the page.
+// looks like on a miniature board rather than by recoloring the page.
 //
 // Passing nothing drops the preview stylesheet again.
 export function loadThemeForPreview(name: string | undefined): void {
-  point(PREVIEW_LINK_ID, name, (n, href) => {
+  load(PREVIEW, name ? [name] : [], (n, href) => {
     console.warn(`theme ${JSON.stringify(n)} was not found at ${href}; its preview shows the default palette instead.`);
+  });
+}
+
+// loadThemeMarks makes several themes' tokens available at once, for the marks
+// that tell projects apart in a list. It loads the themes those projects use
+// rather than every theme that exists, so the cost follows the number of
+// projects; a name nothing defines is left to fall back to the default palette,
+// which is what that project's board does too.
+export function loadThemeMarks(names: string[]): void {
+  load(MARKS, names, () => {
+    // Silent: the board and the edit dialog already warn about a name that
+    // resolves to nothing, and a mark that quietly shows the default palette is
+    // exactly what that project will look like.
   });
 }
