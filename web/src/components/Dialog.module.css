@@ -10,12 +10,12 @@
   max-width: 92vw;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
 }
-/* Room for content that has to be looked at rather than filled in. 48rem is the
-   width the detail pane already caps its content at, and it stays inside the
-   picker's own 60rem column — a dialog wider than the page it opens from reads
-   as a mistake. */
+/* Room for content that has to be looked at rather than filled in — the project
+   dialog's theme chooser is a list beside a miniature board. 60rem is the
+   picker's own content column, the widest thing this app lays out, so it is the
+   ceiling: a dialog wider than the page it opens from reads as a mistake. */
 .wide {
-  width: 48rem;
+  width: 60rem;
 }
 .dialog::backdrop {
   background: var(--scrim);

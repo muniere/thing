@@ -3,7 +3,7 @@ import { editProject, listProjects, listThemes, moveProject, type ProjectInfo, r
 import { isPlainClick } from "../util.ts";
 import { Dialog } from "./Dialog.tsx";
 import { ThemePreview } from "./ThemePreview.tsx";
-import { loadThemeMarks } from "../theme.ts";
+import { loadThemeMarks, loadThemesForPreview } from "../theme.ts";
 import s from "./ProjectList.module.css";
 
 // DropHint marks where a dragged card would land: before or after another card.
@@ -393,6 +393,14 @@ function EditProject({ project, themes, onSaved, onError, onClose }: EditProps) 
   const [dir, setDir] = useState(project.dir);
   const [theme, setTheme] = useState(project.theme ?? "");
 
+  // Every theme the list offers is loaded, not just the selected one: each row
+  // shows its own color, and the miniature needs the selection. Dropped on
+  // unmount so a closed dialog leaves no stylesheets behind.
+  useEffect(() => {
+    loadThemesForPreview(themes);
+    return () => loadThemesForPreview([]);
+  }, [themes]);
+
   const submit = async () => {
     const n = name.trim();
     const d = dir.trim();
@@ -443,18 +451,38 @@ function EditProject({ project, themes, onSaved, onError, onClose }: EditProps) 
         />
       </label>
       {themes.length > 0 && (
-        <label className={s.field}>
-          <span className={s.fieldLabel}>Theme</span>
-          <select className={s.select} value={theme} onChange={(e) => setTheme(e.target.value)}>
-            <option value="">Default</option>
-            {themes.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-          <ThemePreview theme={theme} />
-        </label>
+        <div className={s.field}>
+          <span className={s.fieldLabel} id="theme-label">Theme</span>
+          {/* List beside preview rather than a select above it: choosing a theme
+              is comparing them, and a dropdown hides the alternatives behind a
+              click each time. Native radios carry the group semantics and
+              arrow-key navigation; the input itself is hidden, the row is the
+              control. */}
+          <div className={s.themeChooser}>
+            <div className={s.themeList} role="radiogroup" aria-labelledby="theme-label">
+              {["", ...themes].map((t) => (
+                <label key={t || "default"} className={s.themeOption} data-selected={theme === t || undefined}>
+                  <input
+                    type="radio"
+                    name="theme"
+                    className={s.themeRadio}
+                    value={t}
+                    checked={theme === t}
+                    onChange={() => setTheme(t)}
+                  />
+                  {/* The dot carries the theme it names, so the list is scannable
+                      by color and not only by name. */}
+                  <span className={s.mark} data-theme={t || undefined} aria-hidden="true" />
+                  {/* Lowercase like the theme names it sits among: it names the
+                      same kind of thing, and a lone capital reads as a different
+                      kind of entry. */}
+                  <span className={s.themeName}>{t || "default"}</span>
+                </label>
+              ))}
+            </div>
+            <ThemePreview theme={theme} />
+          </div>
+        </div>
       )}
       <div className={s.actions}>
         <button type="button" className={`${s.btn} ${s.btnAmber}`} onClick={submit} disabled={!name.trim() || !dir.trim()}>

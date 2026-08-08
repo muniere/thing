@@ -1,5 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { loadThemeForPreview } from "../theme.ts";
+import { useLayoutEffect, useRef, useState } from "react";
 import s from "./ThemePreview.module.css";
 
 // The mock is laid out at the width a real board would be and then scaled down as
@@ -42,15 +41,12 @@ function useScaleToFit(ref: React.RefObject<HTMLDivElement | null>): number {
 //
 // The text is placeholder on purpose: this is about color, and real titles would
 // invite reading rather than looking.
+//
+// It does not load the theme's stylesheet: the dialog around it already loads the
+// whole set it offers, since it colors every choice in the list too.
 export function ThemePreview({ theme }: { theme: string }) {
   const frame = useRef<HTMLDivElement>(null);
   const scale = useScaleToFit(frame);
-
-  useEffect(() => {
-    loadThemeForPreview(theme || undefined);
-  }, [theme]);
-  // Dropped on unmount so a closed dialog leaves no stylesheet behind.
-  useEffect(() => () => loadThemeForPreview(undefined), []);
 
   return (
     <div
