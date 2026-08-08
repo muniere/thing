@@ -5,13 +5,44 @@
 .detail {
   max-width: 48rem;
 }
-/* the ref sits under the title as a quiet mono line */
+/* the ref sits under the title as a quiet mono line, with a copy link trailing it
+   inline — a long ref wraps and the link follows its last line */
+.refRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.35rem;
+  align-items: baseline;
+  margin-top: 0.3rem;
+}
 .ref {
+  min-width: 0;
   font-family: var(--mono);
   font-size: 0.72rem;
   color: var(--ink-3);
   overflow-wrap: anywhere;
-  margin-top: 0.3rem;
+}
+/* an icon, not a word: inline next to the ref, a label would read as part of it.
+   Kept in the ref's own tone so it doesn't outshout the ref it belongs to. */
+.copyRef {
+  flex: none;
+  display: flex;
+  align-self: center;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.copyRef svg {
+  width: 13px;
+  height: 13px;
+}
+.copyRef:hover {
+  color: var(--amber);
+}
+/* the icon flips to a check on a successful copy, then reverts */
+.copyRef[data-copied="true"] {
+  color: var(--done);
 }
 /* updated rides at the end of the meta row */
 .updated {
