@@ -183,10 +183,30 @@
   background: var(--panel-2);
   border-color: color-mix(in srgb, var(--amber) 50%, var(--line));
 }
+.cardHead {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
 .cardTitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-weight: 600;
   font-size: 0.98rem;
   color: var(--ink);
+}
+/* The same glowing dot the board wears beside its own title, so a project is
+   marked here by the thing it will be marked by there. --amber resolves through
+   the mark's own data-theme. */
+.mark {
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--amber);
+  box-shadow: 0 0 9px var(--amber);
 }
 .cardName {
   font-family: var(--mono);

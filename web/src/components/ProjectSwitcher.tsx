@@ -1,5 +1,6 @@
 import { type MouseEvent, useEffect, useState } from "react";
 import { listProjects, type ProjectInfo } from "../api.ts";
+import { loadThemeMarks } from "../theme.ts";
 import { isPlainClick } from "../util.ts";
 import s from "./ProjectSwitcher.module.css";
 
@@ -26,6 +27,9 @@ export function ProjectSwitcher({ current, onSwitch }: Props) {
     listProjects()
       .then((ps) => {
         setProjects(ps);
+        // The marks read each project's own palette, so the themes these projects
+        // use have to be loaded — not every theme that exists.
+        loadThemeMarks(ps.map((p) => p.theme).filter((t): t is string => !!t));
         setError(null);
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)));
@@ -92,6 +96,10 @@ export function ProjectSwitcher({ current, onSwitch }: Props) {
               onClick={(e) => pick(e, p.name)}
             >
               <span className={s.check} aria-hidden="true">{p.name === current ? "✓" : ""}</span>
+              {/* The mark carries the project's own data-theme, so switching is a
+                  choice between colors you can see rather than names you have to
+                  remember. */}
+              <span className={s.mark} data-theme={p.theme || undefined} aria-hidden="true" />
               <span className={s.label}>
                 <span className={s.title}>{p.title}</span>
                 <span className={s.name}>/{p.name}</span>

@@ -3,6 +3,7 @@ import { editProject, listProjects, listThemes, moveProject, type ProjectInfo, r
 import { isPlainClick } from "../util.ts";
 import { Dialog } from "./Dialog.tsx";
 import { ThemePreview } from "./ThemePreview.tsx";
+import { loadThemeMarks } from "../theme.ts";
 import s from "./ProjectList.module.css";
 
 // DropHint marks where a dragged card would land: before or after another card.
@@ -37,6 +38,9 @@ export function ProjectList({ onOpen }: Props) {
     listProjects()
       .then((ps) => {
         setProjects(ps);
+        // The marks below read each project's own palette, which means loading
+        // the themes these projects use — not every theme that exists.
+        loadThemeMarks(ps.map((p) => p.theme).filter((t): t is string => !!t));
         setError(null);
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)));
@@ -206,7 +210,14 @@ export function ProjectList({ onOpen }: Props) {
               {/* The card is not itself draggable, so its default link-drag doesn't
                   fight the row's reorder drag. */}
               <a className={s.card} href={`/${p.name}`} draggable={false} onClick={(e) => open(e, p.name)}>
-                <span className={s.cardTitle}>{p.title}</span>
+                <span className={s.cardHead}>
+                  {/* The mark carries the project's own data-theme, so it is that
+                      board's accent rather than a color assigned here. A project
+                      on no theme inherits the picker's, which is what its board
+                      will look like. */}
+                  <span className={s.mark} data-theme={p.theme || undefined} aria-hidden="true" />
+                  <span className={s.cardTitle}>{p.title}</span>
+                </span>
                 {/* Always show the slug, prefixed with "/" so it reads as the URL
                     path (/<name>) rather than a repeat of the title. */}
                 <span className={s.cardName}>/{p.name}</span>

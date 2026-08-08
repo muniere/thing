@@ -71,6 +71,16 @@
   color: var(--amber);
   font-size: 0.8rem;
 }
+/* The same glowing dot the board wears beside its own title. --amber resolves
+   through the mark's own data-theme, so it is that project's accent. */
+.mark {
+  flex: none;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--amber);
+  box-shadow: 0 0 8px var(--amber);
+}
 .current .title {
   font-weight: 600;
 }
