@@ -1,11 +1,11 @@
-import { type MouseEvent, useEffect, useRef, useState } from "react";
+import type { MouseEvent } from "react";
 import type { Node } from "../../domain/generated.ts";
 import { Priority, Status, Type } from "../../domain/generated.ts";
 import type { Api } from "../../api.ts";
 import { renderMarkdown } from "../../markdown.ts";
-import { flatten } from "../../util.ts";
 import { NodeFormDialog } from "../NodeFormDialog/NodeFormDialog.tsx";
 import { PriorityBadge } from "../PriorityBadge/PriorityBadge.tsx";
+import { useNodeDetailPanel } from "./useNodeDetailPanel.ts";
 import s from "./NodeDetailPanel.module.css";
 
 interface Props {
@@ -23,132 +23,51 @@ const PRIORITIES = [Priority.High, Priority.Medium, Priority.Low];
 
 // NodeDetailPanel is the full-edit surface for one node. It is remounted per
 // selection (via a key on the element), so its draft state resets cleanly when
-// the node changes.
+// the node changes. Everything it does lives in useNodeDetailPanel; what is left
+// here is the markup.
 export function NodeDetailPanel({ api, node, allNodes, run, onSelect, hrefFor, onNav }: Props) {
   const isEpic = node.type === Type.Epic;
   // A parent (epic/issue) can roll its status up from its children, offered as an
   // "auto" choice in the status pulldown; a task's status is always its own.
   const isParent = node.type !== Type.Task;
 
-  const [title, setTitle] = useState(node.title);
-  const [category, setCategory] = useState(node.category ?? "");
-  const [body, setBody] = useState(node.body ?? "");
-  const [preview, setPreview] = useState(true);
-  const [linkURL, setLinkURL] = useState("");
-  const [linkLabel, setLinkLabel] = useState("");
-  const [addingLink, setAddingLink] = useState(false);
-  const [moveTo, setMoveTo] = useState("");
-  const [moving, setMoving] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [copied, setCopied] = useState(false);
-
-  // Copy the ref to the clipboard and flash a check on the button. The async
-  // Clipboard API is missing on insecure origins (thingd served over plain HTTP
-  // to a non-localhost host), so fall back to a hidden textarea + execCommand.
-  const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  useEffect(() => () => clearTimeout(copiedTimer.current), []);
-
-  const copyRef = async () => {
-    try {
-      if (navigator.clipboard) {
-        await navigator.clipboard.writeText(node.ref);
-      } else {
-        const ta = document.createElement("textarea");
-        ta.value = node.ref;
-        ta.style.position = "fixed";
-        ta.style.opacity = "0";
-        document.body.appendChild(ta);
-        ta.select();
-        const ok = document.execCommand("copy");
-        document.body.removeChild(ta);
-        if (!ok) throw new Error("copy command failed");
-      }
-    } catch {
-      alert(`Could not copy the ref. It is: ${node.ref}`);
-      return;
-    }
-    setCopied(true);
-    clearTimeout(copiedTimer.current);
-    copiedTimer.current = setTimeout(() => setCopied(false), 1200);
-  };
-
-  // The change-parent picker is a modal dialog; drive the native <dialog> from the
-  // moving flag so Escape and the backdrop close it (its onClose resets state).
-  const moveDialog = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const d = moveDialog.current;
-    if (!d) return;
-    if (moving && !d.open) d.showModal();
-    else if (!moving && d.open) d.close();
-  }, [moving]);
-
-  const saveTitle = async () => {
-    const t = title.trim();
-    if (!t) return;
-    const res = await run(api.rename(node.ref, t, isEpic ? category : undefined));
-    if (res) {
-      setEditing(false);
-      onSelect(res.ref);
-    }
-  };
-
-  const cancelEdit = () => {
-    setTitle(node.title);
-    setCategory(node.category ?? "");
-    setEditing(false);
-  };
-
-  // Valid move targets: an issue moves under an epic or to orphan; a task moves
-  // under another issue. Epics stay at the root.
-  const moveTargets = (): { value: string; label: string }[] => {
-    const flat = flatten(allNodes);
-    if (node.type === Type.Issue) {
-      return [
-        { value: "_orphan", label: "(orphan)" },
-        ...flat.filter((n) => n.type === Type.Epic).map((n) => ({ value: n.ref, label: n.title })),
-      ];
-    }
-    if (node.type === Type.Task) {
-      return flat.filter((n) => n.type === Type.Issue).map((n) => ({ value: n.ref, label: n.title }));
-    }
-    return [];
-  };
+  const { editor, body, copy, links, move, actions } = useNodeDetailPanel({ api, node, allNodes, run, onSelect });
 
   const priority = node.priority ?? "";
   const children = node.children ?? [];
 
   return (
     <div className={s.detail}>
-      {editing ? (
+      {editor.editing ? (
         <div className={s.edit}>
           <input
             className={s.input}
             autoFocus
             placeholder="title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            value={editor.title}
+            onChange={(e) => editor.setTitle(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") saveTitle();
-              else if (e.key === "Escape") cancelEdit();
+              if (e.key === "Enter") editor.save();
+              else if (e.key === "Escape") editor.cancel();
             }}
           />
           {isEpic && (
             <input
               className={s.input}
               placeholder="category"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
+              value={editor.category}
+              onChange={(e) => editor.setCategory(e.target.value)}
             />
           )}
           <div className={s.editActions}>
-            <button type="button" className={`${s.btn} ${s.btnAmber}`} onClick={saveTitle}>Save</button>
-            <button type="button" className={s.btnLink} onClick={cancelEdit}>cancel</button>
+            <button type="button" className={`${s.btn} ${s.btnAmber}`} onClick={editor.save}>Save</button>
+            <button type="button" className={s.btnLink} onClick={editor.cancel}>cancel</button>
           </div>
         </div>
       ) : (
         <div className={s.titleRow}>
           <h2 className={s.title}>{node.title}</h2>
-          <button type="button" className={s.btnLink} onClick={() => setEditing(true)}>edit</button>
+          <button type="button" className={s.btnLink} onClick={editor.start}>edit</button>
         </div>
       )}
       <div className={s.refRow}>
@@ -156,12 +75,12 @@ export function NodeDetailPanel({ api, node, allNodes, run, onSelect, hrefFor, o
         <button
           type="button"
           className={s.copyRef}
-          data-copied={copied}
+          data-copied={copy.copied}
           aria-label={`Copy ref "${node.ref}"`}
-          title={copied ? "Copied" : "Copy ref"}
-          onClick={copyRef}
+          title={copy.copied ? "Copied" : "Copy ref"}
+          onClick={copy.copyRef}
         >
-          {copied ? (
+          {copy.copied ? (
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M20 6 9 17l-5-5" />
             </svg>
@@ -183,7 +102,7 @@ export function NodeDetailPanel({ api, node, allNodes, run, onSelect, hrefFor, o
             data-status={node.effectiveStatus}
             aria-label="status"
             value={node.effectiveStatus}
-            onChange={(e) => run(api.status(node.ref, e.target.value))}
+            onChange={(e) => actions.setStatus(e.target.value)}
           >
             {STATUSES.map((st) => <option key={st} value={st}>{st}</option>)}
           </select>
@@ -194,30 +113,30 @@ export function NodeDetailPanel({ api, node, allNodes, run, onSelect, hrefFor, o
             data-priority={priority}
             aria-label="priority"
             value={priority}
-            onChange={(e) => run(api.priority(node.ref, e.target.value))}
+            onChange={(e) => actions.setPriority(e.target.value)}
           >
             <option value="" disabled>priority</option>
             {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
         </span>
-        {!editing && isEpic && node.category && <span className={s.cat}>{node.category}</span>}
+        {!editor.editing && isEpic && node.category && <span className={s.cat}>{node.category}</span>}
         {(node.tags ?? []).map((t) => <span key={t} className={s.tag}>#{t}</span>)}
         {node.updated && <span className={s.updated}>updated {node.updated}</span>}
       </div>
 
       <div className={s.sectionHead}>
         <span className={s.label} style={{ margin: 0 }}>body</span>
-        <button type="button" className={s.btnLink} onClick={() => setPreview((p) => !p)}>
-          {preview ? "edit" : "preview"}
+        <button type="button" className={s.btnLink} onClick={body.togglePreview}>
+          {body.preview ? "edit" : "preview"}
         </button>
       </div>
-      {preview ? (
+      {body.preview ? (
         <div className={`${s.bodyPanel} markdown`} dangerouslySetInnerHTML={{ __html: renderMarkdown(node.body ?? "") }} />
       ) : (
         <div className={s.field}>
-          <textarea className={s.input} value={body} onChange={(e) => setBody(e.target.value)} rows={10} />
+          <textarea className={s.input} value={body.draft} onChange={(e) => body.setDraft(e.target.value)} rows={10} />
           <div>
-            <button type="button" className={`${s.btn} ${s.btnAmber}`} onClick={() => run(api.body(node.ref, body))}>Save body</button>
+            <button type="button" className={`${s.btn} ${s.btnAmber}`} onClick={body.save}>Save body</button>
           </div>
         </div>
       )}
@@ -289,10 +208,7 @@ export function NodeDetailPanel({ api, node, allNodes, run, onSelect, hrefFor, o
                   className={s.removeLink}
                   aria-label={`Remove link "${l.label || l.url}"`}
                   title="Remove link"
-                  onClick={() => {
-                    if (!confirm(`Remove link "${l.label || l.url}"?`)) return;
-                    run(api.removeLink(node.ref, l.url));
-                  }}
+                  onClick={() => links.remove(l)}
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M4 7h16M9 7V4h6v3M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13" />
@@ -305,29 +221,19 @@ export function NodeDetailPanel({ api, node, allNodes, run, onSelect, hrefFor, o
           </ul>
         </div>
       )}
-      {addingLink ? (
+      {links.adding ? (
         <div className={s.inlineForm}>
-          <input className={s.input} autoFocus placeholder="https://…" value={linkURL} onChange={(e) => setLinkURL(e.target.value)} />
-          <input className={s.input} placeholder="label (optional)" value={linkLabel} onChange={(e) => setLinkLabel(e.target.value)} />
-          <button
-            type="button"
-            className={s.btn}
-            onClick={async () => {
-              if (!linkURL.trim()) return;
-              await run(api.addLink(node.ref, linkURL.trim(), linkLabel.trim()));
-              setLinkURL("");
-              setLinkLabel("");
-              setAddingLink(false);
-            }}
-          >
+          <input className={s.input} autoFocus placeholder="https://…" value={links.url} onChange={(e) => links.setURL(e.target.value)} />
+          <input className={s.input} placeholder="label (optional)" value={links.label} onChange={(e) => links.setLabel(e.target.value)} />
+          <button type="button" className={s.btn} onClick={links.add}>
             Add link
           </button>
-          <button type="button" className={s.btnLink} onClick={() => { setAddingLink(false); setLinkURL(""); setLinkLabel(""); }}>
+          <button type="button" className={s.btnLink} onClick={links.cancel}>
             cancel
           </button>
         </div>
       ) : (
-        <button type="button" className={s.btnLink} onClick={() => setAddingLink(true)}>
+        <button type="button" className={s.btnLink} onClick={links.start}>
           + Add link
         </button>
       )}
@@ -342,15 +248,7 @@ export function NodeDetailPanel({ api, node, allNodes, run, onSelect, hrefFor, o
                 Status is pinned to {node.status}. Reset it to roll up from this {node.type}'s children.
               </div>
             </div>
-            <button
-              type="button"
-              className={s.btn}
-              onClick={() => {
-                if (confirm(`Reset this ${node.type}'s status to auto (roll up from its children)?`)) {
-                  run(api.status(node.ref, ""));
-                }
-              }}
-            >
+            <button type="button" className={s.btn} onClick={actions.resetStatus}>
               Reset to auto
             </button>
           </div>
@@ -362,7 +260,7 @@ export function NodeDetailPanel({ api, node, allNodes, run, onSelect, hrefFor, o
               <div className={s.actionTitle}>Change parent</div>
               <div className={s.actionDesc}>Move this {node.type} under a different parent.</div>
             </div>
-            <button type="button" className={s.btn} onClick={() => setMoving(true)}>Change parent</button>
+            <button type="button" className={s.btn} onClick={move.start}>Change parent</button>
           </div>
         )}
 
@@ -373,15 +271,7 @@ export function NodeDetailPanel({ api, node, allNodes, run, onSelect, hrefFor, o
               Shelve this {node.type}{node.type !== Type.Task ? " and its subtree" : ""} out of the tree. Restore it later from the Archived list.
             </div>
           </div>
-          <button
-            type="button"
-            className={s.btn}
-            onClick={async () => {
-              if (!confirm(`Archive ${node.type} "${node.title}"${node.type !== Type.Task ? " and its subtree" : ""}?`)) return;
-              await run(api.archive(node.ref));
-              onSelect("");
-            }}
-          >
+          <button type="button" className={s.btn} onClick={actions.archive}>
             Archive
           </button>
         </div>
@@ -393,51 +283,30 @@ export function NodeDetailPanel({ api, node, allNodes, run, onSelect, hrefFor, o
               Permanently remove this {node.type}{node.type !== Type.Task ? " and its subtree" : ""}.
             </div>
           </div>
-          <button
-            type="button"
-            className={`${s.btn} ${s.btnDanger}`}
-            onClick={async () => {
-              if (!confirm(`Delete ${node.type} "${node.title}"${node.type !== Type.Task ? " and its subtree" : ""}?`)) return;
-              await run(api.remove(node.ref));
-              onSelect("");
-            }}
-          >
+          <button type="button" className={`${s.btn} ${s.btnDanger}`} onClick={actions.remove}>
             Delete
           </button>
         </div>
       </div>
 
-      <dialog
-        ref={moveDialog}
-        className={s.dialog}
-        onClose={() => {
-          setMoving(false);
-          setMoveTo("");
-        }}
-      >
+      <dialog ref={move.dialog} className={s.dialog} onClose={move.reset}>
         <div className={s.dialogBody}>
           <div className={s.dialogTitle}>Change parent</div>
           <div className={s.dialogDesc}>Move “{node.title}” under a different parent.</div>
-          <select className={s.select} value={moveTo} onChange={(e) => setMoveTo(e.target.value)}>
+          <select className={s.select} value={move.target} onChange={(e) => move.setTarget(e.target.value)}>
             <option value="">choose new parent…</option>
-            {moveTargets().map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+            {move.targets.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
           <div className={s.dialogActions}>
             <button
               type="button"
               className={`${s.btn} ${s.btnAmber}`}
-              disabled={!moveTo}
-              onClick={async () => {
-                // A move re-slugs the node (its ref carries the parent path), so
-                // follow the returned new ref — otherwise the selection points at
-                // the old ref and the pane goes blank after the reload.
-                const res = await run(api.move(node.ref, moveTo));
-                if (res) onSelect(res.ref);
-              }}
+              disabled={!move.target}
+              onClick={move.submit}
             >
               Move
             </button>
-            <button type="button" className={s.btnLink} onClick={() => moveDialog.current?.close()}>
+            <button type="button" className={s.btnLink} onClick={move.close}>
               Cancel
             </button>
           </div>
