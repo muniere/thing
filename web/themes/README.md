@@ -48,7 +48,9 @@ for both color schemes:
 ```
 
 A partial file is fine too — anything left out falls through to the default
-palette, which is what makes the override case above work.
+palette, which is what makes the override case above work. `--scrim`, the dim
+behind a modal, is usually one to leave out: the default already carries a value
+per color scheme.
 
 Anchor the selector at `[data-theme="…"]` rather than `:root[data-theme="…"]`.
 The board sets the attribute on the document element either way, but the picker

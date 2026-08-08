@@ -32,6 +32,15 @@
   --done: #4fb286;
   --paused: #cc7a3b;
   --high: #d9705f;
+  /* scrim veils the page behind a modal with the page's own base color, so what
+     is behind flattens instead of merely darkening: the cards back there are
+     --panel over --bg, and washing them toward --bg is what actually removes
+     their edges. A black veil would keep them as bright shapes on a dark field —
+     more contrast behind, not less — and a white one would erase the boundary
+     with the dialog, whose surface is nearly white in the light theme. Because
+     --panel sits a step above --bg in both color schemes, the dialog stays the
+     brightest surface on screen either way. */
+  --scrim: color-mix(in srgb, var(--bg) 70%, transparent);
   --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
   --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --radius: 11px;
