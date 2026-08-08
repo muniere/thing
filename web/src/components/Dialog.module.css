@@ -18,8 +18,8 @@
   width: 48rem;
 }
 .dialog::backdrop {
-  background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(2px);
+  background: var(--scrim);
+  backdrop-filter: blur(6px);
 }
 
 .panel {
