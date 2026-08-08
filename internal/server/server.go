@@ -155,6 +155,8 @@ func New(mounts []Mount, opts Options) *Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/projects", s.handleProjects)
 	mux.HandleFunc("GET /api/themes", s.handleThemes)
+	mux.HandleFunc("GET /api/settings", s.handleSettings)
+	mux.HandleFunc("PATCH /api/settings", s.handlePatchSettings)
 	mux.HandleFunc("POST /api/projects/reload", s.handleReload)
 	mux.HandleFunc("PUT /api/projects/{project}", s.handleRegister)
 	mux.HandleFunc("PATCH /api/projects/{project}", s.handlePatchProject)
@@ -707,6 +709,82 @@ func (s *Server) handlePatchProject(w http.ResponseWriter, r *http.Request) {
 	default:
 		s.fail(w, http.StatusBadRequest, fmt.Errorf("empty patch: specify before/after, or name/dir/theme"))
 	}
+}
+
+// settingsRes is the display config that belongs to the whole server rather than
+// to one project. The color scheme is the only one so far: it is a fact about the
+// reader and the room, not about a project, and the root picker needs it as much
+// as a board does — which is why it is not folded into /api/projects/<p>/config.
+type settingsRes struct {
+	Scheme string `json:"scheme"`
+}
+
+// settingsReq is the PATCH body. Scheme is a pointer so an omitted field ("keep
+// it") stays distinct from an explicit one, leaving room for a second setting
+// later without every request having to restate the first.
+type settingsReq struct {
+	Scheme *string `json:"scheme"`
+}
+
+// schemeAuto is the wire spelling of "follow the system". On disk that is an
+// absent key; the endpoint names it instead, so a client never has to know that
+// an empty string and "auto" are the same thing.
+const schemeAuto = "auto"
+
+// handleSettings serves the server-wide display config.
+func (s *Server) handleSettings(w http.ResponseWriter, _ *http.Request) {
+	s.regmu.RLock()
+	scheme := ""
+	if s.defaults != nil {
+		scheme = s.defaults.Scheme
+	}
+	s.regmu.RUnlock()
+	if scheme == "" {
+		scheme = schemeAuto
+	}
+	writeJSON(w, http.StatusOK, settingsRes{Scheme: scheme})
+}
+
+// handlePatchSettings changes the server-wide display config and persists it, so
+// the choice survives a restart and reaches every browser on this server.
+func (s *Server) handlePatchSettings(w http.ResponseWriter, r *http.Request) {
+	var req settingsReq
+	if !decode(w, r, &req) {
+		return
+	}
+	if req.Scheme == nil {
+		s.fail(w, http.StatusBadRequest, fmt.Errorf("empty patch: specify scheme"))
+		return
+	}
+	scheme := strings.TrimSpace(*req.Scheme)
+	if scheme == schemeAuto {
+		scheme = ""
+	}
+	if !slices.Contains(registry.Schemes, scheme) {
+		s.fail(w, http.StatusBadRequest, fmt.Errorf("invalid scheme %q (want light|dark|%s)", *req.Scheme, schemeAuto))
+		return
+	}
+
+	s.regmu.Lock()
+	defer s.regmu.Unlock()
+	prev := s.defaults
+	next := registry.Defaults{Scheme: scheme}
+	if prev != nil {
+		next = *prev
+		next.Scheme = scheme
+	}
+	s.defaults = &next
+	if err := s.persistLocked(); err != nil {
+		s.defaults = prev // keep memory and disk in step
+		s.fail(w, http.StatusInternalServerError, fmt.Errorf("persist registry: %w", err))
+		return
+	}
+	// Wake every project's browsers: the scheme is server-wide, so a change made
+	// in one tab should reach the rest without a manual reload.
+	for _, p := range s.projects {
+		p.hub.broadcast()
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // handleThemes lists the themes that exist, for the picker to offer. The names

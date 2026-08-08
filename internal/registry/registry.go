@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/muniere/thing/internal/slug"
 	"gopkg.in/yaml.v3"
@@ -67,6 +68,11 @@ type Registry struct {
 type Defaults struct {
 	Filter *Filter `yaml:"filter,omitempty"`
 	Theme  string  `yaml:"theme,omitempty"`
+	// Scheme fixes the color scheme every board renders in — "light" or "dark" —
+	// or is empty to follow the reader's system. It has no per-project
+	// counterpart: which scheme is comfortable is a fact about the reader and the
+	// room, not about a project.
+	Scheme string `yaml:"scheme,omitempty"`
 }
 
 // filter returns d's filter block, tolerating nil defaults.
@@ -106,7 +112,24 @@ func Load(path string) (*Registry, error) {
 	if err := validate(r.Projects); err != nil {
 		return nil, err
 	}
+	if err := validateScheme(r.Defaults); err != nil {
+		return nil, err
+	}
 	return &r, nil
+}
+
+// Schemes lists every value the scheme setting accepts, "" meaning follow the
+// system.
+var Schemes = []string{"", "light", "dark"}
+
+// validateScheme rejects an unrecognized scheme. A typo has to be an error
+// rather than an ignored key: the board would otherwise keep following the
+// system with nothing said about why the setting did nothing.
+func validateScheme(d *Defaults) error {
+	if d == nil || slices.Contains(Schemes, d.Scheme) {
+		return nil
+	}
+	return fmt.Errorf("defaults.scheme: invalid scheme %q (want light|dark, or omit it to follow the system)", d.Scheme)
 }
 
 // Save writes projects to projects.yaml at path, creating the enclosing state

@@ -109,6 +109,23 @@ export function unregisterProject(name: string): Promise<void> {
   return req<void>("DELETE", `/api/projects/${name}`);
 }
 
+// Scheme is the color scheme every board renders in: "auto" follows the reader's
+// system, the others fix it.
+export type Scheme = "auto" | "light" | "dark";
+
+// settings reads the display config that belongs to the whole server rather than
+// to one project. The root picker needs it as much as a board does, which is why
+// it is not part of a project's own config.
+export function settings(): Promise<{ scheme: Scheme }> {
+  return req<{ scheme: Scheme }>("GET", "/api/settings");
+}
+
+// setScheme changes the color scheme for this server, written back to
+// projects.yaml so it survives a restart and reaches every browser on it.
+export function setScheme(scheme: Scheme): Promise<void> {
+  return req<void>("PATCH", "/api/settings", { scheme });
+}
+
 // listThemes names the themes thingd can serve. They come from the theme files
 // themselves rather than from a list in code, so one dropped into the themes
 // directory shows up here without a rebuild.

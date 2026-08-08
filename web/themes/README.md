@@ -32,20 +32,25 @@ picker's Edit dialog, which lists whatever these directories hold.
 ## Writing one
 
 Redefine every token the default palette sets (see `web/src/styles/tokens.css`),
-for both color schemes:
+stating each one's light and dark value as a `light-dark()` pair:
 
 ```css
 [data-theme="ocean"] {
-  --bg: …; --panel: …; --panel-2: …; --line: …;
+  --bg: light-dark(#eef2f8, #0b1220);
+  --panel: light-dark(#ffffff, #121a2b);
+  --panel-2: …; --line: …;
   --ink: …; --ink-2: …; --ink-3: …;
   --amber: …;  /* the accent — the token is named for the default palette */
-  --link: var(--amber);
+  --link: light-dark(#1d4ed8, var(--amber));
   --todo: …; --doing: …; --done: …; --paused: …; --high: …;
 }
-@media (prefers-color-scheme: light) {
-  [data-theme="ocean"] { /* the same tokens, tuned for light */ }
-}
 ```
+
+Use `light-dark()` rather than a `prefers-color-scheme` media query. Both follow
+the system, but only `light-dark()` follows the reader's explicit `auto / light /
+dark` choice: that control sets one `color-scheme`, and a media query does not
+listen to it. A theme written with media queries still colors a board — it just
+ignores the switch.
 
 A partial file is fine too — anything left out falls through to the default
 palette, which is what makes the override case above work. `--scrim`, the dim

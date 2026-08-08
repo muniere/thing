@@ -1,5 +1,5 @@
-/* Design tokens: the warm dark amber palette, type, and radius every component
-   reads through var(). Global on purpose — this is the shared theme layer, not a
+/* Design tokens: the warm amber palette, type, and radius every component reads
+   through var(). Global on purpose — this is the shared theme layer, not a
    component. Ported from the tray web frontend (status-colored rails and dots,
    mono accents, a 3-pane layout).
 
@@ -7,62 +7,65 @@
    select another one through projects.yaml; each of those is a stylesheet thingd
    serves at /themes/<name>.css, keyed off [data-theme] and derived from the
    values below — element-scoped, so the picker can preview one on a swatch
-   rather than only on the whole page. See web/themes/README.md. */
+   rather than only on the whole page. See web/themes/README.md.
+
+   Each color is a light-dark() pair rather than a dark value with a light
+   override in a media query. That is what lets the reader pick a scheme instead
+   of only inheriting the system's: light-dark() resolves against the element's
+   used color-scheme, so switching one property below switches every token at
+   once. It also halves each palette, which used to state its tokens twice. */
 :root {
+  /* dark first, so a reader with no system preference gets the dark board this
+     palette was designed for. The scheme selector overrides this with a single
+     value; see [data-scheme] below. */
   color-scheme: dark light;
-  --bg: #17130d;
-  --panel: #211b13;
-  --panel-2: #2a2219;
-  --line: #392f22;
-  --ink: #efe7d8;
-  --ink-2: #b3a690;
-  --ink-3: #7a6e5a;
-  --amber: #f5a524;
-  /* link is a hyperlink's label color. In the dark theme, amber orange against
-     the cream --ink already reads as a distinct, high-contrast link, so it's
-     just an alias. The light theme needs its own value (see the override
-     below): amber darkened enough to pass text contrast sits at nearly the
-     same luminance as --ink, so a link would pass contrast against the page
-     background yet barely stand out from surrounding body text. Blue's hue
-     solves that — it separates from --ink's warm palette on sight, the way a
-     browser's default link color would, not just on a contrast checker. */
-  --link: var(--amber);
-  --todo: #8b8172;
-  --doing: #f26a24;
-  --done: #4fb286;
-  --paused: #cc7a3b;
-  --high: #d9705f;
+  --bg: light-dark(#ece6db, #17130d);
+  --panel: light-dark(#fbf8f1, #211b13);
+  --panel-2: light-dark(#f2ece0, #2a2219);
+  --line: light-dark(#dcd3c2, #392f22);
+  --ink: light-dark(#221b11, #efe7d8);
+  --ink-2: light-dark(#6c6252, #b3a690);
+  --ink-3: light-dark(#9a8f7a, #7a6e5a);
+  --amber: light-dark(#b56b12, #f5a524);
+  /* link is a hyperlink's label color. In the dark scheme, amber orange against
+     the cream --ink already reads as a distinct, high-contrast link, so it is
+     just an alias. The light scheme needs its own value: amber darkened enough
+     to pass text contrast sits at nearly the same luminance as --ink, so a link
+     would pass contrast against the page background yet barely stand out from
+     surrounding body text. Blue's hue solves that — it separates from --ink's
+     warm palette on sight, the way a browser's default link color would, not
+     just on a contrast checker. #1d4ed8 is 5.4:1 on the light --bg. */
+  --link: light-dark(#1d4ed8, var(--amber));
+  --todo: light-dark(#8a7f6d, #8b8172);
+  --doing: light-dark(#e65100, #f26a24);
+  --done: light-dark(#2b8f63, #4fb286);
+  --paused: light-dark(#ad5f26, #cc7a3b);
+  --high: light-dark(#c0533f, #d9705f);
   /* scrim veils the page behind a modal with the page's own base color, so what
      is behind flattens instead of merely darkening: the cards back there are
      --panel over --bg, and washing them toward --bg is what actually removes
      their edges. A black veil would keep them as bright shapes on a dark field —
      more contrast behind, not less — and a white one would erase the boundary
-     with the dialog, whose surface is nearly white in the light theme. Because
-     --panel sits a step above --bg in both color schemes, the dialog stays the
+     with the dialog, whose surface is nearly white in the light scheme. Because
+     --panel sits a step above --bg in both schemes, the dialog stays the
      brightest surface on screen either way. */
   --scrim: color-mix(in srgb, var(--bg) 70%, transparent);
   --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
   --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --radius: 11px;
 }
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg: #ece6db;
-    --panel: #fbf8f1;
-    --panel-2: #f2ece0;
-    --line: #dcd3c2;
-    --ink: #221b11;
-    --ink-2: #6c6252;
-    --ink-3: #9a8f7a;
-    --amber: #b56b12;
-    --link: #1d4ed8; /* 5.4:1 on --bg — clears AA text contrast and, being blue, doesn't blend with --ink */
-    --todo: #8a7f6d;
-    --doing: #e65100;
-    --done: #2b8f63;
-    --paused: #ad5f26;
-    --high: #c0533f;
-  }
-}
+
+/* The reader's scheme choice, from projects.yaml. Naming one scheme rather than
+   two is the whole mechanism: it fixes which half of every light-dark() pair
+   applies, in the default palette and in every theme alike, and it tells form
+   controls and scrollbars the same thing. Absent means "auto" — the pair above
+   stands, and the system decides.
+
+   A theme that still writes a prefers-color-scheme media query instead of
+   light-dark() keeps following the system here rather than the choice; see
+   web/themes/README.md. */
+:root[data-scheme="light"] { color-scheme: light; }
+:root[data-scheme="dark"] { color-scheme: dark; }
 
 /* status → accent color, exposed as --c so any element carrying data-status
    (epic rails, rows, dots, child rails, the status chip) reads it through the

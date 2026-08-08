@@ -99,3 +99,15 @@ export function loadThemeMarks(names: string[]): void {
     // exactly what that project will look like.
   });
 }
+
+// applyScheme fixes which half of every light-dark() pair applies, or hands the
+// choice back to the system. It sets one attribute; tokens.css turns that into a
+// color-scheme, which resolves the pairs in the default palette and in every
+// theme alike — and tells form controls and scrollbars the same thing.
+export function applyScheme(scheme: string | undefined): void {
+  if (scheme === "light" || scheme === "dark") {
+    document.documentElement.dataset.scheme = scheme;
+  } else {
+    delete document.documentElement.dataset.scheme;
+  }
+}

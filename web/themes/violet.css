@@ -2,37 +2,20 @@
    entry in projects.yaml. Derived from the default amber palette by rotating
    hue in OKLCH; see README.md in this directory for how the palettes are built
    and how to add or override one. */
+
 [data-theme="violet"] {
-  --bg: #151219;
-  --panel: #1d1a23;
-  --panel-2: #24222d;
-  --line: #322e3d;
-  --ink: #ebe4f4;
-  --ink-2: #aca3ba;
-  --ink-3: #736b80;
-  --amber: #bea7ff;
-  --link: var(--amber);
-  --todo: #8d8073;
-  --doing: #f56449;
-  --done: #62b077;
-  --paused: #d1754b;
-  --high: #d96e71;
-}
-@media (prefers-color-scheme: light) {
-  [data-theme="violet"] {
-    --bg: #ebe4ee;
-    --panel: #fbf6fc;
-    --panel-2: #f1e9f5;
-    --line: #dbcfe0;
-    --ink: #1f1a24;
-    --ink-2: #695f6f;
-    --ink-3: #988b9e;
-    --amber: #866dc5;
-    --link: #1d4ed8;
-    --todo: #8c7e6e;
-    --doing: #e84b39;
-    --done: #428d55;
-    --paused: #b15b36;
-    --high: #c05052;
-  }
+  --bg: light-dark(#ebe4ee, #151219);
+  --panel: light-dark(#fbf6fc, #1d1a23);
+  --panel-2: light-dark(#f1e9f5, #24222d);
+  --line: light-dark(#dbcfe0, #322e3d);
+  --ink: light-dark(#1f1a24, #ebe4f4);
+  --ink-2: light-dark(#695f6f, #aca3ba);
+  --ink-3: light-dark(#988b9e, #736b80);
+  --amber: light-dark(#866dc5, #bea7ff);
+  --link: light-dark(#1d4ed8, var(--amber));
+  --todo: light-dark(#8c7e6e, #8d8073);
+  --doing: light-dark(#e84b39, #f56449);
+  --done: light-dark(#428d55, #62b077);
+  --paused: light-dark(#b15b36, #d1754b);
+  --high: light-dark(#c05052, #d96e71);
 }
