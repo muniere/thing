@@ -2,7 +2,7 @@
    entry in projects.yaml. Derived from the default amber palette by rotating
    hue in OKLCH; see README.md in this directory for how the palettes are built
    and how to add or override one. */
-:root[data-theme="violet"] {
+[data-theme="violet"] {
   --bg: #151219;
   --panel: #1d1a23;
   --panel-2: #24222d;
@@ -19,7 +19,7 @@
   --high: #d96e71;
 }
 @media (prefers-color-scheme: light) {
-  :root[data-theme="violet"] {
+  [data-theme="violet"] {
     --bg: #ebe4ee;
     --panel: #fbf6fc;
     --panel-2: #f1e9f5;

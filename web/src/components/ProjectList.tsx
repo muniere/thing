@@ -2,6 +2,7 @@ import { type DragEvent, type MouseEvent, useCallback, useEffect, useState } fro
 import { editProject, listProjects, listThemes, moveProject, type ProjectInfo, registerProject, reloadProjects, unregisterProject } from "../api.ts";
 import { isPlainClick } from "../util.ts";
 import { Dialog } from "./Dialog.tsx";
+import { ThemePreview } from "./ThemePreview.tsx";
 import s from "./ProjectList.module.css";
 
 // DropHint marks where a dragged card would land: before or after another card.
@@ -404,7 +405,7 @@ function EditProject({ project, themes, onSaved, onError, onClose }: EditProps) 
   };
 
   return (
-    <Dialog open onClose={onClose} title="Edit project">
+    <Dialog open onClose={onClose} title="Edit project" size="wide">
       <label className={s.field}>
         <span className={s.fieldLabel}>Name</span>
         <input
@@ -441,6 +442,7 @@ function EditProject({ project, themes, onSaved, onError, onClose }: EditProps) 
               </option>
             ))}
           </select>
+          <ThemePreview theme={theme} />
         </label>
       )}
       <div className={s.actions}>
