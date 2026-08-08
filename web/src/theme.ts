@@ -73,15 +73,17 @@ export function applyTheme(name: string | undefined): void {
   }
 }
 
-// loadThemeForPreview makes a theme's tokens available to any element carrying
-// data-theme="<name>", without touching the document's own theme. The theme
-// stylesheets are element-scoped for exactly this: the picker shows what a theme
-// looks like on a miniature board rather than by recoloring the page.
+// loadThemesForPreview makes several themes' tokens available to any element
+// carrying data-theme="<name>", without touching the document's own theme. The
+// theme stylesheets are element-scoped for exactly this: a theme is shown by
+// rendering something in it, not by recoloring the page.
 //
-// Passing nothing drops the preview stylesheet again.
-export function loadThemeForPreview(name: string | undefined): void {
-  load(PREVIEW, name ? [name] : [], (n, href) => {
-    console.warn(`theme ${JSON.stringify(n)} was not found at ${href}; its preview shows the default palette instead.`);
+// It takes the whole set the edit dialog offers rather than only the selected
+// one, because the dialog shows every choice as a dot in its own color beside the
+// miniature of the selected one. Passing an empty list drops them again.
+export function loadThemesForPreview(names: string[]): void {
+  load(PREVIEW, names, (n, href) => {
+    console.warn(`theme ${JSON.stringify(n)} was not found at ${href}; it shows the default palette instead.`);
   });
 }
 
