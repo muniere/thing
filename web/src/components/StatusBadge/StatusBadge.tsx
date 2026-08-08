@@ -1,4 +1,4 @@
-import type { Status } from "../domain/generated.ts";
+import type { Status } from "../../domain/generated.ts";
 import s from "./StatusBadge.module.css";
 
 type Variant = "full" | "dot" | "fill";

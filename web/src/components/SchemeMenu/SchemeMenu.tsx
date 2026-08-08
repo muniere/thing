@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import type { Scheme } from "../api.ts";
-import s from "./SchemeToggle.module.css";
+import type { Scheme } from "../../api.ts";
+import s from "./SchemeMenu.module.css";
 
 interface Props {
   scheme: Scheme;
@@ -34,7 +34,7 @@ const ICONS: Record<Scheme, React.ReactNode> = {
 
 const OPTIONS: Scheme[] = ["auto", "light", "dark"];
 
-// SchemeToggle picks the color scheme every board renders in. It floats at the
+// SchemeMenu picks the color scheme every board renders in. It floats at the
 // bottom-right rather than sitting in the top bar: the setting is server-wide and
 // set once, so it has no claim on the width of every board's chrome, and the
 // corner is where a reader looks for it.
@@ -46,7 +46,7 @@ const OPTIONS: Scheme[] = ["auto", "light", "dark"];
 // "auto" is a real choice rather than the absence of one — it means "follow the
 // system", which is a different thing from having chosen light and happening to
 // be in daylight.
-export function SchemeToggle({ scheme, onChange }: Props) {
+export function SchemeMenu({ scheme, onChange }: Props) {
   const [open, setOpen] = useState(false);
 
   // Close on any outside click or Escape, mirroring the project switcher's menu.

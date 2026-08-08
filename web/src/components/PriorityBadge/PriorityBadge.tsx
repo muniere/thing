@@ -1,4 +1,4 @@
-import type { Priority } from "../domain/generated.ts";
+import type { Priority } from "../../domain/generated.ts";
 import s from "./PriorityBadge.module.css";
 
 type Variant = "badge" | "fill";
