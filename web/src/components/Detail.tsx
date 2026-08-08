@@ -39,6 +39,37 @@ export function Detail({ api, node, allNodes, run, onSelect, hrefFor, onNav }: P
   const [moveTo, setMoveTo] = useState("");
   const [moving, setMoving] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  // Copy the ref to the clipboard and flash a check on the button. The async
+  // Clipboard API is missing on insecure origins (thingd served over plain HTTP
+  // to a non-localhost host), so fall back to a hidden textarea + execCommand.
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(copiedTimer.current), []);
+
+  const copyRef = async () => {
+    try {
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(node.ref);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = node.ref;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand("copy");
+        document.body.removeChild(ta);
+        if (!ok) throw new Error("copy command failed");
+      }
+    } catch {
+      alert(`Could not copy the ref. It is: ${node.ref}`);
+      return;
+    }
+    setCopied(true);
+    clearTimeout(copiedTimer.current);
+    copiedTimer.current = setTimeout(() => setCopied(false), 1200);
+  };
 
   // The change-parent picker is a modal dialog; drive the native <dialog> from the
   // moving flag so Escape and the backdrop close it (its onClose resets state).
@@ -119,7 +150,28 @@ export function Detail({ api, node, allNodes, run, onSelect, hrefFor, onNav }: P
           <button type="button" className={s.btnLink} onClick={() => setEditing(true)}>edit</button>
         </div>
       )}
-      <div className={s.ref}>{node.ref}</div>
+      <div className={s.refRow}>
+        <span className={s.ref}>{node.ref}</span>
+        <button
+          type="button"
+          className={s.copyRef}
+          data-copied={copied}
+          aria-label={`Copy ref "${node.ref}"`}
+          title={copied ? "Copied" : "Copy ref"}
+          onClick={copyRef}
+        >
+          {copied ? (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M20 6 9 17l-5-5" />
+            </svg>
+          ) : (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="9" y="9" width="11" height="11" rx="2" />
+              <path d="M5 15V5a2 2 0 0 1 2-2h10" />
+            </svg>
+          )}
+        </button>
+      </div>
 
       <div className={s.meta}>
         <span className={s.chipField} data-status={node.effectiveStatus}>
