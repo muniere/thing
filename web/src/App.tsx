@@ -1,6 +1,6 @@
 import { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Node } from "./domain/generated.ts";
-import { forProject, type ArchiveEntry } from "./api.ts";
+import { forProject, type ArchiveEntry, type Scheme } from "./api.ts";
 import { useLiveReload } from "./live.ts";
 import { collectCategories, collectPriorityCounts, collectStatusCounts, collectTags, defaultsToFilters, emptyFilters, filterTree, filtersActive, filtersFromQuery, filtersToQuery, hasFilterQuery, type Filters } from "./filter.ts";
 import { findNode, isPlainClick } from "./util.ts";
@@ -11,12 +11,19 @@ import { FilterBar } from "./components/FilterBar.tsx";
 import { Detail } from "./components/Detail.tsx";
 import { AddForm } from "./components/AddForm.tsx";
 import { ProjectSwitcher } from "./components/ProjectSwitcher.tsx";
+import { SchemeToggle } from "./components/SchemeToggle.tsx";
 import { ArchivedPanel } from "./components/ArchivedPanel.tsx";
 import s from "./App.module.css";
 
 interface Props {
   // The project this view is scoped to (the first URL path segment).
   project: string;
+  // The server-wide color scheme and the setter for it, both owned by Root.
+  scheme: Scheme;
+  onScheme: (scheme: Scheme) => void;
+  // Re-read the server-wide settings. Called on live-reload, since a scheme
+  // changed in another tab arrives the same way a tree change does.
+  onRefresh: () => void;
   // Switch to another project by name, or to the picker (null). Wired to the
   // logo's switcher caret; Root remounts this component on the new project.
   onSwitch: (name: string | null) => void;
@@ -31,7 +38,7 @@ function refFromPath(project: string): string | null {
   return path.startsWith(prefix) ? path.slice(prefix.length) || null : null;
 }
 
-export function App({ project, onSwitch }: Props) {
+export function App({ project, onSwitch, scheme, onScheme, onRefresh }: Props) {
   const api = useMemo(() => forProject(project), [project]);
   const [tree, setTree] = useState<Node[]>([]);
   const [archived, setArchived] = useState<ArchiveEntry[]>([]);
@@ -103,7 +110,8 @@ export function App({ project, onSwitch }: Props) {
   const refresh = useCallback(() => {
     void reload();
     void loadConfig();
-  }, [reload, loadConfig]);
+    onRefresh();
+  }, [reload, loadConfig, onRefresh]);
   useLiveReload(project, refresh);
   useEffect(() => {
     document.title = title;
@@ -241,6 +249,9 @@ export function App({ project, onSwitch }: Props) {
           <AddForm api={api} parent="" noun="Epic" amber run={run} onCreated={activate} />
         </div>
       </header>
+      {/* Fixed to the viewport's corner, so it is a sibling of the panes rather
+          than part of the bar's layout. */}
+      <SchemeToggle scheme={scheme} onChange={onScheme} />
 
       {error && <div className={s.error} onClick={() => setError(null)}>{error}</div>}
 

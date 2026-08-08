@@ -1,8 +1,9 @@
 import { type DragEvent, type MouseEvent, useCallback, useEffect, useState } from "react";
-import { editProject, listProjects, listThemes, moveProject, type ProjectInfo, registerProject, reloadProjects, unregisterProject } from "../api.ts";
+import { editProject, listProjects, listThemes, moveProject, type ProjectInfo, registerProject, reloadProjects, type Scheme, unregisterProject } from "../api.ts";
 import { isPlainClick } from "../util.ts";
 import { Dialog } from "./Dialog.tsx";
 import { ThemePreview } from "./ThemePreview.tsx";
+import { SchemeToggle } from "./SchemeToggle.tsx";
 import { loadThemeMarks, loadThemesForPreview } from "../theme.ts";
 import s from "./ProjectList.module.css";
 
@@ -15,6 +16,9 @@ interface DropHint {
 interface Props {
   // Open a project (push /<name> and switch the view to it).
   onOpen: (name: string) => void;
+  // The server-wide color scheme and the setter for it, both owned by Root.
+  scheme: Scheme;
+  onScheme: (scheme: Scheme) => void;
 }
 
 // ProjectList is the root picker shown at "/": a card per registered project,
@@ -22,7 +26,7 @@ interface Props {
 // the project in a new tab; a plain click is handled in-app via onOpen. Projects
 // can also be registered (from an existing thing tree) and unregistered here,
 // which writes back to projects.yaml on the server.
-export function ProjectList({ onOpen }: Props) {
+export function ProjectList({ onOpen, scheme, onScheme }: Props) {
   const [projects, setProjects] = useState<ProjectInfo[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Which row's kebab menu is open, by project name; null when none is.
@@ -154,6 +158,9 @@ export function ProjectList({ onOpen }: Props) {
           </div>
         )}
       </header>
+      {/* Fixed to the viewport's corner, so it is a sibling of the content rather
+          than part of the bar's layout. */}
+      <SchemeToggle scheme={scheme} onChange={onScheme} />
 
       <div className={s.content}>
         {error && <div className={s.error}>{error}</div>}

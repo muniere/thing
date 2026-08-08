@@ -355,3 +355,53 @@ projects:
 		t.Errorf("home theme = %q, want the default slate", got)
 	}
 }
+
+// The color scheme is a reader-facing display setting like the filter and the
+// theme, so it rides in the same defaults block.
+func TestLoadScheme(t *testing.T) {
+	reg, err := Load(writeReg(t, "defaults:\n  scheme: light\nprojects: []\n"))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if reg.Defaults.Scheme != "light" {
+		t.Errorf("scheme = %q, want light", reg.Defaults.Scheme)
+	}
+}
+
+// An unset scheme means "follow the system", which is what an absent key should
+// come to rather than an error.
+func TestLoadSchemeAbsent(t *testing.T) {
+	reg, err := Load(writeReg(t, "projects: []\n"))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if reg.Defaults != nil && reg.Defaults.Scheme != "" {
+		t.Errorf("scheme = %q, want empty", reg.Defaults.Scheme)
+	}
+}
+
+// A typo has to be an error rather than a silently ignored key: the board would
+// otherwise just keep following the system with nothing said.
+func TestLoadSchemeInvalid(t *testing.T) {
+	_, err := Load(writeReg(t, "defaults:\n  scheme: bright\n"))
+	if err == nil {
+		t.Fatal("Load succeeded, want an error")
+	}
+	if !strings.Contains(err.Error(), "bright") {
+		t.Errorf("error = %v, want it to mention the bad value", err)
+	}
+}
+
+func TestSaveScheme(t *testing.T) {
+	path := writeReg(t, "projects: []\n")
+	if err := Save(path, &Registry{Defaults: &Defaults{Scheme: "dark"}}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	back, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if back.Defaults.Scheme != "dark" {
+		t.Errorf("scheme after round trip = %q, want dark", back.Defaults.Scheme)
+	}
+}

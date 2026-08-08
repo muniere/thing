@@ -1384,3 +1384,88 @@ func TestEditNameAndTheme(t *testing.T) {
 		t.Errorf("theme = %q, want violet", cfg.Theme)
 	}
 }
+
+// The color scheme is registry-wide rather than per project, so it has its own
+// endpoint: the root picker needs it too, and the picker has no project.
+func TestSettingsEndpoint(t *testing.T) {
+	s := New([]Mount{{Name: "test", Store: fixture(t)}},
+		Options{Defaults: &registry.Defaults{Scheme: "light"}, Now: func() string { return "x" }})
+	var got struct {
+		Scheme string `json:"scheme"`
+	}
+	w := do(t, s, "GET", "/api/settings", "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("settings = %d, want 200", w.Code)
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.Scheme != "light" {
+		t.Errorf("scheme = %q, want light", got.Scheme)
+	}
+}
+
+// Unset reads as "auto" rather than an empty string, so the client has one less
+// special case to know about.
+func TestSettingsEndpointUnset(t *testing.T) {
+	var got struct {
+		Scheme string `json:"scheme"`
+	}
+	if err := json.Unmarshal(do(t, newServer(t), "GET", "/api/settings", "").Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.Scheme != "auto" {
+		t.Errorf("scheme = %q, want auto", got.Scheme)
+	}
+}
+
+func TestPatchSettings(t *testing.T) {
+	regFile := filepath.Join(t.TempDir(), "projects.yaml")
+	s := New([]Mount{{Name: "test", Store: fixture(t)}},
+		Options{RegistryFile: regFile, Now: func() string { return "x" }})
+
+	if w := do(t, s, "PATCH", "/api/settings", `{"scheme":"dark"}`); w.Code != http.StatusNoContent {
+		t.Fatalf("set = %d, want 204; body=%s", w.Code, w.Body.String())
+	}
+	reg, err := registry.Load(regFile)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if reg.Defaults == nil || reg.Defaults.Scheme != "dark" {
+		t.Errorf("persisted defaults = %+v, want scheme dark", reg.Defaults)
+	}
+
+	// "auto" clears it, so the file says nothing rather than saying "auto".
+	if w := do(t, s, "PATCH", "/api/settings", `{"scheme":"auto"}`); w.Code != http.StatusNoContent {
+		t.Fatalf("clear = %d, want 204; body=%s", w.Code, w.Body.String())
+	}
+	reg, _ = registry.Load(regFile)
+	if reg.Defaults != nil && reg.Defaults.Scheme != "" {
+		t.Errorf("persisted scheme = %q, want it cleared", reg.Defaults.Scheme)
+	}
+}
+
+func TestPatchSettingsRejects(t *testing.T) {
+	s := newServer(t)
+	if w := do(t, s, "PATCH", "/api/settings", `{"scheme":"bright"}`); w.Code != http.StatusBadRequest {
+		t.Errorf("bad scheme = %d, want 400", w.Code)
+	}
+}
+
+// A scheme set on the registry survives a register, which rewrites the file.
+func TestSettingsSurviveRegister(t *testing.T) {
+	regFile := filepath.Join(t.TempDir(), "projects.yaml")
+	s := New([]Mount{{Name: "test", Store: fixture(t)}}, Options{
+		Defaults:     &registry.Defaults{Scheme: "dark"},
+		RegistryFile: regFile,
+		Now:          func() string { return "x" },
+	})
+	do(t, s, "PUT", "/api/projects/added", `{"dir":"`+thingTreeDir(t)+`"}`)
+	reg, err := registry.Load(regFile)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if reg.Defaults == nil || reg.Defaults.Scheme != "dark" {
+		t.Errorf("defaults after register = %+v, want scheme dark", reg.Defaults)
+	}
+}

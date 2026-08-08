@@ -107,9 +107,21 @@ accent and leaves the rest. A name neither layer defines simply 404s and the
 board keeps the default palette, which is also what a typo comes to. See
 [`web/themes/README.md`](web/themes/README.md) for how to write one.
 
-Every built-in theme covers both the dark and the light color scheme, and follows
-the reader's system preference the way the default does. All of this affects
-`thingd` only; CLI output is never colored.
+Every theme covers both the dark and the light color scheme. Which one applies
+follows the reader's system by default; the `auto / light / dark` control in the
+top bar fixes it instead, and the choice is written back to `projects.yaml` as a
+top-level `defaults.scheme`, so it survives a restart and reaches every browser
+on that server:
+
+```yaml
+defaults:
+  scheme: dark   # or light; omit it to follow the system
+```
+
+It has no per-project counterpart on purpose: which scheme is comfortable is a
+fact about the reader and the room, not about a project.
+
+All of this affects `thingd` only; CLI output is never colored.
 
 ### Development
 
@@ -190,6 +202,8 @@ PATCH  /api/projects/<p>/archives/<name>   restore _archives/<name> to where it 
 GET    /api/projects/<p>/events            Server-Sent Events reload stream (per project)
 GET    /api/projects/<p>/config            display config (title, dir, filter defaults, theme)
 GET    /api/themes                         the theme names that exist, for the picker to offer
+GET    /api/settings                       server-wide display config (color scheme)
+PATCH  /api/settings                       set it: {scheme:"auto"|"light"|"dark"}
 GET    /themes/<name>.css                  one theme's stylesheet, layered over the reader's own
 ```
 
