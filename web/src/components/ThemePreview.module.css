@@ -1,0 +1,317 @@
+/* A miniature of the board, for previewing a theme in the project dialog.
+   Every value here is the one the real pane uses — the mock is laid out at a
+   board's width and scaled down as a whole, rather than rebuilt at small sizes,
+   so its density and proportions are the board's rather than an approximation.
+   Read alongside App.module.css, FilterBar.module.css, Tree.module.css, and
+   Detail.module.css; changes there should be mirrored here or the preview stops
+   being a preview. */
+
+/* The frame clips the scaled board. Its height comes from an aspect ratio set
+   alongside the board's dimensions, not from the measured scale: a transform
+   leaves layout alone, so sizing the frame to its content would give the unscaled
+   board's full height on the first pass and then collapse. `overflow: hidden`
+   also waives the automatic minimum size, so the ratio decides the height rather
+   than the content. */
+.frame {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-top: 0.15rem;
+}
+.board {
+  display: flex;
+  transform-origin: top left;
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px / 1.55 var(--sans);
+  /* The board fills its own surface; the frame's border is the only chrome. */
+  overflow: hidden;
+}
+
+/* ---- sidebar (FilterBar) ---- */
+.side {
+  flex: none;
+  width: 15rem;
+  padding: 1.4rem 1.1rem;
+  background: color-mix(in srgb, var(--bg) 60%, var(--panel));
+  border-right: 1px solid var(--line);
+}
+.group + .group {
+  margin-top: 1.4rem;
+}
+.heading {
+  display: block;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--ink-3);
+  margin: 0 0 0.5rem 0.15rem;
+}
+.input,
+.select {
+  padding: 0.5rem 0.7rem;
+  font-size: 0.85rem;
+  color: var(--ink-3);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.facet {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 7px;
+}
+.check {
+  flex: none;
+  width: 0.95rem;
+  height: 0.95rem;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel);
+}
+/* --c comes from the global [data-status] map, the same one the board's rails and
+   status dots read, so these are the very colors a tree row would use. */
+.dot {
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--c, var(--todo));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--c, var(--todo)) 20%, transparent);
+}
+.facetName {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--ink-2);
+}
+.count {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--ink-3);
+}
+.high {
+  color: var(--high);
+}
+.medium {
+  color: var(--amber);
+}
+.low {
+  color: var(--ink-3);
+}
+
+/* ---- tree pane ---- */
+.treePane {
+  flex: none;
+  width: 40%;
+  padding: 1.4rem 1.2rem;
+  border-right: 1px solid var(--line);
+}
+.path {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--ink-3);
+  margin: 0 0.5rem 1rem;
+}
+.groupLabel {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  color: var(--ink-3);
+  padding: 0 0.5rem;
+  margin: 0 0 0.55rem;
+}
+.epicCard {
+  position: relative;
+  overflow: hidden;
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 0.4rem 0.5rem 0.55rem;
+  margin-bottom: 0.8rem;
+}
+.epicCard:not([data-status="todo"]) {
+  background: color-mix(in srgb, var(--c) 6%, var(--panel));
+}
+.epicCard::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--c);
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 7px;
+}
+.row[data-selected] {
+  background: color-mix(in srgb, var(--c) 16%, var(--panel));
+  box-shadow: inset 2px 0 0 var(--c);
+}
+.caret {
+  flex: none;
+  width: 1.3rem;
+  font-size: 0.8rem;
+  line-height: 1;
+  color: var(--ink-3);
+}
+.rowDot {
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--c, var(--todo));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--c, var(--todo)) 20%, transparent);
+}
+.epicTitle {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  color: var(--ink-2);
+}
+.rowTitle {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.9rem;
+  font-weight: 550;
+  color: var(--ink);
+}
+.taskTitle {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.9rem;
+  font-weight: 450;
+  color: var(--ink-2);
+}
+.badge {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  color: var(--ink-3);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.02rem 0.4rem;
+}
+.row .high,
+.row .medium,
+.row .low {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+/* ---- detail pane ---- */
+.detailPane {
+  flex: 1;
+  min-width: 0;
+  padding: 1.8rem 2rem;
+}
+.detailHead {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+.detailTitle {
+  flex: 1;
+  min-width: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.edit {
+  flex: none;
+  font-size: 0.76rem;
+  color: var(--amber);
+}
+.detailRef {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--ink-3);
+  margin-top: 0.3rem;
+}
+.chips {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 1rem 0 1.4rem;
+}
+.statusChip {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  padding: 0.2rem 1.4rem;
+  border-radius: var(--radius);
+  background: var(--c, var(--todo));
+  color: var(--bg);
+}
+.priorityChip {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  padding: 0.2rem 1.4rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--ink-3);
+}
+.updated {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  color: var(--ink-3);
+}
+.sectionLabel {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--ink-3);
+  margin: 1.5rem 0 0.6rem;
+}
+.sectionLabel:first-of-type {
+  margin-top: 0;
+}
+.bodyPanel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.85rem 1.05rem;
+  color: var(--ink-2);
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
+.childRow {
+  position: relative;
+  overflow: hidden;
+  background: var(--panel);
+  border-radius: 9px;
+  padding: 0.5rem 0.7rem 0.5rem 0.85rem;
+  margin-bottom: 0.4rem;
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+.childRow::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--c, var(--todo));
+}

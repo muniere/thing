@@ -166,3 +166,21 @@ func TestListIgnoresNonThemes(t *testing.T) {
 		t.Errorf("List() = %v, want just the built-in teal", got)
 	}
 }
+
+// The built-in themes must scope their rules to [data-theme], not
+// :root[data-theme]. The board sets the attribute on the document element either
+// way, but a :root-anchored rule can only ever style the whole page — the picker
+// renders a swatch by putting the attribute on a small element inside the dialog,
+// and that only works when the selector is element-scoped.
+func TestBuiltinThemesAreElementScoped(t *testing.T) {
+	l := Loader{Builtin: os.DirFS("../../web/themes")}
+	for _, name := range l.List() {
+		css, ok := l.Read(name)
+		if !ok {
+			t.Fatalf("Read(%q) = not found", name)
+		}
+		if strings.Contains(string(css), ":root[data-theme") {
+			t.Errorf("%s.css anchors a rule at :root[data-theme]; use [data-theme] so it can style a preview element too", name)
+		}
+	}
+}

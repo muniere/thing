@@ -85,7 +85,7 @@ list it offers comes from the theme files themselves, so one you add appears
 there too.
 
 A theme is one stylesheet, served at `/themes/<name>.css`, that redefines the
-design tokens under `:root[data-theme="<name>"]`. **Adding one is adding a
+design tokens under `[data-theme="<name>"]`. **Adding one is adding a
 file** — nothing in `thingd` or the frontend enumerates the names that exist, so
 no code change and no rebuild are involved. Two layers are read: the themes built
 into the binary ([`web/themes/`](web/themes/)), then `themes/` under the same

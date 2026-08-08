@@ -1,7 +1,7 @@
 # Themes
 
 A theme is one CSS file, `<name>.css`, that redefines the design tokens under
-`:root[data-theme="<name>"]`. The board asks for `/themes/<name>.css` whenever a
+`[data-theme="<name>"]`. The board asks for `/themes/<name>.css` whenever a
 project's `projects.yaml` entry names a theme, so **adding one takes no code
 change and no rebuild** — nothing in thingd or the frontend enumerates the names that exist.
 An unknown name is a 404 and the board keeps the default palette.
@@ -19,7 +19,7 @@ changes**. To warm up the built-in teal without redefining it:
 
 ```css
 /* ~/.local/state/thingd/themes/teal.css */
-:root[data-theme="teal"] {
+[data-theme="teal"] {
   --amber: #00bcd4;
 }
 ```
@@ -35,7 +35,7 @@ Redefine every token the default palette sets (see `web/src/styles/tokens.css`),
 for both color schemes:
 
 ```css
-:root[data-theme="ocean"] {
+[data-theme="ocean"] {
   --bg: …; --panel: …; --panel-2: …; --line: …;
   --ink: …; --ink-2: …; --ink-3: …;
   --amber: …;  /* the accent — the token is named for the default palette */
@@ -43,12 +43,18 @@ for both color schemes:
   --todo: …; --doing: …; --done: …; --paused: …; --high: …;
 }
 @media (prefers-color-scheme: light) {
-  :root[data-theme="ocean"] { /* the same tokens, tuned for light */ }
+  [data-theme="ocean"] { /* the same tokens, tuned for light */ }
 }
 ```
 
 A partial file is fine too — anything left out falls through to the default
 palette, which is what makes the override case above work.
+
+Anchor the selector at `[data-theme="…"]` rather than `:root[data-theme="…"]`.
+The board sets the attribute on the document element either way, but the picker
+previews a theme by putting the attribute on a small element inside its edit
+dialog, and a `:root`-anchored rule can only ever style the whole page. (A theme
+written the `:root` way still colors a board — it just will not preview.)
 
 Two things worth keeping true, since the board relies on them:
 
