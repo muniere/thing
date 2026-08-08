@@ -198,29 +198,60 @@ func (e *httpError) Error() string { return e.err.Error() }
 // starts its watcher, and persists the updated registry. dir must already be an
 // initialized thing tree — the server never creates it; use `thing init` first.
 //
+// theme colors the project's board. It is a pointer so an omitted theme ("leave
+// it alone") stays distinct from an explicit empty one ("no theme of its own"),
+// the same convention the patch path uses — this endpoint is an upsert rather
+// than a true replacement anyway, since it refuses to re-point a name at a
+// different dir, so an absent field keeping its value is the consistent reading.
+//
 // It is an idempotent upsert, matching PUT semantics: registering a name that
 // already points at the same dir is a no-op that reports created=false, so a
-// repeated request is safe. A name already bound to a different dir is a conflict
-// rather than a silent re-point — detach it with Unregister first. A bad name or
-// a non-thing directory fails, leaving the server untouched.
-func (s *Server) Register(name, dir string) (p *project, created bool, err error) {
+// repeated request is safe. Such a repeat still applies a theme it carries,
+// since a value that was sent and then ignored would be a lie. A name already
+// bound to a different dir is a conflict rather than a silent re-point — detach
+// it with Unregister first. A bad name, a non-thing directory, or a malformed
+// theme fails, leaving the server untouched.
+func (s *Server) Register(name, dir string, theme *string) (p *project, created bool, err error) {
 	if name == "" || slug.Slugify(name) != name {
 		return nil, false, &httpError{http.StatusBadRequest, fmt.Errorf("invalid project name %q: must be a URL-safe slug", name)}
 	}
 	if !isThingTree(dir) {
 		return nil, false, &httpError{http.StatusBadRequest, fmt.Errorf("%q is not a thing project (no %s)", dir, config.FileName)}
 	}
+	// Only the shape of a theme name is checked, matching Edit: one no layer
+	// defines resolves to no stylesheet and leaves the board on the default
+	// palette.
+	if theme != nil && *theme != "" && registry.ResolveTheme("", *theme) == "" {
+		return nil, false, &httpError{http.StatusBadRequest, fmt.Errorf("invalid theme %q: must be lowercase letters, digits, and dashes", *theme)}
+	}
 
 	s.regmu.Lock()
 	defer s.regmu.Unlock()
 	if existing, ok := s.projects[name]; ok {
-		if filepath.Clean(existing.store.Root) == filepath.Clean(dir) {
-			return existing, false, nil // idempotent: same name, same dir
+		if filepath.Clean(existing.store.Root) != filepath.Clean(dir) {
+			return nil, false, &httpError{http.StatusConflict, fmt.Errorf("project %q is already registered to a different directory", name)}
 		}
-		return nil, false, &httpError{http.StatusConflict, fmt.Errorf("project %q is already registered to a different directory", name)}
+		// Idempotent on the mount: same name, same dir. A theme that differs from
+		// the live one is still applied, in place and without remounting, the way
+		// Edit handles a recolor on its own.
+		if theme == nil || *theme == existing.theme {
+			return existing, false, nil
+		}
+		prev := existing.theme
+		existing.theme = *theme
+		if err := s.persistLocked(); err != nil {
+			existing.theme = prev // keep memory and disk in step
+			return nil, false, &httpError{http.StatusInternalServerError, fmt.Errorf("persist registry: %w", err)}
+		}
+		existing.hub.broadcast() // recolor any open board on this project
+		return existing, false, nil
 	}
 
-	p = s.mountLocked(name, dir, nil, "")
+	newTheme := ""
+	if theme != nil {
+		newTheme = *theme
+	}
+	p = s.mountLocked(name, dir, nil, newTheme)
 	if err := s.persistLocked(); err != nil {
 		s.unmountLocked(name) // undo the mount so disk and memory stay in step
 		return nil, false, &httpError{http.StatusInternalServerError, fmt.Errorf("persist registry: %w", err)}
@@ -614,10 +645,14 @@ func (s *Server) handleProjects(w http.ResponseWriter, _ *http.Request) {
 }
 
 // registerReq is the PUT /api/projects/{project} body. The name is the {project}
-// path segment (the resource URI); the body carries only the data directory to
-// mount, which must already be an initialized thing tree.
+// path segment (the resource URI); the body carries the data directory to mount,
+// which must already be an initialized thing tree, and optionally the theme its
+// board renders in. Theme is a pointer for the same reason as on the patch
+// request: an omitted one leaves the theme alone, an explicit empty one means the
+// project has no theme of its own.
 type registerReq struct {
-	Dir string `json:"dir"`
+	Dir   string  `json:"dir"`
+	Theme *string `json:"theme"`
 }
 
 // handleRegister mounts the project named in the path over the body's dir. It is
@@ -629,7 +664,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
-	p, created, err := s.Register(r.PathValue("project"), strings.TrimSpace(req.Dir))
+	p, created, err := s.Register(r.PathValue("project"), strings.TrimSpace(req.Dir), req.Theme)
 	if err != nil {
 		s.failErr(w, err)
 		return
