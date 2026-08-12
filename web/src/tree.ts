@@ -21,9 +21,9 @@ export interface TreeFold {
 // useTreeFold tracks which nodes are collapsed. Top-level nodes (epics, orphan
 // issues) start open; a nested node that has children starts folded, matching
 // the outline convention. Each node is seeded once, so the SSE reloads after an
-// edit don't discard the user's manual folds. When a filter is active every node
-// is force-expanded so a match can't hide behind a fold. Selecting a node reveals
-// it by unfolding its ancestors.
+// edit don't discard the user's manual folds. Turning a filter on unfolds the
+// whole tree once, so a match can't start out hidden behind a fold. Selecting a
+// node reveals it by unfolding its ancestors.
 export function useTreeFold(tree: Node[], filtersActive: boolean, activeRef: string | null): TreeFold {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const seen = useRef<Set<string>>(new Set());
@@ -52,6 +52,29 @@ export function useTreeFold(tree: Node[], filtersActive: boolean, activeRef: str
     });
   }, [tree]);
 
+  // Unfold everything on the way into a filtered view, so a match cannot start
+  // out hidden. This is a starting point rather than a lock: a fold made while
+  // the filter is on is kept, which is what lets the carets work at all under a
+  // configured default filter — a board that starts filtered would otherwise have
+  // no way to fold anything, ever, and no way to turn the filter off either,
+  // since the clear button hides while the filters equal the defaults.
+  //
+  // Keyed on entering the filtered state rather than on the filters' value:
+  // typing in the search box changes them on every keystroke, and re-unfolding
+  // there would throw away the reader's folds as they searched. It waits for a
+  // tree so that it lands after the seeding effect above on a board that starts
+  // filtered; effects run in declaration order, so on that commit this one wins.
+  const unfoldedForFilter = useRef(false);
+  useEffect(() => {
+    if (!filtersActive) {
+      unfoldedForFilter.current = false;
+      return;
+    }
+    if (unfoldedForFilter.current || tree.length === 0) return;
+    unfoldedForFilter.current = true;
+    setCollapsed((prev) => (prev.size === 0 ? prev : new Set()));
+  }, [filtersActive, tree]);
+
   // Reveal the active node by unfolding its ancestors. This also depends on the
   // tree: on a fresh load (a deep-link or a click-through, where the ref is set
   // from the URL before the tree arrives) the seeding effect above collapses the
@@ -67,10 +90,7 @@ export function useTreeFold(tree: Node[], filtersActive: boolean, activeRef: str
     });
   }, [activeRef, tree]);
 
-  const expanded = useCallback(
-    (ref: string) => filtersActive || !collapsed.has(ref),
-    [filtersActive, collapsed],
-  );
+  const expanded = useCallback((ref: string) => !collapsed.has(ref), [collapsed]);
   const toggle = useCallback((ref: string) => {
     setCollapsed((prev) => {
       const next = new Set(prev);
