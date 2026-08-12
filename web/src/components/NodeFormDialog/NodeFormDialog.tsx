@@ -16,8 +16,8 @@ interface Props {
   label?: string;
   // Style the toggle as the primary (amber) button — used for the epic add.
   amber?: boolean;
-  // Full-width, left-aligned toggle — used for the detail pane's child add.
-  block?: boolean;
+  // Plain text-link toggle, matching the detail pane's "+ Add link" affordance.
+  link?: boolean;
   run: <T>(p: Promise<T>) => Promise<T | undefined>;
   onCreated: (ref: string) => void;
 }
@@ -29,7 +29,7 @@ const PRIORITIES = [Priority.High, Priority.Medium, Priority.Low];
 // for a top-level epic (parent === ""), matching the server, which rejects a
 // category on anything else. Every field but the title is optional; on success
 // the dialog closes and the new node is activated.
-export function NodeFormDialog({ api, parent, noun, label, amber, block, run, onCreated }: Props) {
+export function NodeFormDialog({ api, parent, noun, label, amber, link, run, onCreated }: Props) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [priority, setPriority] = useState("");
@@ -60,7 +60,7 @@ export function NodeFormDialog({ api, parent, noun, label, amber, block, run, on
     }
   };
 
-  const toggleCls = [s.btn, amber ? s.btnAmber : "", block ? s.block : ""].filter(Boolean).join(" ");
+  const toggleCls = link ? s.btnLink : [s.btn, amber ? s.btnAmber : ""].filter(Boolean).join(" ");
 
   return (
     <>

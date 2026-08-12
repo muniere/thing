@@ -164,7 +164,7 @@ export function NodeDetailPanel({ api, node, allNodes, run, onSelect, hrefFor, o
               parent={node.ref}
               noun={isEpic ? "issue" : "task"}
               label={`+ Add a new ${isEpic ? "issue" : "task"}`}
-              block
+              link
               run={run}
               onCreated={onSelect}
             />

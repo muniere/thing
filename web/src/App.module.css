@@ -49,7 +49,7 @@
 }
 
 /* +Epic lives in the top bar as the global "new" action; the wrapper anchors its
-   drop-down form (AddForm's floating variant positions the form itself). */
+   drop-down form (NodeFormDialog's own dialog positions the form itself). */
 .topbarAdd {
   position: relative;
   margin-left: auto;

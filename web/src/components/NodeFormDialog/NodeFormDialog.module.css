@@ -1,7 +1,7 @@
-/* AddForm — a toggle button that expands into a stacked create form. Used for the
+/* NodeFormDialog — a toggle button that opens a stacked create form. Used for the
    epic add (top bar, floating drop-down) and the issue/task add (detail pane,
-   full-width block toggle). The button/input primitives live here rather than in a
-   shared layer, so the component owns its own look. */
+   text-link toggle, matching "+ Add link"). The button/input primitives live here
+   rather than in a shared layer, so the component owns its own look. */
 .btn {
   cursor: pointer;
   background: var(--panel);
@@ -27,11 +27,6 @@
 .btnAmber:hover {
   filter: brightness(1.08);
   border-color: transparent;
-}
-/* the collapsed +issue/+task toggle spans the child list's width, left-aligned */
-.block {
-  width: 100%;
-  text-align: left;
 }
 .btnLink {
   background: none;
