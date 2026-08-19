@@ -4,7 +4,7 @@ import { NodeChainList } from "./components/NodeChainList/NodeChainList.tsx";
 import { FilterForm } from "./components/FilterForm/FilterForm.tsx";
 import { NodeDetailPanel } from "./components/NodeDetailPanel/NodeDetailPanel.tsx";
 import { NodeFormDialog } from "./components/NodeFormDialog/NodeFormDialog.tsx";
-import { ProjectSwitcher } from "./components/ProjectSwitcher/ProjectSwitcher.tsx";
+import { ProjectHeader } from "./components/ProjectHeader/ProjectHeader.tsx";
 import { SchemeMenu } from "./components/SchemeMenu/SchemeMenu.tsx";
 import { ArchiveList } from "./components/ArchiveList/ArchiveList.tsx";
 import s from "./App.module.css";
@@ -31,17 +31,15 @@ export function App({ project, onSwitch, scheme, onScheme, onRefresh }: Props) {
 
   return (
     <div className={s.app}>
-      <header className={s.topbar}>
-        <div className={s.brandGroup}>
-          <a className={s.brand} href={board.hrefFor("")} onClick={(e) => board.onNav(e, "")}>
-            <span className={s.dot} />{board.title}
-          </a>
-          <ProjectSwitcher current={project} onSwitch={onSwitch} />
-        </div>
-        <div className={s.topbarAdd}>
-          <NodeFormDialog api={board.api} parent="" noun="Epic" amber run={board.run} onCreated={board.activate} />
-        </div>
-      </header>
+      <ProjectHeader
+        project={project}
+        title={board.title}
+        href={board.rootHref}
+        onNav={(e) => board.onNav(e, "")}
+        onSwitch={onSwitch}
+      >
+        <NodeFormDialog api={board.api} parent="" noun="Epic" amber run={board.run} onCreated={board.activate} />
+      </ProjectHeader>
       {/* Fixed to the viewport's corner, so it is a sibling of the panes rather
           than part of the bar's layout. */}
       <SchemeMenu scheme={scheme} onChange={onScheme} />

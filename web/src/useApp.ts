@@ -1,14 +1,11 @@
 import { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Node } from "./domain/generated.ts";
-import { type ArchiveEntry, forProject } from "./api.ts";
-import { useLiveReload } from "./live.ts";
+import type { ArchiveEntry } from "./api.ts";
 import {
   collectCategories,
   collectPriorityCounts,
   collectStatusCounts,
   collectTags,
-  defaultsToFilters,
-  emptyFilters,
   filterTree,
   filtersActive,
   filtersFromQuery,
@@ -17,7 +14,8 @@ import {
   type Filters,
 } from "./filter.ts";
 import { findNode, isPlainClick } from "./util.ts";
-import { applyTheme } from "./theme.ts";
+import { boardHref, nodeHref, refFromQuery, withoutRef } from "./route.ts";
+import { type ProjectState, useProject } from "./useProject.ts";
 import { type TreeFold, useTreeFold, useTreeNav } from "./tree.ts";
 
 interface Input {
@@ -30,7 +28,7 @@ interface Input {
 
 export interface AppState {
   // The per-project API client, for the components that mutate through it.
-  api: ReturnType<typeof forProject>;
+  api: ProjectState["api"];
   // The configured title (also the browser tab's) and the data directory the
   // board is rooted at, both from the project's config.yaml.
   title: string;
@@ -60,101 +58,23 @@ export interface AppState {
   activate: (ref: string) => void;
   // Which rows are unfolded, driven by the selection and the filters.
   fold: TreeFold;
-  // The URL a node's anchor points at, and the click handler that navigates
-  // in-app rather than reloading.
+  // The URL a node's anchor points at, the board's own URL for the logo, and the
+  // click handler that navigates in-app rather than reloading.
   hrefFor: (ref: string) => string;
+  rootHref: string;
   onNav: (e: MouseEvent, ref: string) => void;
 }
 
-// The URL path is /<project>/<ref> (e.g. /work/epic/issue/task); /<project> alone
-// means nothing is active. Refs are slug paths ([a-z0-9-] joined by "/"), so they
-// are URL-safe as-is. Filters and search live in the query string instead.
-function refFromPath(project: string): string | null {
-  const path = window.location.pathname.replace(/^\/+/, "").replace(/\/+$/, "");
-  const prefix = `${project}/`;
-  return path.startsWith(prefix) ? path.slice(prefix.length) || null : null;
-}
-
-// useApp holds a board's state: what it loaded, what is selected and filtered,
-// and the URL that mirrors both. App itself is left to be layout.
+// useApp holds a board's state: what is selected and filtered, and the URL that
+// mirrors both. What was loaded lives in useProject; App itself is left to be
+// layout.
 export function useApp({ project, onRefresh }: Input): AppState {
-  const api = useMemo(() => forProject(project), [project]);
-  const [tree, setTree] = useState<Node[]>([]);
-  const [archived, setArchived] = useState<ArchiveEntry[]>([]);
-  const [title, setTitle] = useState(project);
-  const [dir, setDir] = useState("");
-  const [activeRef, setActiveRef] = useState<string | null>(() => refFromPath(project));
+  const { api, title, dir, tree, archived, defaults, configReady, error, dismissError, run } = useProject({
+    project,
+    onRefresh,
+  });
+  const [activeRef, setActiveRef] = useState<string | null>(() => refFromQuery(window.location.search));
   const [filters, setFilters] = useState<Filters>(() => filtersFromQuery(window.location.search));
-  const [defaults, setDefaults] = useState<Filters>(emptyFilters);
-  // Whether the config fetch has settled (either way — see loadConfig's catch).
-  // Until then `defaults` is a placeholder, not "no configured defaults", so the
-  // replaceState effect below must not write the URL from it: see its comment.
-  const [configReady, setConfigReady] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // pathFor builds the URL path for a node ref within this project: /<project> at
-  // the root, /<project>/<ref> for a node.
-  const pathFor = useCallback((ref: string) => (ref ? `/${project}/${ref}` : `/${project}`), [project]);
-
-  const reload = useCallback(async () => {
-    // The tree is the primary view; the archive list is supplementary. Fetch both
-    // together but handle them independently so a failing archive fetch never
-    // blanks the tree.
-    const [t, a] = await Promise.allSettled([api.tree(), api.listArchive()]);
-    if (t.status === "fulfilled") {
-      setTree(t.value);
-    } else {
-      setError(t.reason instanceof Error ? t.reason.message : String(t.reason));
-      return;
-    }
-    setArchived(a.status === "fulfilled" ? a.value : []);
-  }, [api]);
-
-  // Load the configured title and keep the browser tab in sync with it. It also
-  // roots the tree and labels the top-left logo. Refetched on live-reload since
-  // editing config.yaml changes it.
-  const loadConfig = useCallback(async () => {
-    try {
-      const c = await api.config();
-      setTitle(c.title || project);
-      setDir(c.dir);
-      setDefaults(defaultsToFilters(c.filter));
-      // The theme is a document-level concern (it drives html[data-theme]), not
-      // React state, so it is applied here rather than rendered. Applying it on
-      // every config load also means editing config.yaml recolors the board over
-      // live-reload, the way the title already updates.
-      applyTheme(c.theme);
-      setConfigReady(true);
-    } catch (e) {
-      // A missing/unreachable config just leaves the defaults, but still marks
-      // config as settled so the URL sync below (and the effect above) can proceed
-      // — an unreachable /api/config must not stall the UI indefinitely. Deliberately
-      // not setError: this can fire on a transient reconnect (e.g. thingd restarting),
-      // and a banner would flash on an otherwise-healthy board. Still worth knowing
-      // about, so it is not completely silent — just not user-facing.
-      console.warn("GET /api/config failed; using placeholder title/dir and no configured filter defaults", e);
-      setConfigReady(true);
-    }
-  }, [api, project]);
-  useEffect(() => {
-    void reload();
-    void loadConfig();
-  }, [reload, loadConfig]);
-  // The theme belongs to the open project, so drop it on the way out: leaving it
-  // set would color the root picker — and, briefly, the next project — with the
-  // palette of the project just left. Root remounts the board per project, so
-  // this runs on every switch as well as on the way back to the picker.
-  useEffect(() => () => applyTheme(undefined), []);
-  // One SSE subscription refreshes both the tree and the config (title/dir).
-  const refresh = useCallback(() => {
-    void reload();
-    void loadConfig();
-    onRefresh();
-  }, [reload, loadConfig, onRefresh]);
-  useLiveReload(project, refresh);
-  useEffect(() => {
-    document.title = title;
-  }, [title]);
 
   // The configured defaults arrive with the config fetch, one tick after the first
   // render has already read the URL. Apply them only when the URL said nothing about
@@ -169,22 +89,6 @@ export function useApp({ project, onRefresh }: Input): AppState {
     if (!hasFilterQuery(window.location.search)) setFilters(defaults);
   }, [defaults]);
 
-  // run awaits a mutation, surfaces any error, then refreshes the tree.
-  const run = useCallback(
-    async <T,>(p: Promise<T>): Promise<T | undefined> => {
-      setError(null);
-      try {
-        const r = await p;
-        await reload();
-        return r;
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-        return undefined;
-      }
-    },
-    [reload],
-  );
-
   // activate makes a node the focused one (or clears it when given ""); the tree
   // and the detail panel fire it when the user picks a node.
   const activate = useCallback((ref: string) => setActiveRef(ref || null), []);
@@ -197,18 +101,23 @@ export function useApp({ project, onRefresh }: Input): AppState {
   // "nothing configured" would turn the query into a bare URL, and the sentinel
   // for the user's explicit "show everything" would be lost the moment they
   // click a row or copy a link. So until configReady, keep whatever the URL
-  // already says, verbatim.
+  // already says, verbatim — minus the focus, which boardHref writes itself and
+  // would otherwise appear twice.
   const queryString = useCallback(
-    () => (configReady ? filtersToQuery(filters, defaults) : window.location.search),
+    () => (configReady ? filtersToQuery(filters, defaults) : withoutRef(window.location.search)),
     [configReady, filters, defaults],
   );
 
-  // hrefFor is the URL a node's anchor points at: its ref as the path plus the
-  // current filters as the query. Tree rows, child rows, and the logo are real
-  // <a> links so the URL is real (a ⌘/Ctrl/Shift/middle click opens the node in a
-  // new tab, and the link is copyable), but a plain click is intercepted (see
-  // onNav) and handled in-app rather than reloading the page.
-  const hrefFor = useCallback((ref: string) => `${pathFor(ref)}${queryString()}`, [pathFor, queryString]);
+  // hrefFor is where a node's anchor points: the node's own screen, at its own
+  // path. Tree rows and child rows are real <a> links so the URL is real — a
+  // ⌘/Ctrl/Shift/middle click opens the node with the full width of the window,
+  // and the link is copyable — but a plain click is intercepted (see onNav) and
+  // focuses the node here instead, without reloading the page.
+  const hrefFor = useCallback((ref: string) => nodeHref(project, ref), [project]);
+
+  // rootHref is the board itself, carrying the current filters. The logo links
+  // here; it names no node, so hrefFor cannot express it.
+  const rootHref = boardHref(project, null, queryString());
 
   // navigate selects a node and pushes a history entry, so a plain click behaves
   // like a page navigation (Back/Forward step through visited nodes) without the
@@ -216,14 +125,15 @@ export function useApp({ project, onRefresh }: Input): AppState {
   // onto the connection pool.
   const navigate = useCallback(
     (ref: string) => {
-      window.history.pushState(null, "", `${pathFor(ref)}${queryString()}`);
+      window.history.pushState(null, "", boardHref(project, ref || null, queryString()));
       setActiveRef(ref || null);
     },
-    [pathFor, queryString],
+    [project, queryString],
   );
 
-  // onNav handles an anchor click: a plain click navigates in-app; a modified or
-  // middle click is left to the browser so its default (open in a new tab) stands.
+  // onNav handles an anchor click: a plain click focuses the node in place; a
+  // modified or middle click is left to the browser so its default — the node's
+  // own screen, in a new tab — stands.
   const onNav = useCallback(
     (e: MouseEvent, ref: string) => {
       if (!isPlainClick(e)) return;
@@ -244,19 +154,19 @@ export function useApp({ project, onRefresh }: Input): AppState {
   // bare URL, permanently erasing the sentinel before the real defaults arrive.
   useEffect(() => {
     if (!configReady) return;
-    window.history.replaceState(null, "", `${pathFor(activeRef ?? "")}${filtersToQuery(filters, defaults)}`);
-  }, [pathFor, activeRef, filters, defaults, configReady]);
+    window.history.replaceState(null, "", boardHref(project, activeRef, filtersToQuery(filters, defaults)));
+  }, [project, activeRef, filters, defaults, configReady]);
 
   // Restore the view from the URL on Back/Forward (a popstate, which pushState
   // navigation produces).
   useEffect(() => {
     const onPop = () => {
-      setActiveRef(refFromPath(project));
+      setActiveRef(refFromQuery(window.location.search));
       setFilters(filtersFromQuery(window.location.search, defaults));
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
-  }, [project, defaults]);
+  }, [defaults]);
 
   const filtered = useMemo(() => filterTree(tree, filters), [tree, filters]);
   const categories = useMemo(() => collectCategories(tree), [tree]);
@@ -283,7 +193,7 @@ export function useApp({ project, onRefresh }: Input): AppState {
     filtered,
     archived,
     error,
-    dismissError: () => setError(null),
+    dismissError,
     run,
     filters,
     setFilters,
@@ -297,6 +207,7 @@ export function useApp({ project, onRefresh }: Input): AppState {
     activate,
     fold,
     hrefFor,
+    rootHref,
     onNav,
   };
 }
