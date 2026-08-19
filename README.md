@@ -34,7 +34,8 @@ layer as the CLI, so the two never disagree. One process hosts **multiple
 projects** — each a named mount over its own data directory — registered in
 `projects.yaml` and addressed under `/<project>`; the root `/` is a picker
 listing them. The frontend lives in [`web/`](web/) (React + TypeScript, bundled
-with esbuild; types hand-written in `web/src/domain/generated.ts`).
+with esbuild; wire types are generated into `web/src/domain/generated.ts` from
+`schema/tree.json` by `make gen` — see [`scripts/gen.sh`](scripts/gen.sh)).
 
 ### Projects
 
@@ -262,6 +263,7 @@ thing link add  <ref> <url> [--label <l>]    # add or update a related link
 thing link rm   <ref> <url|index>            # remove a link by URL, or 1-based index
 thing link list <ref>                        # list a node's related links
 thing find <query> [--json]                  # fuzzy-search titles, slugs, and tags
+thing check [<ref>]                          # validate body section convention; no ref = whole tree
 thing tree                                   # whole tree as an indented outline
 thing export                                 # print the whole tree as JSON
 thing import <file> [--dry-run]              # bulk-create nodes from a JSON batch
@@ -418,6 +420,51 @@ Free-form Markdown body. `[[<ref>]]` links to another node by its ref;
 
 All frontmatter fields are optional. A node's name on disk is its slug — do not
 move or rename files by hand; use `thing mv`.
+
+### Section convention
+
+A body should carry four headings, at level 2 (`## `), in this order:
+`Summary`, `Details`, and `Definition of Done` are required; `Comments` is
+optional. Matching is case-insensitive with surrounding whitespace trimmed,
+and tolerant of a closing ATX run (`## Summary ##`); a `# Summary` (level 1)
+heading is not recognized, since a level-1 heading in a body is
+conventionally the node's own title, never a section. A heading inside a
+fenced code block is never recognized either.
+
+<!-- section-convention-example -->
+```markdown
+## Summary
+
+Roll the new dashboard out to every region without a visible gap in alerting.
+
+## Details
+
+Region-by-region cutover, starting with the lowest-traffic region so a
+misconfigured alert rule surfaces before it reaches production traffic.
+
+## Definition of Done
+
+- [ ] Every region is on the new dashboard
+- [ ] No alert rule fired unexpectedly during cutover
+```
+
+This is a writing convention, not a schema: `thing` never writes a body back
+out, and never rejects a body for not following it. `thing check [<ref>]`
+validates a node's body against the convention and reports what it finds as
+warnings — a missing required section, or sections out of order — never as
+an error; its exit code is 0 either way. With no ref, it walks the whole tree
+and prints only the nodes that have warnings:
+
+```
+$ thing check node-body-sections/comments
+node-body-sections/comments
+  warn: No Definition of Done section
+  warn: Details appears before Summary
+```
+
+`thingd`'s web API (`ExportWeb`, not the plain `thing export` interchange
+format) carries the same warnings as `markers`, each entry with its
+`severity` (always `"warn"` today) and `message`.
 
 ## Configuration
 

@@ -212,3 +212,40 @@ Markdown file:
 `<data-dir>/<epic>/_epic.md`, `.../<epic>/<issue>/_issue.md`, or
 `.../<issue>/<task>.md` (orphan issues live under `<data-dir>/_orphan/`).
 Preserve the frontmatter block delimited by `---`.
+
+## Section convention
+
+Since there is no write command for the body, this convention is the only
+thing keeping an AI-written body in the format `thing` reads. **When you write
+or rewrite a node's body, include all three of `## Summary`, `## Details`,
+and `## Definition of Done`, in that order, at heading level 2 (`##`),
+exactly spelled.** `## Comments` is optional; append it last if you use it at
+all. Matching is case-insensitive, but write them with this exact casing
+regardless. A single `# Summary` (level 1) is silently ignored — it is not
+recognized as the section, and `thing` reads the body as if it were not there
+at all — and a heading inside a fenced code block is never recognized either.
+
+<!-- section-convention-example -->
+```markdown
+## Summary
+
+Roll the new dashboard out to every region without a visible gap in alerting.
+
+## Details
+
+Region-by-region cutover, starting with the lowest-traffic region so a
+misconfigured alert rule surfaces before it reaches production traffic.
+
+## Definition of Done
+
+- [ ] Every region is on the new dashboard
+- [ ] No alert rule fired unexpectedly during cutover
+```
+
+Run `thing check <ref>` after writing a body to confirm it against the
+convention — it reports a missing required section or an out-of-order
+heading as a warning (never an error; exit code is always 0) — or
+`thing check` with no ref to walk the whole tree and see only the nodes that
+need attention. thingd's web API carries the same warnings as `markers`
+(each entry's `severity` and `message`); `thing export` (the interchange
+format above) does not — it carries only the raw `body`.

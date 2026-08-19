@@ -257,3 +257,19 @@ func extractExampleFence(t *testing.T, path string) string {
 
 	return strings.Join(lines[fenceStart+1:fenceEnd], "\n")
 }
+
+// TestDocsExamplesParse keeps README.md and skills/thing/SKILL.md honest:
+// each carries a worked example body, marked with docsExampleMarker so this
+// test can find it among the surrounding YAML and shell fences, and both
+// must actually pass Check cleanly. A documented example that would itself
+// trigger a warning is a documentation bug.
+func TestDocsExamplesParse(t *testing.T) {
+	for _, path := range []string{"../../README.md", "../../skills/thing/SKILL.md"} {
+		t.Run(path, func(t *testing.T) {
+			body := extractExampleFence(t, path)
+			if got := Check(body); got != nil {
+				t.Errorf("Check() = %+v, want nil", got)
+			}
+		})
+	}
+}
