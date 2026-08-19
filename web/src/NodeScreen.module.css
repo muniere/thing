@@ -16,14 +16,20 @@
   cursor: pointer;
 }
 
+/* The scroll lives out here, on the full width, so the scrollbar rides the edge
+   of the window the way the board's does. Were the centered column itself the
+   scroller, its bar would hang partway across the page. */
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 /* Wider than the board's detail pane, which is the point of this screen: the
    panel measures itself against --detail-measure, and here the column is the
    only thing setting the width. */
 .column {
   --detail-measure: 100%;
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
   width: 100%;
   max-width: 68rem;
   margin: 0 auto;
