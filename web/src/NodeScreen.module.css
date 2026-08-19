@@ -1,0 +1,41 @@
+/* One node, on its own. The header is ProjectHeader's; this owns the column
+   underneath it. */
+.screen {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.error {
+  flex: none;
+  padding: 0.5rem 1.5rem;
+  background: color-mix(in srgb, var(--high) 22%, var(--panel));
+  border-bottom: 1px solid var(--high);
+  color: var(--ink);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+/* Wider than the board's detail pane, which is the point of this screen: the
+   panel measures itself against --detail-measure, and here the column is the
+   only thing setting the width. */
+.column {
+  --detail-measure: 100%;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  width: 100%;
+  max-width: 68rem;
+  margin: 0 auto;
+  padding: 1.8rem 2rem 3rem;
+}
+
+.missing {
+  color: var(--ink-3);
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  padding: 2rem 0.2rem;
+}
+.missing a {
+  color: var(--ink-2);
+}

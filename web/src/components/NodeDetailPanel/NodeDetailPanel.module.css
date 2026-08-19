@@ -2,8 +2,11 @@
    edit mode), status/priority chips, the Markdown body, the child list, links,
    move, and delete. Button/input primitives live here so the component owns its
    look; the body's Markdown styling is global (see styles/markdown.css). */
+/* A comfortable measure for prose by default, but the container has the last
+   word: on a screen given over to one node there is no reason to stop at the
+   width the board's pane happened to allow. */
 .detail {
-  max-width: 48rem;
+  max-width: var(--detail-measure, 48rem);
 }
 /* the ref sits under the title as a quiet mono line, with a copy link trailing it
    inline — a long ref wraps and the link follows its last line */
