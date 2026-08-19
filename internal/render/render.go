@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/muniere/thing/internal/model"
+	"github.com/muniere/thing/internal/section"
 )
 
 // statusBox is a compact, fixed-width marker for a node's status.
@@ -240,6 +241,32 @@ func field(b *strings.Builder, name, value string) {
 		return
 	}
 	fmt.Fprintf(b, "%-9s %s\n", name+":", value)
+}
+
+// CheckItem is one node's section-convention markers, as shown by
+// `thing check`: its ref and whatever section.Check found on its body.
+type CheckItem struct {
+	Ref     string
+	Markers []section.Marker
+}
+
+// Check renders each item that carries at least one marker as its ref
+// followed by an indented "<severity>: <message>" line per marker. An item
+// with no markers is skipped, so `thing check` (whole-tree mode) prints only
+// the nodes that need attention; a single-ref check that comes back clean
+// prints nothing at all.
+func Check(items []CheckItem) string {
+	var b strings.Builder
+	for _, it := range items {
+		if len(it.Markers) == 0 {
+			continue
+		}
+		b.WriteString(it.Ref + "\n")
+		for _, m := range it.Markers {
+			fmt.Fprintf(&b, "  %s: %s\n", m.Severity, m.Message)
+		}
+	}
+	return b.String()
 }
 
 func writeChildren(b *strings.Builder, nodes []*model.Node, prefix string) {

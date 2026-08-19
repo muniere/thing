@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/muniere/thing/internal/model"
+	"github.com/muniere/thing/internal/section"
 )
 
 func TestTree(t *testing.T) {
@@ -170,5 +171,28 @@ func TestCategoryGrouping(t *testing.T) {
 	}
 	if flat := TopList(top, nil); strings.Contains(flat, "#") {
 		t.Errorf("no categories should render a flat list:\n%s", flat)
+	}
+}
+
+func TestCheck(t *testing.T) {
+	items := []CheckItem{
+		{Ref: "clean", Markers: nil},
+		{Ref: "node-body-sections/comments", Markers: []section.Marker{
+			{Severity: "warn", Message: "No Definition of Done section"},
+			{Severity: "warn", Message: "Details appears before Summary"},
+		}},
+	}
+	want := "node-body-sections/comments\n" +
+		"  warn: No Definition of Done section\n" +
+		"  warn: Details appears before Summary\n"
+	if got := Check(items); got != want {
+		t.Errorf("Check:\n got: %q\nwant: %q", got, want)
+	}
+}
+
+func TestCheckAllClean(t *testing.T) {
+	items := []CheckItem{{Ref: "clean-one"}, {Ref: "clean-two"}}
+	if got := Check(items); got != "" {
+		t.Errorf("Check() = %q, want empty (no node has markers)", got)
 	}
 }

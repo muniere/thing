@@ -24,7 +24,7 @@ _thing() {
         cword=$COMP_CWORD
     }
 
-    local commands="init add ls show status priority mv rm archive unarchive link find tree export import server help --version"
+    local commands="init add ls show status priority mv rm archive unarchive link find check tree export import server help --version"
     local link_verbs="add rm list"
     local server_verbs="start stop restart status logs"
     local statuses="todo doing done paused"
@@ -95,7 +95,7 @@ _thing() {
             esac
             ;;
         *)
-            # show, mv, rm, archive, init, tree, export: global flags only.
+            # show, mv, rm, archive, init, check, tree, export: global flags only.
             [[ "$cur" == -* ]] && COMPREPLY=($(compgen -W "$global_flags" -- "$cur"))
             ;;
     esac

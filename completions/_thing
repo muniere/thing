@@ -19,6 +19,7 @@ _thing() {
         'unarchive:restore an archived node to the live tree'
         'link:manage a node'\''s related links'
         'find:fuzzy-search titles, slugs, and tags'
+        'check:validate a node'\''s body against the section convention'
         'tree:print the whole tree as an outline'
         'export:print the whole tree as JSON'
         'import:bulk-create nodes from a JSON batch'
@@ -109,7 +110,7 @@ _thing() {
                     fi
                     ;;
                 *)
-                    # show, mv, rm, archive, init, tree, export: global flags only.
+                    # show, mv, rm, archive, init, check, tree, export: global flags only.
                     _arguments $global_flags
                     ;;
             esac
