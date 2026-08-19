@@ -1,14 +1,11 @@
 import { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Node } from "./domain/generated.ts";
-import { type ArchiveEntry, forProject } from "./api.ts";
-import { useLiveReload } from "./live.ts";
+import type { ArchiveEntry } from "./api.ts";
 import {
   collectCategories,
   collectPriorityCounts,
   collectStatusCounts,
   collectTags,
-  defaultsToFilters,
-  emptyFilters,
   filterTree,
   filtersActive,
   filtersFromQuery,
@@ -17,7 +14,7 @@ import {
   type Filters,
 } from "./filter.ts";
 import { findNode, isPlainClick } from "./util.ts";
-import { applyTheme } from "./theme.ts";
+import { type ProjectState, useProject } from "./useProject.ts";
 import { type TreeFold, useTreeFold, useTreeNav } from "./tree.ts";
 
 interface Input {
@@ -30,7 +27,7 @@ interface Input {
 
 export interface AppState {
   // The per-project API client, for the components that mutate through it.
-  api: ReturnType<typeof forProject>;
+  api: ProjectState["api"];
   // The configured title (also the browser tab's) and the data directory the
   // board is rooted at, both from the project's config.yaml.
   title: string;
@@ -75,86 +72,16 @@ function refFromPath(project: string): string | null {
   return path.startsWith(prefix) ? path.slice(prefix.length) || null : null;
 }
 
-// useApp holds a board's state: what it loaded, what is selected and filtered,
-// and the URL that mirrors both. App itself is left to be layout.
+// useApp holds a board's state: what is selected and filtered, and the URL that
+// mirrors both. What was loaded lives in useProject; App itself is left to be
+// layout.
 export function useApp({ project, onRefresh }: Input): AppState {
-  const api = useMemo(() => forProject(project), [project]);
-  const [tree, setTree] = useState<Node[]>([]);
-  const [archived, setArchived] = useState<ArchiveEntry[]>([]);
-  const [title, setTitle] = useState(project);
-  const [dir, setDir] = useState("");
+  const { api, title, dir, tree, archived, defaults, configReady, error, dismissError, run } = useProject({
+    project,
+    onRefresh,
+  });
   const [activeRef, setActiveRef] = useState<string | null>(() => refFromPath(project));
   const [filters, setFilters] = useState<Filters>(() => filtersFromQuery(window.location.search));
-  const [defaults, setDefaults] = useState<Filters>(emptyFilters);
-  // Whether the config fetch has settled (either way — see loadConfig's catch).
-  // Until then `defaults` is a placeholder, not "no configured defaults", so the
-  // replaceState effect below must not write the URL from it: see its comment.
-  const [configReady, setConfigReady] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // pathFor builds the URL path for a node ref within this project: /<project> at
-  // the root, /<project>/<ref> for a node.
-  const pathFor = useCallback((ref: string) => (ref ? `/${project}/${ref}` : `/${project}`), [project]);
-
-  const reload = useCallback(async () => {
-    // The tree is the primary view; the archive list is supplementary. Fetch both
-    // together but handle them independently so a failing archive fetch never
-    // blanks the tree.
-    const [t, a] = await Promise.allSettled([api.tree(), api.listArchive()]);
-    if (t.status === "fulfilled") {
-      setTree(t.value);
-    } else {
-      setError(t.reason instanceof Error ? t.reason.message : String(t.reason));
-      return;
-    }
-    setArchived(a.status === "fulfilled" ? a.value : []);
-  }, [api]);
-
-  // Load the configured title and keep the browser tab in sync with it. It also
-  // roots the tree and labels the top-left logo. Refetched on live-reload since
-  // editing config.yaml changes it.
-  const loadConfig = useCallback(async () => {
-    try {
-      const c = await api.config();
-      setTitle(c.title || project);
-      setDir(c.dir);
-      setDefaults(defaultsToFilters(c.filter));
-      // The theme is a document-level concern (it drives html[data-theme]), not
-      // React state, so it is applied here rather than rendered. Applying it on
-      // every config load also means editing config.yaml recolors the board over
-      // live-reload, the way the title already updates.
-      applyTheme(c.theme);
-      setConfigReady(true);
-    } catch (e) {
-      // A missing/unreachable config just leaves the defaults, but still marks
-      // config as settled so the URL sync below (and the effect above) can proceed
-      // — an unreachable /api/config must not stall the UI indefinitely. Deliberately
-      // not setError: this can fire on a transient reconnect (e.g. thingd restarting),
-      // and a banner would flash on an otherwise-healthy board. Still worth knowing
-      // about, so it is not completely silent — just not user-facing.
-      console.warn("GET /api/config failed; using placeholder title/dir and no configured filter defaults", e);
-      setConfigReady(true);
-    }
-  }, [api, project]);
-  useEffect(() => {
-    void reload();
-    void loadConfig();
-  }, [reload, loadConfig]);
-  // The theme belongs to the open project, so drop it on the way out: leaving it
-  // set would color the root picker — and, briefly, the next project — with the
-  // palette of the project just left. Root remounts the board per project, so
-  // this runs on every switch as well as on the way back to the picker.
-  useEffect(() => () => applyTheme(undefined), []);
-  // One SSE subscription refreshes both the tree and the config (title/dir).
-  const refresh = useCallback(() => {
-    void reload();
-    void loadConfig();
-    onRefresh();
-  }, [reload, loadConfig, onRefresh]);
-  useLiveReload(project, refresh);
-  useEffect(() => {
-    document.title = title;
-  }, [title]);
 
   // The configured defaults arrive with the config fetch, one tick after the first
   // render has already read the URL. Apply them only when the URL said nothing about
@@ -169,21 +96,9 @@ export function useApp({ project, onRefresh }: Input): AppState {
     if (!hasFilterQuery(window.location.search)) setFilters(defaults);
   }, [defaults]);
 
-  // run awaits a mutation, surfaces any error, then refreshes the tree.
-  const run = useCallback(
-    async <T,>(p: Promise<T>): Promise<T | undefined> => {
-      setError(null);
-      try {
-        const r = await p;
-        await reload();
-        return r;
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-        return undefined;
-      }
-    },
-    [reload],
-  );
+  // pathFor builds the URL path for a node ref within this project: /<project> at
+  // the root, /<project>/<ref> for a node.
+  const pathFor = useCallback((ref: string) => (ref ? `/${project}/${ref}` : `/${project}`), [project]);
 
   // activate makes a node the focused one (or clears it when given ""); the tree
   // and the detail panel fire it when the user picks a node.
@@ -283,7 +198,7 @@ export function useApp({ project, onRefresh }: Input): AppState {
     filtered,
     archived,
     error,
-    dismissError: () => setError(null),
+    dismissError,
     run,
     filters,
     setFilters,
