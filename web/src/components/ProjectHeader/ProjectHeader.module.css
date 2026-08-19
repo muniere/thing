@@ -1,0 +1,48 @@
+.header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 0.8rem 1.5rem;
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+  /* backdrop-filter makes the header its own stacking context at root z-index
+     auto, so the switcher dropdown (a descendant) would paint *below* the
+     positioned panes that come later in the DOM. Lift the whole header above
+     that content so the dropdown's lower rows stay clickable. */
+  position: relative;
+  z-index: 10;
+}
+/* The logo and its switcher caret travel together at the far left. */
+.brandGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+  text-decoration: none;
+}
+.dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--amber);
+  box-shadow: 0 0 9px var(--amber);
+}
+
+/* The right-hand slot. The board puts +Epic here as the global "new" action; the
+   wrapper anchors its drop-down form (NodeFormDialog's own dialog positions the
+   form itself). */
+.slot {
+  position: relative;
+  margin-left: auto;
+}
