@@ -33,7 +33,7 @@ export function App({ project, onSwitch, scheme, onScheme, onRefresh }: Props) {
     <div className={s.app}>
       <header className={s.topbar}>
         <div className={s.brandGroup}>
-          <a className={s.brand} href={board.hrefFor("")} onClick={(e) => board.onNav(e, "")}>
+          <a className={s.brand} href={board.rootHref} onClick={(e) => board.onNav(e, "")}>
             <span className={s.dot} />{board.title}
           </a>
           <ProjectSwitcher current={project} onSwitch={onSwitch} />

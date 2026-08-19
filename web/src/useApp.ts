@@ -14,6 +14,7 @@ import {
   type Filters,
 } from "./filter.ts";
 import { findNode, isPlainClick } from "./util.ts";
+import { boardHref, nodeHref, refFromQuery, withoutRef } from "./route.ts";
 import { type ProjectState, useProject } from "./useProject.ts";
 import { type TreeFold, useTreeFold, useTreeNav } from "./tree.ts";
 
@@ -57,19 +58,11 @@ export interface AppState {
   activate: (ref: string) => void;
   // Which rows are unfolded, driven by the selection and the filters.
   fold: TreeFold;
-  // The URL a node's anchor points at, and the click handler that navigates
-  // in-app rather than reloading.
+  // The URL a node's anchor points at, the board's own URL for the logo, and the
+  // click handler that navigates in-app rather than reloading.
   hrefFor: (ref: string) => string;
+  rootHref: string;
   onNav: (e: MouseEvent, ref: string) => void;
-}
-
-// The URL path is /<project>/<ref> (e.g. /work/epic/issue/task); /<project> alone
-// means nothing is active. Refs are slug paths ([a-z0-9-] joined by "/"), so they
-// are URL-safe as-is. Filters and search live in the query string instead.
-function refFromPath(project: string): string | null {
-  const path = window.location.pathname.replace(/^\/+/, "").replace(/\/+$/, "");
-  const prefix = `${project}/`;
-  return path.startsWith(prefix) ? path.slice(prefix.length) || null : null;
 }
 
 // useApp holds a board's state: what is selected and filtered, and the URL that
@@ -80,7 +73,7 @@ export function useApp({ project, onRefresh }: Input): AppState {
     project,
     onRefresh,
   });
-  const [activeRef, setActiveRef] = useState<string | null>(() => refFromPath(project));
+  const [activeRef, setActiveRef] = useState<string | null>(() => refFromQuery(window.location.search));
   const [filters, setFilters] = useState<Filters>(() => filtersFromQuery(window.location.search));
 
   // The configured defaults arrive with the config fetch, one tick after the first
@@ -96,10 +89,6 @@ export function useApp({ project, onRefresh }: Input): AppState {
     if (!hasFilterQuery(window.location.search)) setFilters(defaults);
   }, [defaults]);
 
-  // pathFor builds the URL path for a node ref within this project: /<project> at
-  // the root, /<project>/<ref> for a node.
-  const pathFor = useCallback((ref: string) => (ref ? `/${project}/${ref}` : `/${project}`), [project]);
-
   // activate makes a node the focused one (or clears it when given ""); the tree
   // and the detail panel fire it when the user picks a node.
   const activate = useCallback((ref: string) => setActiveRef(ref || null), []);
@@ -112,18 +101,23 @@ export function useApp({ project, onRefresh }: Input): AppState {
   // "nothing configured" would turn the query into a bare URL, and the sentinel
   // for the user's explicit "show everything" would be lost the moment they
   // click a row or copy a link. So until configReady, keep whatever the URL
-  // already says, verbatim.
+  // already says, verbatim — minus the focus, which boardHref writes itself and
+  // would otherwise appear twice.
   const queryString = useCallback(
-    () => (configReady ? filtersToQuery(filters, defaults) : window.location.search),
+    () => (configReady ? filtersToQuery(filters, defaults) : withoutRef(window.location.search)),
     [configReady, filters, defaults],
   );
 
-  // hrefFor is the URL a node's anchor points at: its ref as the path plus the
-  // current filters as the query. Tree rows, child rows, and the logo are real
-  // <a> links so the URL is real (a ⌘/Ctrl/Shift/middle click opens the node in a
-  // new tab, and the link is copyable), but a plain click is intercepted (see
-  // onNav) and handled in-app rather than reloading the page.
-  const hrefFor = useCallback((ref: string) => `${pathFor(ref)}${queryString()}`, [pathFor, queryString]);
+  // hrefFor is where a node's anchor points: the node's own screen, at its own
+  // path. Tree rows and child rows are real <a> links so the URL is real — a
+  // ⌘/Ctrl/Shift/middle click opens the node with the full width of the window,
+  // and the link is copyable — but a plain click is intercepted (see onNav) and
+  // focuses the node here instead, without reloading the page.
+  const hrefFor = useCallback((ref: string) => nodeHref(project, ref), [project]);
+
+  // rootHref is the board itself, carrying the current filters. The logo links
+  // here; it names no node, so hrefFor cannot express it.
+  const rootHref = boardHref(project, null, queryString());
 
   // navigate selects a node and pushes a history entry, so a plain click behaves
   // like a page navigation (Back/Forward step through visited nodes) without the
@@ -131,14 +125,15 @@ export function useApp({ project, onRefresh }: Input): AppState {
   // onto the connection pool.
   const navigate = useCallback(
     (ref: string) => {
-      window.history.pushState(null, "", `${pathFor(ref)}${queryString()}`);
+      window.history.pushState(null, "", boardHref(project, ref || null, queryString()));
       setActiveRef(ref || null);
     },
-    [pathFor, queryString],
+    [project, queryString],
   );
 
-  // onNav handles an anchor click: a plain click navigates in-app; a modified or
-  // middle click is left to the browser so its default (open in a new tab) stands.
+  // onNav handles an anchor click: a plain click focuses the node in place; a
+  // modified or middle click is left to the browser so its default — the node's
+  // own screen, in a new tab — stands.
   const onNav = useCallback(
     (e: MouseEvent, ref: string) => {
       if (!isPlainClick(e)) return;
@@ -159,19 +154,19 @@ export function useApp({ project, onRefresh }: Input): AppState {
   // bare URL, permanently erasing the sentinel before the real defaults arrive.
   useEffect(() => {
     if (!configReady) return;
-    window.history.replaceState(null, "", `${pathFor(activeRef ?? "")}${filtersToQuery(filters, defaults)}`);
-  }, [pathFor, activeRef, filters, defaults, configReady]);
+    window.history.replaceState(null, "", boardHref(project, activeRef, filtersToQuery(filters, defaults)));
+  }, [project, activeRef, filters, defaults, configReady]);
 
   // Restore the view from the URL on Back/Forward (a popstate, which pushState
   // navigation produces).
   useEffect(() => {
     const onPop = () => {
-      setActiveRef(refFromPath(project));
+      setActiveRef(refFromQuery(window.location.search));
       setFilters(filtersFromQuery(window.location.search, defaults));
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
-  }, [project, defaults]);
+  }, [defaults]);
 
   const filtered = useMemo(() => filterTree(tree, filters), [tree, filters]);
   const categories = useMemo(() => collectCategories(tree), [tree]);
@@ -212,6 +207,7 @@ export function useApp({ project, onRefresh }: Input): AppState {
     activate,
     fold,
     hrefFor,
+    rootHref,
     onNav,
   };
 }
