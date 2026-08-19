@@ -1,22 +1,22 @@
 import { useCallback, useEffect, useState } from "react";
 import { App } from "./App.tsx";
+import { NodeScreen } from "./NodeScreen.tsx";
 import { ProjectList } from "./components/ProjectList/ProjectList.tsx";
 import { type Scheme, setScheme as saveScheme, settings } from "./api.ts";
+import { parseLocation, type Route } from "./route.ts";
 import { applyScheme } from "./theme.ts";
 
-// The first URL path segment names the project; an empty path ("/") is the root
-// picker. Everything after the project is that project's own ref (handled inside
-// App).
-function projectFromPath(): string | null {
-  const seg = window.location.pathname.replace(/^\/+/, "").split("/")[0];
-  return seg || null;
-}
-
-// Root owns the top-level route — which project is open, or the picker at "/".
-// It renders ProjectList when no project is selected and App (keyed by project so
-// it remounts on a switch) otherwise, and keeps in sync with Back/Forward.
+// Root owns the top-level route: the picker at "/", a project's board, or one
+// node on a screen of its own. It renders the matching view — keyed so a board
+// remounts per project and a node's screen per node — and keeps in sync with
+// Back/Forward.
+//
+// It does not own the board's focus. Which node the board has selected is read
+// and written by useApp, straight from the query, so keyboard nav and filter
+// changes never make a round trip through the router; Root's copy of that ref
+// goes stale on the board, and nothing reads it.
 export function Root() {
-  const [project, setProject] = useState<string | null>(projectFromPath);
+  const [route, setRoute] = useState<Route>(parseLocation);
 
   // The color scheme is server-wide, so it is owned here rather than by either
   // view: the picker and a board both wear it, and both offer the control.
@@ -55,27 +55,45 @@ export function Root() {
   );
 
   useEffect(() => {
-    const onPop = () => setProject(projectFromPath());
+    const onPop = () => setRoute(parseLocation());
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  // switchTo routes to a project (push /<name>) or to the picker (null → "/"),
-  // remounting App via its project key. The picker cards and the in-project
-  // switcher share it — the picker only ever passes a name, the switcher may pass
-  // null for "All projects".
-  const switchTo = useCallback((name: string | null) => {
-    window.history.pushState(null, "", name ? `/${name}` : "/");
-    setProject(name);
+  // navigate is the one in-app transition that can change which view is shown, so
+  // it lives here. The board's own focus moves do not come through it (see the
+  // note above); a node's screen has nowhere else to go, so all of its links do.
+  const navigate = useCallback((href: string) => {
+    window.history.pushState(null, "", href);
+    setRoute(parseLocation());
   }, []);
 
-  if (!project) {
+  // switchTo routes to a project or to the picker (null → "/"). The picker cards
+  // and the in-project switcher share it — the picker only ever passes a name,
+  // the switcher may pass null for "All projects".
+  const switchTo = useCallback((name: string | null) => navigate(name ? `/${name}/` : "/"), [navigate]);
+
+  if (route.kind === "picker") {
     return <ProjectList onOpen={switchTo} scheme={scheme} onScheme={chooseScheme} />;
+  }
+  if (route.kind === "node") {
+    return (
+      <NodeScreen
+        key={`${route.project}/${route.ref}`}
+        project={route.project}
+        nodeRef={route.ref}
+        navigate={navigate}
+        onSwitch={switchTo}
+        scheme={scheme}
+        onScheme={chooseScheme}
+        onRefresh={refreshScheme}
+      />
+    );
   }
   return (
     <App
-      key={project}
-      project={project}
+      key={route.project}
+      project={route.project}
       onSwitch={switchTo}
       scheme={scheme}
       onScheme={chooseScheme}
