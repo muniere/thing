@@ -3,7 +3,11 @@
   display: flex;
   align-items: center;
   gap: 1.25rem;
-  padding: 0.8rem 1.5rem;
+  /* Height comes from --topbar-height, not from the contents: the slot below is
+     empty on a node's screen and holds a button on the board, and a
+     content-sized bar would be two different heights for that reason alone. */
+  height: var(--topbar-height);
+  padding: 0 1.5rem;
   background: color-mix(in srgb, var(--bg) 86%, transparent);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--line);
