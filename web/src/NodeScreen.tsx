@@ -50,29 +50,31 @@ export function NodeScreen({ project, nodeRef, onSwitch, scheme, onScheme, onRef
 
       {screen.error && <div className={s.error} onClick={screen.dismissError}>{screen.error}</div>}
 
-      <main className={s.column}>
-        {screen.node ? (
-          <NodeDetailPanel
-            key={screen.node.ref}
-            api={screen.api}
-            node={screen.node}
-            allNodes={screen.tree}
-            run={screen.run}
-            onSelect={screen.onSelect}
-            hrefFor={screen.hrefFor}
-            onNav={screen.onNav}
-          />
-        ) : (
-          // Nothing at all until the tree has arrived: `node` is null while it is
-          // still in flight, and flashing "no such node" at every reader of a
-          // perfectly good link would be a lie told on every page load.
-          screen.treeReady && (
-            <p className={s.missing}>
-              No node at <code>{nodeRef}</code>. <a href={boardHref}>Back to the board</a>.
-            </p>
-          )
-        )}
-      </main>
+      <div className={s.scroll}>
+        <main className={s.column}>
+          {screen.node ? (
+            <NodeDetailPanel
+              key={screen.node.ref}
+              api={screen.api}
+              node={screen.node}
+              allNodes={screen.tree}
+              run={screen.run}
+              onSelect={screen.onSelect}
+              hrefFor={screen.hrefFor}
+              onNav={screen.onNav}
+            />
+          ) : (
+            // Nothing at all until the tree has arrived: `node` is null while it is
+            // still in flight, and flashing "no such node" at every reader of a
+            // perfectly good link would be a lie told on every page load.
+            screen.treeReady && (
+              <p className={s.missing}>
+                No node at <code>{nodeRef}</code>. <a href={boardHref}>Back to the board</a>.
+              </p>
+            )
+          )}
+        </main>
+      </div>
     </div>
   );
 }
