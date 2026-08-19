@@ -22,36 +22,44 @@ type Marker struct {
 	Message  string `json:"message"`
 }
 
-// convention is the prescribed heading order, canonically named (trimmed,
-// lowercased). Comments is the only optional one.
-var convention = []string{"summary", "details", "definition of done", "comments"}
-
-// required marks which convention headings must be present.
-var required = map[string]bool{
-	"summary":            true,
-	"details":            true,
-	"definition of done": true,
+// section is one heading of the convention: the spelling a Marker names it
+// by, whether a body must carry it, and the other spellings that count as it.
+type section struct {
+	label    string
+	required bool
+	aliases  []string
 }
 
-// display restores a convention heading's canonical spelling, keyed by its
-// canonical (trimmed, lowercased) form, for use in a Marker's Message.
-var display = map[string]string{
-	"summary":            "Summary",
-	"details":            "Details",
-	"definition of done": "Definition of Done",
-	"comments":           "Comments",
+// convention is the prescribed heading order — a section's index is its rank,
+// which is what "out of order" is measured against — carrying everything known
+// about a heading on its own row. Adding a heading is one row and accepting
+// another spelling of one is one word, with nothing to keep in step elsewhere.
+// Comments is the only optional heading. Bodies are written in Japanese as
+// often as in English, so a Japanese heading counts as the section it names;
+// the Markers stay English, since they describe the convention rather than the
+// body.
+var convention = []section{
+	{label: "Summary", required: true, aliases: []string{"概要", "要約", "サマリ", "サマリー"}},
+	{label: "Details", required: true, aliases: []string{"詳細", "詳細説明"}},
+	{label: "Definition of Done", required: true, aliases: []string{"完了条件", "完了の定義", "受入条件", "DoD"}},
+	{label: "Comments", aliases: []string{"コメント", "備考"}},
 }
 
-// rank reports name's position in convention, or -1 when name is not one of
-// the convention headings.
-func rank(name string) int {
-	for i, c := range convention {
-		if c == name {
-			return i
+// ranks resolves a heading, in the canonical (trimmed, lowercased) form canon
+// produces, to its rank — its index in convention. It holds every spelling of
+// every heading, the label and the aliases alike, and is derived from
+// convention rather than written out so the two can never disagree. The
+// lowercasing here is what lets convention spell a heading the way a body
+// would ("Definition of Done", "DoD") instead of pre-canonicalized.
+var ranks = func() map[string]int {
+	m := make(map[string]int, len(convention))
+	for i, s := range convention {
+		for _, spelling := range append([]string{s.label}, s.aliases...) {
+			m[strings.ToLower(spelling)] = i
 		}
 	}
-	return -1
-}
+	return m
+}()
 
 // headingRe recognizes an ATX heading, absorbing leading whitespace, a
 // closing ATX suffix ("## Summary ##"), and trailing whitespace. Group 1 is
@@ -93,8 +101,9 @@ func eachUnfencedLine(lines []string, visit func(line string)) {
 	}
 }
 
-// canon normalizes a heading for matching against the convention names: trim
-// surrounding whitespace, then lowercase.
+// canon normalizes a heading into the form ranks is keyed by: trim
+// surrounding whitespace, then lowercase. TrimSpace trims by Unicode class, so
+// an ideographic space ("## 概要　") goes too.
 func canon(s string) string {
 	return strings.ToLower(strings.TrimSpace(s))
 }
@@ -122,31 +131,32 @@ func scanHeadings(body string) []string {
 // one "missing" warning per required heading. Returns nil, not an empty
 // slice, when there is nothing to report.
 func Check(body string) []Marker {
-	// found holds each recognized convention heading's canonical name on its
-	// first occurrence, in file order; a repeat of a heading already seen
-	// does not get a second entry.
-	seen := make(map[string]bool, len(convention))
-	var found []string
+	// found holds the rank of each recognized convention heading on its first
+	// occurrence, in file order; a repeat of a heading already seen does not
+	// get a second entry, and neither does a second spelling of it.
+	seen := make(map[int]bool, len(convention))
+	var found []int
 	for _, name := range scanHeadings(body) {
-		if rank(name) < 0 || seen[name] {
+		i, ok := ranks[name]
+		if !ok || seen[i] {
 			continue
 		}
-		seen[name] = true
-		found = append(found, name)
+		seen[i] = true
+		found = append(found, i)
 	}
 
 	var markers []Marker
-	for _, name := range convention {
-		if required[name] && !seen[name] {
-			markers = append(markers, Marker{Severity: "warn", Message: "No " + display[name] + " section"})
+	for i, s := range convention {
+		if s.required && !seen[i] {
+			markers = append(markers, Marker{Severity: "warn", Message: "No " + s.label + " section"})
 		}
 	}
 	for i := 1; i < len(found); i++ {
 		prev, cur := found[i-1], found[i]
-		if rank(cur) < rank(prev) {
+		if cur < prev {
 			markers = append(markers, Marker{
 				Severity: "warn",
-				Message:  display[prev] + " appears before " + display[cur],
+				Message:  convention[prev].label + " appears before " + convention[cur].label,
 			})
 		}
 	}
