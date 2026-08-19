@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/muniere/thing/internal/model"
+	"github.com/muniere/thing/internal/section"
 	"github.com/muniere/thing/internal/store"
 )
 
@@ -12,26 +13,28 @@ import (
 // empty. Status is the node's own stored status — empty (and omitted) when the
 // node has none, i.e. its displayed status is rolled up from its children; this
 // is the canonical value that round-trips through export/import. EffectiveStatus
-// is the derived display status (own-or-rollup) and Files lists the node's
-// attachment file names; both are read-time derivations from disk, not stored
-// data, so only the web serialization emits them (for the client's convenience)
-// and the interchange Export leaves them out. Ref is the node's full slug-path
-// identity, so a client (e.g. thingd's web UI) can address it; the bare slug is
-// its last segment and is not emitted separately.
+// is the derived display status (own-or-rollup), Files lists the node's
+// attachment file names, and Markers is the body's section-convention warnings.
+// All three are read-time derivations, not stored data, so only the web
+// serialization emits them (for the client's convenience) and the interchange
+// Export leaves them out; import has no way to consume them anyway. Ref is the
+// node's full slug-path identity, so a client (e.g. thingd's web UI) can
+// address it; the bare slug is its last segment and is not emitted separately.
 type node struct {
-	Type            model.NodeType `json:"type"`
-	Ref             string         `json:"ref"`
-	Title           string         `json:"title"`
-	Status          model.Status   `json:"status,omitempty"`
-	EffectiveStatus model.Status   `json:"effectiveStatus,omitempty"`
-	Priority        model.Priority `json:"priority,omitempty"`
-	Category        string         `json:"category,omitempty"`
-	Tags            []string       `json:"tags,omitempty"`
-	Updated         string         `json:"updated,omitempty"`
-	Links           []model.Link   `json:"links,omitempty"`
-	Body            string         `json:"body,omitempty"`
-	Files           []string       `json:"files,omitempty"`
-	Children        []node         `json:"children,omitempty"`
+	Type            model.NodeType   `json:"type"`
+	Ref             string           `json:"ref"`
+	Title           string           `json:"title"`
+	Status          model.Status     `json:"status,omitempty"`
+	EffectiveStatus model.Status     `json:"effectiveStatus,omitempty"`
+	Priority        model.Priority   `json:"priority,omitempty"`
+	Category        string           `json:"category,omitempty"`
+	Tags            []string         `json:"tags,omitempty"`
+	Updated         string           `json:"updated,omitempty"`
+	Links           []model.Link     `json:"links,omitempty"`
+	Body            string           `json:"body,omitempty"`
+	Files           []string         `json:"files,omitempty"`
+	Markers         []section.Marker `json:"markers,omitempty"`
+	Children        []node           `json:"children,omitempty"`
 }
 
 // Export loads the whole tree and returns it as an indented JSON array of
@@ -43,9 +46,10 @@ func Export(s *store.Store) ([]byte, error) {
 }
 
 // ExportWeb is Export plus each node's effectiveStatus (the derived display
-// status) and files (its attachment file names). thingd serves this to the web
-// UI so the client does not recompute the rollup or list the directory itself;
-// neither field is part of the interchange format (see Export).
+// status), files (its attachment file names), and markers (the body's
+// section-convention warnings). thingd serves this to the web UI so the client
+// does not recompute the rollup, list the directory, or validate the body
+// itself; none of these fields is part of the interchange format (see Export).
 func ExportWeb(s *store.Store) ([]byte, error) {
 	return export(s, true)
 }
@@ -86,6 +90,7 @@ func convert(parentRef string, n *model.Node, effective bool) node {
 	if effective {
 		out.EffectiveStatus = n.EffectiveStatus()
 		out.Files = n.Files
+		out.Markers = n.Markers()
 	}
 	for _, c := range n.Children {
 		out.Children = append(out.Children, convert(ref, c, effective))

@@ -144,3 +144,53 @@ func TestExportWebAddsEffectiveStatus(t *testing.T) {
 		t.Errorf("child status=%q effectiveStatus=%q, want both done", c.Status, c.EffectiveStatus)
 	}
 }
+
+func TestMarkersAreWebOnly(t *testing.T) {
+	s := store.Open(t.TempDir())
+	// Markers is a read-time derivation like effectiveStatus and files:
+	// `thing import` has no way to consume it, so it belongs to the web shape
+	// only, not the interchange format. This body is missing its Definition
+	// of Done section, so ExportWeb should report exactly one warning.
+	body := "## Summary\n\nOne line.\n\n## Details\n\nMore text.\n"
+	if _, err := s.Add("", &model.Node{Title: "E", Body: body}); err != nil {
+		t.Fatal(err)
+	}
+
+	exportData, err := Export(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []node
+	if err := json.Unmarshal(exportData, &got); err != nil {
+		t.Fatalf("output is not valid JSON: %v", err)
+	}
+	if len(got[0].Markers) != 0 {
+		t.Errorf("Export markers = %+v, want empty", got[0].Markers)
+	}
+	var raw []map[string]any
+	if err := json.Unmarshal(exportData, &raw); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := raw[0]["markers"]; ok {
+		t.Error("Export must not carry markers")
+	}
+	if _, ok := raw[0]["effectiveStatus"]; ok {
+		t.Error("Export must not carry effectiveStatus")
+	}
+	if _, ok := raw[0]["files"]; ok {
+		t.Error("Export must not carry files")
+	}
+
+	webData, err := ExportWeb(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gotWeb []node
+	if err := json.Unmarshal(webData, &gotWeb); err != nil {
+		t.Fatalf("output is not valid JSON: %v", err)
+	}
+	markers := gotWeb[0].Markers
+	if len(markers) != 1 || markers[0].Severity != "warn" || markers[0].Message != "No Definition of Done section" {
+		t.Errorf("ExportWeb markers = %+v, want a single missing-Definition-of-Done warning", markers)
+	}
+}

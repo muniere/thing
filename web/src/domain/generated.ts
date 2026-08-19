@@ -17,8 +17,14 @@ export interface Node {
      * Attachment file names in the node's own directory, other than the tree's own files. Empty
      * for a task, which owns no directory.
      */
-    files?:    string[];
-    links?:    NodeLink[];
+    files?: string[];
+    links?: NodeLink[];
+    /**
+     * Warnings from validating the body against the section convention (Summary, Details, and
+     * Definition of Done required, Comments optional, all as "## " headings in that order),
+     * derived at read time. Absent when the body raises nothing worth warning about.
+     */
+    markers?:  Marker[];
     priority?: Priority;
     /**
      * The node's full slug-path identity (e.g. "epic/issue/task"), used to address it in the
@@ -56,6 +62,22 @@ export enum Status {
 export interface NodeLink {
     label?: string;
     url:    string;
+}
+
+/**
+ * One warning from validating a node body against the section convention.
+ */
+export interface Marker {
+    /**
+     * A concrete, lowercase, English description of the warning, e.g. "no Definition of Done
+     * section" or "Details appears before Summary".
+     */
+    message: string;
+    /**
+     * The marker's severity. Always "warn" today; the field exists so a future stricter rule
+     * does not need a shape change.
+     */
+    severity: string;
 }
 
 export enum Priority {

@@ -34,7 +34,29 @@
           "items": { "type": "string" },
           "description": "Attachment file names in the node's own directory, other than the tree's own files. Empty for a task, which owns no directory."
         },
+        "markers": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/Marker" },
+          "description": "Warnings from validating the body against the section convention (Summary, Details, and Definition of Done required, Comments optional, all as \"## \" headings in that order), derived at read time. Absent when the body raises nothing worth warning about."
+        },
         "children": { "type": "array", "items": { "$ref": "#/definitions/Node" } }
+      }
+    },
+    "Marker": {
+      "type": "object",
+      "title": "Marker",
+      "description": "One warning from validating a node body against the section convention.",
+      "additionalProperties": false,
+      "required": ["severity", "message"],
+      "properties": {
+        "severity": {
+          "type": "string",
+          "description": "The marker's severity. Always \"warn\" today; the field exists so a future stricter rule does not need a shape change."
+        },
+        "message": {
+          "type": "string",
+          "description": "A concrete, lowercase, English description of the warning, e.g. \"no Definition of Done section\" or \"Details appears before Summary\"."
+        }
       }
     },
     "NodeLink": {

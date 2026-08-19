@@ -1212,6 +1212,7 @@ func waitFor(t *testing.T, cond func() bool) {
 	}
 	t.Fatal("condition not met within deadline")
 }
+
 // Themes are served as one stylesheet per name from /themes/<name>.css, layering
 // the built-in set with the reader's own directory so adding a theme takes no
 // code change.

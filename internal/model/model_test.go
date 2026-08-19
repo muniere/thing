@@ -1,6 +1,68 @@
 package model
 
-import "testing"
+import (
+	"testing"
+)
+
+// wellFormedBody carries all four convention sections, in order.
+const wellFormedBody = `## Summary
+
+A short summary.
+
+## Details
+
+More detail.
+
+## Definition of Done
+
+- [ ] pending item
+- [x] done item
+
+## Comments
+
+### //2026-01-02
+
+second comment
+
+### //2026-01-01
+
+first comment
+`
+
+// legacyBody mirrors a real pre-convention node body (see
+// .thing/thingd-project-switcher/_epic.md): a level-1 heading followed by
+// non-canonical "## " sections with Japanese prose. None of its headings
+// match the convention, so every required section is missing.
+const legacyBody = `# thingd project switcher
+
+開いているプロジェクト内から、左上ロゴ隣のキャレットで別プロジェクトへ切り替えられるようにする。
+
+## 決定事項
+
+- ロゴ ` + "`<a>`" + ` はプロジェクトルートへのリンクのまま維持
+- [ ] 未整理のTODO
+
+## 実装
+
+` + "`Root.tsx`" + `: App へ ` + "`onSwitch`" + ` を渡す。
+
+## 検証
+
+` + "`npm run typecheck`" + ` で確認。
+`
+
+func TestMarkers(t *testing.T) {
+	n := &Node{Body: wellFormedBody}
+	if got := n.Markers(); got != nil {
+		t.Errorf("Markers() = %+v, want nil", got)
+	}
+
+	legacy := &Node{Body: legacyBody}
+	got := legacy.Markers()
+	if len(got) != 3 {
+		t.Fatalf("legacy Markers() = %+v, want 3 missing-section warnings", got)
+	}
+}
 
 func TestNodeTypeValid(t *testing.T) {
 	for _, ty := range []NodeType{Epic, Issue, Task} {

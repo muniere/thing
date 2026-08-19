@@ -2,7 +2,11 @@
 // the Epic > Issue > Task node and the small enumerations that describe it.
 package model
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/muniere/thing/internal/section"
+)
 
 // NodeType is the kind of a node in the tree.
 type NodeType string
@@ -127,6 +131,15 @@ func (n *Node) EffectiveStatus() Status {
 		return rollup(n.Children)
 	}
 	return Todo
+}
+
+// Markers is the body's section-convention warnings (a missing required
+// heading, or headings out of the prescribed order), like EffectiveStatus a
+// read-time derivation and never persisted: the convention is enforced by
+// the "thing" skill, not by this tool, so a body is never rejected for
+// failing it. Nil when the body raises nothing worth warning about.
+func (n *Node) Markers() []section.Marker {
+	return section.Check(n.Body)
 }
 
 // rollup derives a parent's status from its children's effective status:

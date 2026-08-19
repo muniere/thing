@@ -396,6 +396,44 @@
   content: "↗";
 }
 
+/* Convention markers: a trailer after actions, each row a full-width label
+   with an icon rather than a bare line of text — a node that departs from
+   the body convention should read as a labeled callout, not a footnote.
+   data-severity is a styling hook for a stricter level appearing later;
+   only "warn" exists today, so only it gets a tint — anything else (a
+   future "info") falls back to the neutral surface below without needing
+   a TSX change. */
+.markers {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 1.5rem 0 0;
+}
+.marker {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.6rem 0.9rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: var(--ink-2);
+}
+.marker[data-severity="warn"] {
+  background: color-mix(in srgb, var(--amber) 16%, var(--panel));
+  border-color: color-mix(in srgb, var(--amber) 45%, var(--line));
+}
+.markerIcon {
+  flex: none;
+}
+.markerMessage {
+  flex: 1;
+  min-width: 0;
+}
+
 /* button + input primitives */
 .input {
   width: 100%;

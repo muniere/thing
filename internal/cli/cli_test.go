@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+
+	"github.com/muniere/thing/internal/store"
 )
 
 // runCLI executes the root command with the given args and returns exit code,
@@ -594,5 +596,54 @@ func TestStatusAuto(t *testing.T) {
 	// A bogus status is still rejected.
 	if code, _, _ := runCLI(t, append([]string{"status", "web/roll", "bogus"}, d...)...); code == 0 {
 		t.Error("invalid status should fail")
+	}
+}
+
+func TestCheckCommand(t *testing.T) {
+	dir := t.TempDir()
+	d := []string{"--data-dir", dir, "--config", dir}
+	runCLI(t, append([]string{"init"}, d...)...)
+	runCLI(t, append([]string{"add", "Web"}, d...)...)
+	runCLI(t, append([]string{"add", "web/Roll"}, d...)...)
+
+	// "add" has no way to set a body, so write one directly through the store,
+	// mirroring how thingd's PATCH handler saves an edited body.
+	setBody := func(ref, body string) {
+		s := store.Open(dir)
+		e, err := s.Get(ref)
+		if err != nil {
+			t.Fatal(err)
+		}
+		e.Node.Body = body
+		if err := s.Save(e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	setBody("web", "## Summary\n\nA.\n\n## Details\n\nB.\n\n## Definition of Done\n\n- [ ] x\n")
+	setBody("web/roll", "## Details\n\nOnly details, out of order and missing the rest.\n\n## Summary\n\nA.\n")
+
+	// A clean node's single-ref check prints nothing, exit 0.
+	if code, out, _ := runCLI(t, append([]string{"check", "web"}, d...)...); code != 0 || out != "" {
+		t.Errorf("check web: code=%d out=%q", code, out)
+	}
+	// A node with warnings: single-ref check reports them, exit 0.
+	code, out, _ := runCLI(t, append([]string{"check", "web/roll"}, d...)...)
+	if code != 0 {
+		t.Fatalf("check web/roll: code=%d", code)
+	}
+	if !strings.Contains(out, "web/roll") || !strings.Contains(out, "warn: No Definition of Done section") ||
+		!strings.Contains(out, "warn: Details appears before Summary") {
+		t.Errorf("check web/roll: %q", out)
+	}
+
+	// Whole-tree check (no ref) prints only the node with warnings, not the
+	// clean one.
+	if _, out, _ := runCLI(t, append([]string{"check"}, d...)...); !strings.Contains(out, "web/roll") || strings.Contains(out, "web\n") {
+		t.Errorf("check (whole tree): %q", out)
+	}
+
+	// An unknown ref is still a usage error, same as show.
+	if code, _, _ := runCLI(t, append([]string{"check", "nope"}, d...)...); code == 0 {
+		t.Error("check on an unknown ref should fail")
 	}
 }

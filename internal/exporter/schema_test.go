@@ -26,7 +26,7 @@ func TestExportWebMatchesSchema(t *testing.T) {
 		Title:    "Monitor",
 		Status:   "doing",
 		Priority: "high",
-		Body:     "Body text.",
+		Body:     "## Summary\n\nWatch the release.\n\n## Details\n\nCheck dashboards hourly.\n",
 		Links:    []model.Link{{URL: "https://x.test", Label: "X"}},
 	})
 	if _, err := s.Add(issue, &model.Node{Title: "Confirm"}); err != nil {
@@ -55,6 +55,26 @@ func TestExportWebMatchesSchema(t *testing.T) {
 		if err := sch.Validate(n); err != nil {
 			t.Fatalf("node %d fails schema: %v", i, err)
 		}
+	}
+
+	// Schema validation of a document that omits an optional field proves
+	// nothing, so assert the populated issue actually carries the derived
+	// values, not just that the shape is schema-valid.
+	epicMap, ok := nodes[0].(map[string]any)
+	if !ok || len(epicMap["children"].([]any)) == 0 {
+		t.Fatalf("expected epic with children: %+v", nodes[0])
+	}
+	issueMap, ok := epicMap["children"].([]any)[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected issue node: %+v", epicMap["children"])
+	}
+	markers, ok := issueMap["markers"].([]any)
+	if !ok || len(markers) != 1 {
+		t.Fatalf("markers = %v, want 1 entry (the body has No Definition of Done section)", issueMap["markers"])
+	}
+	marker, ok := markers[0].(map[string]any)
+	if !ok || marker["severity"] != "warn" || marker["message"] != "No Definition of Done section" {
+		t.Errorf("markers[0] = %v", markers[0])
 	}
 }
 
