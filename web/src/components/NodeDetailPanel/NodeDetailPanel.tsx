@@ -289,6 +289,17 @@ export function NodeDetailPanel({ api, node, allNodes, run, onSelect, hrefFor, o
         </div>
       </div>
 
+      {(node.markers ?? []).length > 0 && (
+        <div className={s.markers}>
+          {(node.markers ?? []).map((m, i) => (
+            <div key={i} className={s.marker} data-severity={m.severity}>
+              <span className={s.markerIcon} aria-hidden="true">{m.severity === "warn" ? "⚠️" : "ℹ️"}</span>
+              <span className={s.markerMessage}>{m.message}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       <dialog ref={move.dialog} className={s.dialog} onClose={move.reset}>
         <div className={s.dialogBody}>
           <div className={s.dialogTitle}>Change parent</div>
