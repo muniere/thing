@@ -225,6 +225,13 @@ regardless. A single `# Summary` (level 1) is silently ignored — it is not
 recognized as the section, and `thing` reads the body as if it were not there
 at all — and a heading inside a fenced code block is never recognized either.
 
+A body written in Japanese may use the Japanese heading for each section
+instead: `概要` / `要約` / `サマリ` / `サマリー` for Summary, `詳細` /
+`詳細説明` for Details, `完了条件` / `完了の定義` / `受入条件` / `DoD` for
+Definition of Done, `コメント` / `備考` for Comments. Pick one language per
+body and keep it — do not mix, even though `thing` accepts a mixed body. The
+warnings `thing check` prints are English regardless.
+
 <!-- section-convention-example -->
 ```markdown
 ## Summary

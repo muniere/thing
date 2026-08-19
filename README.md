@@ -431,6 +431,19 @@ heading is not recognized, since a level-1 heading in a body is
 conventionally the node's own title, never a section. A heading inside a
 fenced code block is never recognized either.
 
+A Japanese heading counts as the section it names, so a body written in
+Japanese satisfies the convention without any English in it:
+
+| Section              | Also accepted                            |
+| -------------------- | ---------------------------------------- |
+| `Summary`            | `概要`, `要約`, `サマリ`, `サマリー`      |
+| `Details`            | `詳細`, `詳細説明`                       |
+| `Definition of Done` | `完了条件`, `完了の定義`, `受入条件`, `DoD` |
+| `Comments`           | `コメント`, `備考`                       |
+
+Headings may mix languages within one body. The warnings stay English either
+way — they name the convention, not the heading the body happened to use.
+
 <!-- section-convention-example -->
 ```markdown
 ## Summary

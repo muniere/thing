@@ -203,6 +203,108 @@ func TestCheckCaseInsensitive(t *testing.T) {
 	}
 }
 
+// TestCheckJapaneseHeadings guards that a body written with Japanese headings
+// satisfies the convention exactly as an English one does.
+func TestCheckJapaneseHeadings(t *testing.T) {
+	body := "## 概要\n\n短い概要。\n\n## 詳細\n\nもっと詳しく。\n\n## 完了条件\n\n- [ ] 項目\n\n## コメント\n\n### //2026-01-01\n\nひとこと。\n"
+	if got := Check(body); got != nil {
+		t.Errorf("Check() = %+v, want nil", got)
+	}
+}
+
+// TestCheckAliasVariants guards that every alias in the convention table
+// actually resolves, by substituting it into an otherwise English body one
+// section at a time. It walks the table rather than a copy of it, so a
+// spelling added there is covered without touching this test. An alias that
+// stops resolving is a silent regression: the only symptom is a spurious
+// missing-section warning on a body that reads fine.
+func TestCheckAliasVariants(t *testing.T) {
+	for i, section := range convention {
+		for _, spelling := range section.aliases {
+			t.Run(section.label+"/"+spelling, func(t *testing.T) {
+				var body strings.Builder
+				for j, s := range convention {
+					heading := s.label
+					if j == i {
+						heading = spelling
+					}
+					body.WriteString("## " + heading + "\n\nX.\n\n")
+				}
+				if got := Check(body.String()); got != nil {
+					t.Errorf("Check() = %+v, want nil", got)
+				}
+			})
+		}
+	}
+}
+
+// TestRanksWellFormed guards the convention table itself, since a mistake
+// there fails open: a spelling listed under two sections resolves to whichever
+// row the loop reached last, and one listed twice under the same section hides
+// a typo in the other. Either way the symptom is only that a heading stops
+// being recognized, so the table is checked directly.
+func TestRanksWellFormed(t *testing.T) {
+	for i, section := range convention {
+		if section.label == "" {
+			t.Errorf("convention[%d]: no label", i)
+		}
+		for _, spelling := range append([]string{section.label}, section.aliases...) {
+			if got, ok := ranks[strings.ToLower(spelling)]; !ok || got != i {
+				t.Errorf("ranks[%q] = %d (present: %t), want %d — spelling claimed by another section?",
+					spelling, got, ok, i)
+			}
+		}
+	}
+
+	total := 0
+	for _, section := range convention {
+		total += 1 + len(section.aliases)
+	}
+	if len(ranks) != total {
+		t.Errorf("len(ranks) = %d, want %d — a spelling is listed twice", len(ranks), total)
+	}
+}
+
+// TestCheckMixedLanguageHeadings guards that English and Japanese headings mix
+// freely within one body — a body part-translated mid-edit is common, and each
+// heading resolves on its own.
+func TestCheckMixedLanguageHeadings(t *testing.T) {
+	body := "## Summary\n\nA.\n\n## 詳細\n\nB.\n\n## Definition of Done\n\n- [ ] item\n"
+	if got := Check(body); got != nil {
+		t.Errorf("Check() = %+v, want nil", got)
+	}
+}
+
+// TestCheckJapaneseMarkersStayEnglish guards that the Markers describe the
+// convention, not the body: a Japanese body out of order and missing a
+// section still reports the canonical English names.
+func TestCheckJapaneseMarkersStayEnglish(t *testing.T) {
+	body := "## 詳細\n\nB.\n\n## 概要\n\nA.\n"
+	got := Check(body)
+	want := []Marker{
+		{Severity: "warn", Message: "No Definition of Done section"},
+		{Severity: "warn", Message: "Details appears before Summary"},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("Check() = %+v, want %+v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("Check()[%d] = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+}
+
+// TestCheckIdeographicSpaceTrimmed guards that a heading padded with the
+// ideographic space (U+3000) a Japanese input method produces still matches —
+// the regexp's \s does not cover it, so canon's trim has to.
+func TestCheckIdeographicSpaceTrimmed(t *testing.T) {
+	body := "## 概要　\n\nA.\n\n## 　詳細\n\nB.\n\n## 完了条件　\n\n- [ ] item\n"
+	if got := Check(body); got != nil {
+		t.Errorf("Check() = %+v, want nil", got)
+	}
+}
+
 // docsExampleMarker precedes the fenced example this package's doc tests
 // extract; both README.md and skills/thing/SKILL.md carry other fenced
 // blocks (YAML config, shell) that must not be picked up instead.
