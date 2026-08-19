@@ -2,9 +2,24 @@
 
 The React + TypeScript SPA served by `thingd`. There is no Go here; the frontend
 talks to thingd's project-scoped, ref-based JSON API (`/api/projects/<p>/…`) and
-consumes the hand-written types in `src/domain/generated.ts`. The root `/` is a
-project picker; `/<project>` opens that project's tree, and `/<project>/<ref>` a
-node. See the root [README](../README.md#web-thingd) for the project registry.
+consumes the hand-written types in `src/domain/generated.ts`. See the root
+[README](../README.md#web-thingd) for the project registry.
+
+The URL says which of four things you are looking at:
+
+| URL | |
+|---|---|
+| `/` | the project picker |
+| `/<project>/` | that project's board, nothing focused |
+| `/<project>/?ref=/<ref>` | the board, focused on that node |
+| `/<project>/<ref>` | that node alone, given the whole window |
+
+A path names a node — where it sits in the tree — while which node the board has
+focused is part of the board's own state, written in the query beside its
+filters. So a node's row on the board links to the node's path, and a plain click
+is intercepted to focus it in place; ⌘/Ctrl/Shift/middle-clicking that same row
+follows the link and opens the node on its own. `src/route.ts` holds the whole
+contract.
 
 [esbuild](https://esbuild.github.io/) bundles the SPA into `dist/` (see
 `build.mjs`), which `thingd` embeds. There is no dev server: the dev loop runs
