@@ -3,6 +3,7 @@ import { App } from "./App.tsx";
 import { NodeScreen } from "./NodeScreen.tsx";
 import { ProjectList } from "./components/ProjectList/ProjectList.tsx";
 import { type Scheme, setScheme as saveScheme, settings } from "./api.ts";
+import { syncFavicon } from "./favicon.ts";
 import { parseLocation, type Route } from "./route.ts";
 import { applyScheme } from "./theme.ts";
 
@@ -53,6 +54,12 @@ export function Root() {
     },
     [scheme],
   );
+
+  // The tab wears the icon of the board on screen, and a pushState does not
+  // touch the document's head. See favicon.ts.
+  useEffect(() => {
+    syncFavicon(route.kind === "picker" ? null : route.project);
+  }, [route]);
 
   useEffect(() => {
     const onPop = () => setRoute(parseLocation());

@@ -163,6 +163,7 @@ func New(mounts []Mount, opts Options) *Server {
 	mux.HandleFunc("DELETE /api/projects/{project}", s.handleUnregister)
 	mux.HandleFunc("GET /api/projects/{project}/tree", s.withProject(s.handleTree))
 	mux.HandleFunc("GET /api/projects/{project}/config", s.withProject(s.handleConfig))
+	mux.HandleFunc("GET /api/projects/{project}/icon", s.withProject(s.handleIcon))
 	mux.HandleFunc("GET /api/projects/{project}/archives", s.withProject(s.handleArchiveList))
 	mux.HandleFunc("GET /api/projects/{project}/archives/{name}", s.withProject(s.handleArchive))
 	mux.HandleFunc("GET /api/projects/{project}/events", s.withProject(s.handleEvents))

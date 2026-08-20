@@ -22,6 +22,26 @@ type Config struct {
 	Categories []string `yaml:"categories,omitempty"`
 }
 
+// iconNames are the file names a tree may use for its own board icon, in the
+// order they are preferred. The icon is found by convention rather than named in
+// config.yaml so that dropping the file in is the whole of the configuration;
+// SVG comes first because it stays sharp at every size a tab or a dock asks for,
+// while a PNG is fixed at whatever it was exported at.
+var iconNames = []string{"icon.svg", "icon.png"}
+
+// Icon reports the name of the icon file root carries, or ok false when it
+// carries none — the common case, which leaves the board on its built-in mark.
+// It returns the name rather than the contents because the caller serving it
+// wants the path anyway, to hand the file to the http layer as a file.
+func Icon(root string) (name string, ok bool) {
+	for _, name := range iconNames {
+		if info, err := os.Stat(filepath.Join(root, name)); err == nil && info.Mode().IsRegular() {
+			return name, true
+		}
+	}
+	return "", false
+}
+
 // Load reads config.yaml from root. A missing file is not an error; it yields a
 // zero-value Config.
 func Load(root string) (*Config, error) {

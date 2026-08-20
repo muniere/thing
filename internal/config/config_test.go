@@ -68,3 +68,38 @@ func TestStaleServerKeys(t *testing.T) {
 		t.Errorf("StaleServerKeys on a dir with no config = %v, want none", got)
 	}
 }
+
+// A tree may carry its own board icon next to config.yaml, so Icon reports the
+// conventional file it finds.
+func TestIcon(t *testing.T) {
+	dir := write(t, "title: Board\n")
+	if err := os.WriteFile(filepath.Join(dir, "icon.png"), []byte("png"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	name, ok := Icon(dir)
+	if !ok || name != "icon.png" {
+		t.Errorf("Icon = %q, %v; want icon.png, true", name, ok)
+	}
+}
+
+// SVG wins over PNG: it is the one that stays sharp at every size a tab or a
+// dock asks for, so a tree carrying both is taken to prefer it.
+func TestIconPrefersSVG(t *testing.T) {
+	dir := write(t, "title: Board\n")
+	for _, name := range []string{"icon.png", "icon.svg"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if name, ok := Icon(dir); !ok || name != "icon.svg" {
+		t.Errorf("Icon = %q, %v; want icon.svg, true", name, ok)
+	}
+}
+
+// No icon is the common case, and it is not an error: the board falls back to
+// its built-in mark.
+func TestIconMissing(t *testing.T) {
+	if name, ok := Icon(t.TempDir()); ok || name != "" {
+		t.Errorf("Icon = %q, %v; want \"\", false", name, ok)
+	}
+}

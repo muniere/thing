@@ -202,6 +202,7 @@ GET    /api/projects/<p>/archives/<name>   one archived entry's detail (from, st
 PATCH  /api/projects/<p>/archives/<name>   restore _archives/<name> to where it came from, or {to:"<ref>"}
 GET    /api/projects/<p>/events            Server-Sent Events reload stream (per project)
 GET    /api/projects/<p>/config            display config (title, dir, filter defaults, theme)
+GET    /api/projects/<p>/icon              the board's icon: the tree's own, else thing's mark
 GET    /api/themes                         the theme names that exist, for the picker to offer
 GET    /api/settings                       server-wide display config (color scheme)
 PATCH  /api/settings                       set it: {scheme:"auto"|"light"|"dark"}
@@ -385,6 +386,7 @@ with an empty or unknown category, and all orphan issues, fall under
 <config-dir>/
   config.yaml
 <data-dir>/
+  icon.svg                   # optional board icon (icon.png also works)
   <epic-slug>/
     _epic.md
     <issue-slug>/
@@ -487,6 +489,13 @@ Two files configure a board, split by what they describe.
 board `title` and the `categories` used to group epics. The CLI reads it too, so
 it is the same for everyone who works on the tree. See
 [`config.example.yaml`](config.example.yaml).
+
+A board also wears an icon of its own, in its tab and in the picker. It is found
+by convention rather than named in `config.yaml`: drop an `icon.svg` (preferred,
+since it stays sharp at every size) or an `icon.png` into the same data
+directory, and that is the whole of the configuration. A tree carrying neither
+gets thing's own ◉ mark, so the icon is worth setting mainly when several boards
+are open at once and their tabs need telling apart.
 
 `projects.yaml` holds what **thingd** does with it. Alongside each project's
 `name` and `dir`, its entry carries the display settings that shape only the web
