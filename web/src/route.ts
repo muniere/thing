@@ -14,20 +14,22 @@
 // place in the tree is a path, and which node the board has focused is one more
 // piece of that board's state, alongside its filters.
 
+// A route is named for the depth of the URL that produces it, which is also what
+// the path segments say: nothing, a project, a node within it.
 export type Route =
-  | { kind: "picker" }
-  | { kind: "board"; project: string; ref: string | null }
+  | { kind: "root" }
+  | { kind: "project"; project: string; ref: string | null }
   | { kind: "node"; project: string; ref: string };
 
-// parseLocation reads the current URL. Zero path segments is the picker; one is
-// the board, whose focus comes from the query; two or more is a node, whose ref
-// is everything after the project.
+// parseLocation reads the current URL. Zero path segments is the root; one is a
+// project's board, whose focus comes from the query; two or more is a node,
+// whose ref is everything after the project.
 export function parseLocation(): Route {
   const segments = window.location.pathname.split("/").filter(Boolean);
-  if (segments.length === 0) return { kind: "picker" };
+  if (segments.length === 0) return { kind: "root" };
   const [project, ...rest] = segments;
   if (rest.length === 0) {
-    return { kind: "board", project, ref: refFromQuery(window.location.search) };
+    return { kind: "project", project, ref: refFromQuery(window.location.search) };
   }
   return { kind: "node", project, ref: rest.join("/") };
 }

@@ -58,7 +58,7 @@ export function Root() {
   // The tab wears the icon of the board on screen, and a pushState does not
   // touch the document's head. See favicon.ts.
   useEffect(() => {
-    syncFavicon(route.kind === "picker" ? null : route.project);
+    syncFavicon(route.kind === "root" ? null : route.project);
   }, [route]);
 
   useEffect(() => {
@@ -80,7 +80,7 @@ export function Root() {
   // the switcher may pass null for "All projects".
   const switchTo = useCallback((name: string | null) => navigate(name ? `/${name}/` : "/"), [navigate]);
 
-  if (route.kind === "picker") {
+  if (route.kind === "root") {
     return <ProjectList onOpen={switchTo} scheme={scheme} onScheme={chooseScheme} />;
   }
   if (route.kind === "node") {
