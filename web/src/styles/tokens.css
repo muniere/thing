@@ -53,6 +53,16 @@
   --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
   --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --radius: 11px;
+
+  /* The top bar's height, fixed rather than left to whatever the bar happens to
+     hold. Every view wears the same bar, but not the same controls — the board
+     and the picker put a button in it, a node's screen puts nothing — and a
+     content-sized bar would stand taller wherever a button is, so the bar would
+     visibly change height as you move between views. The value is what the
+     tallest of those controls needs: 0.8rem of padding above and below a
+     ~2.1rem button, plus the 1px rule underneath. Anything placed in the bar
+     must fit within it. */
+  --topbar-height: 3.8rem;
 }
 
 /* The reader's scheme choice, from projects.yaml. Naming one scheme rather than

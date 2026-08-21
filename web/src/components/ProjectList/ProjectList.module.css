@@ -2,13 +2,17 @@
    per registered project. Styled from the shared theme tokens so it matches the
    in-project view. */
 /* A full-width top bar identical to the in-project view's, so the header keeps
-   the same height and look when switching between the picker and a project. The
-   cards sit in a centered column below it. */
+   the same height and look when switching between the picker and a project. That
+   sameness is what --topbar-height is for: this bar's own contents change too —
+   the "+ Project" button is absent until the list has loaded — and a
+   content-sized bar would jump on arrival as well as differ from the project
+   views. The cards sit in a centered column below it. */
 .topbar {
   display: flex;
   align-items: center;
   gap: 1.25rem;
-  padding: 0.8rem 1.5rem;
+  height: var(--topbar-height);
+  padding: 0 1.5rem;
   background: color-mix(in srgb, var(--bg) 86%, transparent);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--line);
