@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { App } from "./App.tsx";
-import { NodeScreen } from "./NodeScreen.tsx";
-import { ProjectList } from "./components/ProjectList/ProjectList.tsx";
-import { type Scheme, setScheme as saveScheme, settings } from "./api.ts";
-import { syncFavicon } from "./favicon.ts";
-import { parseLocation, type Route } from "./route.ts";
-import { applyScheme } from "./theme.ts";
+import { Board } from "./$project/index/Board.tsx";
+import { NodeScreen } from "./$project/$ref/NodeScreen.tsx";
+import { ProjectList } from "../components/ProjectList/ProjectList.tsx";
+import { type Scheme, setScheme as saveScheme, settings } from "../lib/api.ts";
+import { syncFavicon } from "../lib/favicon.ts";
+import { parseLocation, type Route } from "../route.ts";
+import { applyScheme } from "../lib/theme.ts";
 
 // Root owns the top-level route: the picker at "/", a project's board, or one
 // node on a screen of its own. It renders the matching view — keyed so a board
@@ -13,7 +13,7 @@ import { applyScheme } from "./theme.ts";
 // Back/Forward.
 //
 // It does not own the board's focus. Which node the board has selected is read
-// and written by useApp, straight from the query, so keyboard nav and filter
+// and written by useBoard, straight from the query, so keyboard nav and filter
 // changes never make a round trip through the router; Root's copy of that ref
 // goes stale on the board, and nothing reads it.
 export function Root() {
@@ -98,7 +98,7 @@ export function Root() {
     );
   }
   return (
-    <App
+    <Board
       key={route.project}
       project={route.project}
       onSwitch={switchTo}

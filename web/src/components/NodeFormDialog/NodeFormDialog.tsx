@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Priority } from "../../domain/generated.ts";
-import type { Api, CreateInput } from "../../api.ts";
+import type { Api, CreateInput } from "../../lib/api.ts";
 import { Dialog } from "../Dialog/Dialog.tsx";
 import s from "./NodeFormDialog.module.css";
 

@@ -1,8 +1,8 @@
 import { type RefObject, useEffect, useRef, useState } from "react";
 import type { Node, NodeLink } from "../../domain/generated.ts";
 import { Type } from "../../domain/generated.ts";
-import type { Api } from "../../api.ts";
-import { flatten } from "../../util.ts";
+import type { Api } from "../../lib/api.ts";
+import { flatten } from "../../lib/util.ts";
 
 interface Input {
   api: Api;

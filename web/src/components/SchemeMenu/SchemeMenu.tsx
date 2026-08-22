@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Scheme } from "../../api.ts";
+import type { Scheme } from "../../lib/api.ts";
 import s from "./SchemeMenu.module.css";
 
 interface Props {

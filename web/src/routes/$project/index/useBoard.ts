@@ -1,6 +1,6 @@
 import { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Node } from "./domain/generated.ts";
-import type { ArchiveEntry } from "./api.ts";
+import type { Node } from "../../../domain/generated.ts";
+import type { ArchiveEntry } from "../../../lib/api.ts";
 import {
   collectCategories,
   collectPriorityCounts,
@@ -12,11 +12,11 @@ import {
   filtersToQuery,
   hasFilterQuery,
   type Filters,
-} from "./filter.ts";
-import { findNode, isPlainClick } from "./util.ts";
-import { boardHref, nodeHref, refFromQuery, withoutRef } from "./route.ts";
-import { type ProjectState, useProject } from "./useProject.ts";
-import { type TreeFold, useTreeFold, useTreeNav } from "./tree.ts";
+} from "../../../lib/filter.ts";
+import { findNode, isPlainClick } from "../../../lib/util.ts";
+import { boardHref, nodeHref, refFromQuery, withoutRef } from "../../../route.ts";
+import { type ProjectState, useProject } from "../../../lib/useProject.ts";
+import { type TreeFold, useTreeFold, useTreeNav } from "../../../lib/tree.ts";
 
 interface Input {
   // The project this view is scoped to (the first URL path segment).
@@ -26,7 +26,7 @@ interface Input {
   onRefresh: () => void;
 }
 
-export interface AppState {
+export interface BoardState {
   // The per-project API client, for the components that mutate through it.
   api: ProjectState["api"];
   // The configured title (also the browser tab's) and the data directory the
@@ -65,10 +65,10 @@ export interface AppState {
   onNav: (e: MouseEvent, ref: string) => void;
 }
 
-// useApp holds a board's state: what is selected and filtered, and the URL that
-// mirrors both. What was loaded lives in useProject; App itself is left to be
+// useBoard holds a board's state: what is selected and filtered, and the URL that
+// mirrors both. What was loaded lives in useProject; Board itself is left to be
 // layout.
-export function useApp({ project, onRefresh }: Input): AppState {
+export function useBoard({ project, onRefresh }: Input): BoardState {
   const { api, title, dir, tree, archived, defaults, configReady, error, dismissError, run } = useProject({
     project,
     onRefresh,

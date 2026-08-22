@@ -1,4 +1,4 @@
-import type { Node } from "./domain/generated.ts";
+import type { Node } from "../domain/generated.ts";
 import type { FilterDefaults } from "./filter.ts";
 
 // Thin client over thingd's JSON API. One server hosts multiple projects, so

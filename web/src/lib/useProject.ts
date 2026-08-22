@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Node } from "./domain/generated.ts";
+import type { Node } from "../domain/generated.ts";
 import { type ArchiveEntry, forProject } from "./api.ts";
 import { useLiveReload } from "./live.ts";
 import { defaultsToFilters, emptyFilters, type Filters } from "./filter.ts";
@@ -89,7 +89,7 @@ export function useProject({ project, onRefresh }: Input): ProjectState {
       setConfigReady(true);
     } catch (e) {
       // A missing/unreachable config just leaves the defaults, but still marks
-      // config as settled so the URL sync in useApp (and the effect there) can proceed
+      // config as settled so the URL sync in useBoard (and the effect there) can proceed
       // — an unreachable /api/config must not stall the UI indefinitely. Deliberately
       // not setError: this can fire on a transient reconnect (e.g. thingd restarting),
       // and a banner would flash on an otherwise-healthy board. Still worth knowing

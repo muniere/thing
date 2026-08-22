@@ -1,6 +1,6 @@
 import type { MouseEvent } from "react";
 import type { Node } from "../../domain/generated.ts";
-import { groupTopNodes } from "../../util.ts";
+import { groupTopNodes } from "../../lib/util.ts";
 import { StatusBadge } from "../StatusBadge/StatusBadge.tsx";
 import { PriorityBadge } from "../PriorityBadge/PriorityBadge.tsx";
 import s from "./NodeChainList.module.css";

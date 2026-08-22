@@ -1,14 +1,14 @@
 import { type MouseEvent, useEffect, useState } from "react";
-import { listProjects, type ProjectInfo } from "../../api.ts";
-import { loadThemeMarks } from "../../theme.ts";
-import { isPlainClick } from "../../util.ts";
+import { listProjects, type ProjectInfo } from "../../lib/api.ts";
+import { loadThemeMarks } from "../../lib/theme.ts";
+import { isPlainClick } from "../../lib/util.ts";
 import s from "./ProjectSwitcher.module.css";
 
 interface Props {
   // The currently open project's name; its row is marked with a check.
   current: string;
   // Switch to another project by name, or to the picker (null for "All
-  // projects"). Root routes both by remounting App on its project key.
+  // projects"). Root routes both by remounting Board on its project key.
   onSwitch: (name: string | null) => void;
 }
 

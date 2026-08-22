@@ -1,8 +1,8 @@
 import type { MouseEvent } from "react";
 import type { Node } from "../../domain/generated.ts";
 import { Priority, Status, Type } from "../../domain/generated.ts";
-import type { Api } from "../../api.ts";
-import { renderMarkdown } from "../../markdown.ts";
+import type { Api } from "../../lib/api.ts";
+import { renderMarkdown } from "../../lib/markdown.ts";
 import { NodeFormDialog } from "../NodeFormDialog/NodeFormDialog.tsx";
 import { PriorityBadge } from "../PriorityBadge/PriorityBadge.tsx";
 import { useNodeDetailPanel } from "./useNodeDetailPanel.ts";

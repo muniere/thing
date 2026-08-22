@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { editProject, type ProjectInfo, registerProject } from "../../api.ts";
-import { loadThemesForPreview } from "../../theme.ts";
+import { editProject, type ProjectInfo, registerProject } from "../../lib/api.ts";
+import { loadThemesForPreview } from "../../lib/theme.ts";
 import { Dialog } from "../Dialog/Dialog.tsx";
 import { ThemePreview } from "../ThemePreview/ThemePreview.tsx";
 import s from "./ProjectFormDialog.module.css";

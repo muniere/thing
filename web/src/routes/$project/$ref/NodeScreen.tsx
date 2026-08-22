@@ -1,10 +1,10 @@
-import type { Scheme } from "./api.ts";
+import type { Scheme } from "../../../lib/api.ts";
 import { useNodeScreen } from "./useNodeScreen.ts";
-import { nodeHref } from "./route.ts";
-import { isPlainClick } from "./util.ts";
-import { NodeDetailPanel } from "./components/NodeDetailPanel/NodeDetailPanel.tsx";
-import { ProjectHeader } from "./components/ProjectHeader/ProjectHeader.tsx";
-import { SchemeMenu } from "./components/SchemeMenu/SchemeMenu.tsx";
+import { nodeHref } from "../../../route.ts";
+import { isPlainClick } from "../../../lib/util.ts";
+import { NodeDetailPanel } from "../../../components/NodeDetailPanel/NodeDetailPanel.tsx";
+import { ProjectHeader } from "../../../components/ProjectHeader/ProjectHeader.tsx";
+import { SchemeMenu } from "../../../components/SchemeMenu/SchemeMenu.tsx";
 import s from "./NodeScreen.module.css";
 
 interface Props {
