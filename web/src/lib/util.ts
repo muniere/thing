@@ -1,5 +1,5 @@
-import type { Node } from "./domain/generated.ts";
-import { Type } from "./domain/generated.ts";
+import type { Node } from "../domain/generated.ts";
+import { Type } from "../domain/generated.ts";
 
 // isPlainClick reports whether a click should be handled as in-app navigation
 // (primary button, no modifier). A modified or middle click falls through to the

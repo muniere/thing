@@ -1,7 +1,7 @@
 import { type DragEvent, type MouseEvent, useCallback, useEffect, useState } from "react";
-import { listProjects, listThemes, moveProject, type ProjectInfo, reloadProjects, unregisterProject } from "../../api.ts";
-import { loadThemeMarks } from "../../theme.ts";
-import { isPlainClick } from "../../util.ts";
+import { listProjects, listThemes, moveProject, type ProjectInfo, reloadProjects, unregisterProject } from "../../lib/api.ts";
+import { loadThemeMarks } from "../../lib/theme.ts";
+import { isPlainClick } from "../../lib/util.ts";
 
 interface Input {
   // Open a project (push /<name> and switch the view to it).

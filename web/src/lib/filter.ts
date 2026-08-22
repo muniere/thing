@@ -1,4 +1,4 @@
-import type { Node } from "./domain/generated.ts";
+import type { Node } from "../domain/generated.ts";
 
 export interface Filters {
   statuses: Set<string>; // empty = all statuses

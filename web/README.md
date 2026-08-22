@@ -25,7 +25,7 @@ contract.
 `build.mjs`), which `thingd` embeds. There is no dev server: the dev loop runs
 the one embedded binary under [air](https://github.com/air-verse/air), which
 rebuilds it on any change, and the browser reloads itself over SSE (see
-`src/live.ts`). So the same binary serves the app in dev and prod.
+`src/lib/live.ts`). So the same binary serves the app in dev and prod.
 
 ## Develop
 

@@ -44,7 +44,7 @@ export function refFromQuery(search: string): string | null {
 
 // withoutRef returns the query minus the focus. It serves the one place that
 // carries the URL's query through verbatim rather than rebuilding it (see
-// useApp's queryString, which does so until the configured filter defaults have
+// useBoard's queryString, which does so until the configured filter defaults have
 // settled) and would otherwise hand boardHref a ref it is about to write again.
 export function withoutRef(search: string): string {
   const p = new URLSearchParams(search);

@@ -1,8 +1,8 @@
 import { type MouseEvent, useCallback } from "react";
-import type { Node } from "./domain/generated.ts";
-import { findNode, isPlainClick } from "./util.ts";
-import { nodeHref } from "./route.ts";
-import { type ProjectState, useProject } from "./useProject.ts";
+import type { Node } from "../../../domain/generated.ts";
+import { findNode, isPlainClick } from "../../../lib/util.ts";
+import { nodeHref } from "../../../route.ts";
+import { type ProjectState, useProject } from "../../../lib/useProject.ts";
 
 interface Input {
   // The project the node belongs to (the first URL path segment).

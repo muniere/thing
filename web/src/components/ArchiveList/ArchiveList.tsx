@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Api, ArchiveDetail, ArchiveEntry } from "../../api.ts";
+import type { Api, ArchiveDetail, ArchiveEntry } from "../../lib/api.ts";
 import s from "./ArchiveList.module.css";
 
 interface Props {

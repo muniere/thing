@@ -1,5 +1,5 @@
 import { Priority, Status } from "../../domain/generated.ts";
-import { filtersActive, filtersEqual, type Filters } from "../../filter.ts";
+import { filtersActive, filtersEqual, type Filters } from "../../lib/filter.ts";
 import { StatusBadge } from "../StatusBadge/StatusBadge.tsx";
 import { PriorityBadge } from "../PriorityBadge/PriorityBadge.tsx";
 import s from "./FilterForm.module.css";

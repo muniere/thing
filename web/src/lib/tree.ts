@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Node } from "./domain/generated.ts";
+import type { Node } from "../domain/generated.ts";
 import { groupTopNodes } from "./util.ts";
 
 // ancestorRefs("epic/issue/task") => ["epic", "epic/issue"]. A ref is a slug

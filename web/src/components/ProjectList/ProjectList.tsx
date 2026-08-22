@@ -1,7 +1,7 @@
 import { ProjectFormDialog } from "../ProjectFormDialog/ProjectFormDialog.tsx";
 import { SchemeMenu } from "../SchemeMenu/SchemeMenu.tsx";
 import { useProjectList } from "./useProjectList.ts";
-import type { Scheme } from "../../api.ts";
+import type { Scheme } from "../../lib/api.ts";
 import s from "./ProjectList.module.css";
 
 interface Props {

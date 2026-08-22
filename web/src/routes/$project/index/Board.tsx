@@ -1,13 +1,13 @@
-import type { Scheme } from "./api.ts";
-import { useApp } from "./useApp.ts";
-import { NodeChainList } from "./components/NodeChainList/NodeChainList.tsx";
-import { FilterForm } from "./components/FilterForm/FilterForm.tsx";
-import { NodeDetailPanel } from "./components/NodeDetailPanel/NodeDetailPanel.tsx";
-import { NodeFormDialog } from "./components/NodeFormDialog/NodeFormDialog.tsx";
-import { ProjectHeader } from "./components/ProjectHeader/ProjectHeader.tsx";
-import { SchemeMenu } from "./components/SchemeMenu/SchemeMenu.tsx";
-import { ArchiveList } from "./components/ArchiveList/ArchiveList.tsx";
-import s from "./App.module.css";
+import type { Scheme } from "../../../lib/api.ts";
+import { useBoard } from "./useBoard.ts";
+import { NodeChainList } from "../../../components/NodeChainList/NodeChainList.tsx";
+import { FilterForm } from "../../../components/FilterForm/FilterForm.tsx";
+import { NodeDetailPanel } from "../../../components/NodeDetailPanel/NodeDetailPanel.tsx";
+import { NodeFormDialog } from "../../../components/NodeFormDialog/NodeFormDialog.tsx";
+import { ProjectHeader } from "../../../components/ProjectHeader/ProjectHeader.tsx";
+import { SchemeMenu } from "../../../components/SchemeMenu/SchemeMenu.tsx";
+import { ArchiveList } from "../../../components/ArchiveList/ArchiveList.tsx";
+import s from "./Board.module.css";
 
 interface Props {
   // The project this view is scoped to (the first URL path segment).
@@ -23,11 +23,11 @@ interface Props {
   onSwitch: (name: string | null) => void;
 }
 
-// App is one project's board: the filter controls, the tree, and the detail panel
-// for whatever is selected. Everything it holds lives in useApp; what is left
+// Board is one project's board: the filter controls, the tree, and the detail panel
+// for whatever is selected. Everything it holds lives in useBoard; what is left
 // here is the layout.
-export function App({ project, onSwitch, scheme, onScheme, onRefresh }: Props) {
-  const board = useApp({ project, onRefresh });
+export function Board({ project, onSwitch, scheme, onScheme, onRefresh }: Props) {
+  const board = useBoard({ project, onRefresh });
 
   return (
     <div className={s.app}>
